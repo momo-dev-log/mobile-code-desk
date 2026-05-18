@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mobile Code Desk</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- ── Header ── -->
+  <header id="header">
+    <button id="btn-project-menu" aria-label="プロジェクト一覧">&#9776;</button>
+    <span id="project-title">プロジェクトなし</span>
+    <span id="save-status" class="save-status saved">保存済</span>
+    <button id="btn-save" class="btn-accent">保存</button>
+  </header>
+
+  <!-- ── Tab Bar ── -->
+  <nav id="tab-bar">
+    <button class="tab active" data-tab="html">HTML</button>
+    <button class="tab" data-tab="css">CSS</button>
+    <button class="tab" data-tab="js">JS</button>
+    <button class="tab" data-tab="preview">プレビュー</button>
+  </nav>
+
+  <!-- ── Main Area ── -->
+  <main id="main-area">
+    <!-- HTML Pane -->
+    <div id="pane-html" class="pane active">
+      <div class="pane-toolbar">
+        <span class="pane-label">HTML</span>
+        <button class="btn-copy" data-target="html">コピー</button>
+      </div>
+      <textarea id="editor-html"
+        spellcheck="false" autocorrect="off" autocapitalize="off" autocomplete="off"
+        placeholder="HTMLを入力..."></textarea>
+    </div>
+
+    <!-- CSS Pane -->
+    <div id="pane-css" class="pane">
+      <div class="pane-toolbar">
+        <span class="pane-label">CSS</span>
+        <button class="btn-copy" data-target="css">コピー</button>
+      </div>
+      <textarea id="editor-css"
+        spellcheck="false" autocorrect="off" autocapitalize="off" autocomplete="off"
+        placeholder="CSSを入力..."></textarea>
+    </div>
+
+    <!-- JS Pane -->
+    <div id="pane-js" class="pane">
+      <div class="pane-toolbar">
+        <span class="pane-label">JavaScript</span>
+        <button class="btn-copy" data-target="js">コピー</button>
+      </div>
+      <textarea id="editor-js"
+        spellcheck="false" autocorrect="off" autocapitalize="off" autocomplete="off"
+        placeholder="JavaScriptを入力..."></textarea>
+    </div>
+
+    <!-- Preview Pane -->
+    <div id="pane-preview" class="pane">
+      <div class="pane-toolbar">
+        <span class="pane-label">プレビュー</span>
+        <button id="btn-refresh-preview">&#8635; 更新</button>
+      </div>
+      <iframe id="preview-frame" sandbox="allow-scripts" title="プレビュー"></iframe>
+    </div>
+  </main>
+
+  <!-- ── Action Bar ── -->
+  <footer id="action-bar">
+    <button id="btn-export">エクスポート</button>
+    <label class="action-label">インポート
+      <input type="file" id="import-file" accept=".json">
+    </label>
+    <button id="btn-single-html">1ファイル書き出し</button>
+  </footer>
+
+  <!-- ── Modal: Project List ── -->
+  <div id="modal-projects" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-sheet">
+      <div class="modal-header">
+        <h2>プロジェクト</h2>
+        <button class="btn-close" data-modal="modal-projects" aria-label="閉じる">✕</button>
+      </div>
+      <div class="modal-body">
+        <button id="btn-open-new-project" class="btn-primary btn-full">＋ 新規プロジェクト</button>
+        <ul id="project-list" class="project-list"></ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Modal: New Project ── -->
+  <div id="modal-new-project" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-sheet">
+      <div class="modal-header">
+        <h2>新規プロジェクト</h2>
+        <button class="btn-close" data-modal="modal-new-project" aria-label="閉じる">✕</button>
+      </div>
+      <div class="modal-body">
+        <input type="text" id="new-project-input" class="text-input" placeholder="プロジェクト名">
+        <div class="modal-actions">
+          <button id="btn-create-project" class="btn-primary">作成</button>
+          <button class="btn-close btn-secondary" data-modal="modal-new-project">キャンセル</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Modal: Rename ── -->
+  <div id="modal-rename" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-sheet">
+      <div class="modal-header">
+        <h2>名前を変更</h2>
+        <button class="btn-close" data-modal="modal-rename" aria-label="閉じる">✕</button>
+      </div>
+      <div class="modal-body">
+        <input type="text" id="rename-input" class="text-input" placeholder="プロジェクト名">
+        <div class="modal-actions">
+          <button id="btn-rename-ok" class="btn-primary">変更</button>
+          <button class="btn-close btn-secondary" data-modal="modal-rename">キャンセル</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Modal: Copy Fallback ── -->
+  <div id="modal-copy-fallback" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-sheet">
+      <div class="modal-header">
+        <h2>コードをコピー</h2>
+        <button class="btn-close" data-modal="modal-copy-fallback" aria-label="閉じる">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-note">自動コピーに失敗しました。以下を全選択してコピーしてください。</p>
+        <textarea id="copy-fallback-textarea" readonly class="code-textarea"></textarea>
+        <button id="btn-select-all-fallback" class="btn-secondary btn-full">全選択</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Modal: Single HTML ── -->
+  <div id="modal-single-html" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-sheet">
+      <div class="modal-header">
+        <h2>1ファイルHTML書き出し</h2>
+        <button class="btn-close" data-modal="modal-single-html" aria-label="閉じる">✕</button>
+      </div>
+      <div class="modal-body">
+        <textarea id="single-html-textarea" readonly class="code-textarea"></textarea>
+        <div class="modal-actions">
+          <button id="btn-copy-single-html" class="btn-primary">コピー</button>
+          <button id="btn-download-single-html" class="btn-secondary">ダウンロード</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Modal: Confirm ── -->
+  <div id="modal-confirm" class="modal modal-centered hidden" role="dialog" aria-modal="true">
+    <div class="modal-sheet modal-dialog">
+      <div class="modal-header">
+        <h2>確認</h2>
+      </div>
+      <div class="modal-body">
+        <p id="confirm-message" class="confirm-text"></p>
+        <div class="modal-actions">
+          <button id="btn-confirm-ok" class="btn-danger">OK</button>
+          <button id="btn-confirm-cancel" class="btn-secondary">キャンセル</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Toast ── -->
+  <div id="toast" class="toast" aria-live="polite"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
