@@ -178,7 +178,8 @@ button {
 
 /* Toolbar buttons (copy / refresh) */
 .btn-copy,
-#btn-refresh-preview {
+#btn-refresh-preview,
+#btn-fullscreen-preview {
   height: 30px;
   padding: 0 14px;
   background: var(--surface-3);
@@ -521,6 +522,48 @@ textarea::placeholder { color: var(--text-muted); opacity: 0.6; }
 .toast.show {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
+}
+
+/* ── Toolbar actions group ────────────────────── */
+.toolbar-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+/* ── No project guard ─────────────────────────── */
+.no-project-guard {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 32px 24px;
+}
+.no-project-guard.hidden { display: none; }
+
+.guard-message {
+  font-size: 15px;
+  color: var(--text-muted);
+  text-align: center;
+  line-height: 1.6;
+}
+
+.guard-btn {
+  width: 100%;
+  max-width: 280px;
+}
+
+/* ── Fullscreen preview ───────────────────────── */
+.pane.is-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  display: flex;
 }
 
 /* ── Scroll lock when modal open ──────────────── */

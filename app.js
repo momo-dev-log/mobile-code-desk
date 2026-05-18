@@ -95,7 +95,10 @@
   }
 
   function performSave() {
-    if (!currentId) return;
+    if (!currentId) {
+      showToast('保存先のプロジェクトがありません');
+      return;
+    }
     setSaveStatus('saving');
     captureEditors();
     persistProjects();
@@ -108,12 +111,42 @@
     document.getElementById('project-title').textContent = p ? p.title : 'プロジェクトなし';
   }
 
+  // ── Guard: show when no project selected ─────
+  function updateGuardState() {
+    const guard = document.getElementById('no-project-guard');
+    if (currentId) {
+      guard.classList.add('hidden');
+    } else {
+      guard.classList.remove('hidden');
+    }
+  }
+
+  // ── Fullscreen preview ────────────────────────
+  function exitFullscreen() {
+    const pane = document.getElementById('pane-preview');
+    if (!pane.classList.contains('is-fullscreen')) return;
+    pane.classList.remove('is-fullscreen');
+    document.getElementById('btn-fullscreen-preview').textContent = '全画面';
+  }
+
+  function toggleFullscreen() {
+    const pane = document.getElementById('pane-preview');
+    if (pane.classList.contains('is-fullscreen')) {
+      exitFullscreen();
+    } else {
+      pane.classList.add('is-fullscreen');
+      document.getElementById('btn-fullscreen-preview').textContent = '✕ 閉じる';
+      refreshPreview();
+    }
+  }
+
   // ── Select project ───────────────────────────
   function selectProject(id) {
     if (isDirty && currentId) performSave();
     currentId = id;
     loadIntoEditors(currentProject());
     refreshTitle();
+    updateGuardState();
     setSaveStatus('saved');
     persistProjects();
     closeAllModals();
@@ -122,6 +155,7 @@
 
   // ── Tabs ─────────────────────────────────────
   function switchTab(tab) {
+    if (tab !== 'preview') exitFullscreen();
     document.querySelectorAll('.tab').forEach(btn =>
       btn.classList.toggle('active', btn.dataset.tab === tab)
     );
@@ -132,15 +166,12 @@
   }
 
   // ── Preview ──────────────────────────────────
-  // Updated only when switching to preview tab or pressing the refresh button.
-  function refreshPreview() {
-    const html = editorVal('html');
-    const css  = editorVal('css');
-    const js   = editorVal('js');
-    // Escape </script> so it does not break the srcdoc HTML parser
+  function buildPreviewDoc() {
+    const html   = editorVal('html');
+    const css    = editorVal('css');
+    const js     = editorVal('js');
     const safeJs = js.replace(/<\/script>/gi, '<\\/script>');
-
-    document.getElementById('preview-frame').srcdoc = [
+    return [
       '<!DOCTYPE html><html lang="ja"><head>',
       '<meta charset="UTF-8">',
       '<meta name="viewport" content="width=device-width,initial-scale=1">',
@@ -150,6 +181,16 @@
       '<script>', safeJs, '<\/script>',
       '</body></html>'
     ].join('\n');
+  }
+
+  // Updated only when switching to preview tab, entering fullscreen, or pressing refresh.
+  // Resets srcdoc to '' first to force a full reload on every call.
+  function refreshPreview() {
+    const iframe = document.getElementById('preview-frame');
+    iframe.srcdoc = '';
+    requestAnimationFrame(() => {
+      iframe.srcdoc = buildPreviewDoc();
+    });
   }
 
   // ── Copy ─────────────────────────────────────
@@ -286,6 +327,7 @@
           currentId = projects.length > 0 ? projects[projects.length - 1].id : null;
           loadIntoEditors(currentProject());
           refreshTitle();
+          updateGuardState();
           persistProjects();
           setSaveStatus('saved');
           showToast('インポートしました');
@@ -362,6 +404,7 @@
     loadIntoEditors(currentProject());
     refreshTitle();
     setSaveStatus('saved');
+    updateGuardState();
 
     // ── Tabs ──
     document.querySelectorAll('.tab').forEach(btn =>
@@ -377,6 +420,23 @@
     document.getElementById('btn-save').addEventListener('click', () => {
       clearTimeout(saveTimer);
       performSave();
+    });
+
+    // ── Guard buttons ──
+    document.getElementById('btn-guard-create').addEventListener('click', () => {
+      document.getElementById('new-project-input').value = '';
+      openModal('modal-new-project');
+      setTimeout(() => document.getElementById('new-project-input').focus(), 150);
+    });
+    document.getElementById('btn-guard-list').addEventListener('click', () => {
+      renderProjectList();
+      openModal('modal-projects');
+    });
+
+    // ── Fullscreen preview ──
+    document.getElementById('btn-fullscreen-preview').addEventListener('click', toggleFullscreen);
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') exitFullscreen();
     });
 
     // ── Project menu ──
@@ -434,6 +494,7 @@
               currentId = projects.length > 0 ? projects[projects.length - 1].id : null;
               loadIntoEditors(currentProject());
               refreshTitle();
+              updateGuardState();
               setSaveStatus('saved');
             }
             persistProjects();

@@ -63,9 +63,18 @@
     <div id="pane-preview" class="pane">
       <div class="pane-toolbar">
         <span class="pane-label">プレビュー</span>
-        <button id="btn-refresh-preview">&#8635; 更新</button>
+        <div class="toolbar-actions">
+          <button id="btn-fullscreen-preview">全画面</button>
+          <button id="btn-refresh-preview">&#8635; 更新</button>
+        </div>
       </div>
-      <iframe id="preview-frame" sandbox="allow-scripts" title="プレビュー"></iframe>
+      <iframe id="preview-frame" sandbox="allow-scripts allow-same-origin" title="プレビュー"></iframe>
+    </div>
+    <!-- ── No Project Guard ── -->
+    <div id="no-project-guard" class="no-project-guard hidden">
+      <p class="guard-message">プロジェクトが選択されていません</p>
+      <button id="btn-guard-create" class="btn-primary guard-btn">＋ 新規プロジェクトを作成</button>
+      <button id="btn-guard-list" class="btn-secondary guard-btn">プロジェクト一覧を開く</button>
     </div>
   </main>
 
