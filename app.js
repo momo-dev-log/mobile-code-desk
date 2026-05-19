@@ -171,10 +171,18 @@
     const css    = editorVal('css');
     const js     = editorVal('js');
     const safeJs = js.replace(/<\/script>/gi, '<\/script>');
+    const previewTouchStyle =
+      '<style id="mobile-code-desk-preview-touch-style">\n' +
+      '*, *::before, *::after { -webkit-tap-highlight-color: transparent; }\n' +
+      'button, a, [role="button"], svg, svg * { touch-action: manipulation; }\n' +
+      'svg, svg * { -webkit-user-select: none; user-select: none; }\n' +
+      'input, textarea, [contenteditable] { -webkit-user-select: text; user-select: text; touch-action: auto; }\n' +
+      '</style>';
     return [
       '<!DOCTYPE html><html lang="ja"><head>',
       '<meta charset="UTF-8">',
       '<meta name="viewport" content="width=device-width,initial-scale=1">',
+      previewTouchStyle,
       '<style>', css, '</style>',
       '</head><body>',
       html,
