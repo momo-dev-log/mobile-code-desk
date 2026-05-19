@@ -11,7 +11,7 @@
   let confirmCallback = null;
   let renameTargetId  = null;
 
-  // ── ID generation ──────────────────────────────────
+  // ── ID generation ──────────────────────────────
   function genId() {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
       return crypto.randomUUID();
@@ -19,7 +19,7 @@
     return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2);
   }
 
-  // ── Storage ─────────────────────────────────
+  // ── Storage ────────────────────────────────
   function loadFromStorage() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -40,7 +40,7 @@
     }
   }
 
-  // ── Project helpers ────────────────────────────
+  // ── Project helpers ──────────────────────────
   function findProject(id) {
     return projects.find(p => p.id === id) || null;
   }
@@ -60,7 +60,7 @@
     };
   }
 
-  // ── Editor helpers ───────────────────────────────
+  // ── Editor helpers ────────────────────────────
   function editorVal(type) {
     return document.getElementById('editor-' + type).value;
   }
@@ -80,7 +80,7 @@
     document.getElementById('editor-js').value   = project ? project.js   : '';
   }
 
-  // ── Save status ────────────────────────────────
+  // ── Save status ─────────────────────────────
   function setSaveStatus(status) {
     const el = document.getElementById('save-status');
     el.className = 'save-status ' + status;
@@ -105,13 +105,13 @@
     setTimeout(() => setSaveStatus('saved'), 200);
   }
 
-  // ── Project title display ──────────────────────────
+  // ── Project title display ──────────────────────
   function refreshTitle() {
     const p = currentProject();
     document.getElementById('project-title').textContent = p ? p.title : 'プロジェクトなし';
   }
 
-  // ── Guard: show when no project selected ─────
+  // ── Guard: show when no project selected ────
   function updateGuardState() {
     const guard = document.getElementById('no-project-guard');
     if (currentId) {
@@ -121,7 +121,7 @@
     }
   }
 
-  // ── Fullscreen preview ──────────────────────────────
+  // ── Fullscreen preview ───────────────────────────
   function exitFullscreen() {
     const pane = document.getElementById('pane-preview');
     if (!pane.classList.contains('is-fullscreen')) return;
@@ -140,7 +140,7 @@
     }
   }
 
-  // ── Select project ───────────────────────────────
+  // ── Select project ────────────────────────────
   function selectProject(id) {
     if (isDirty && currentId) performSave();
     currentId = id;
@@ -153,7 +153,7 @@
     switchTab('html');
   }
 
-  // ── Tabs ─────────────────────────────────────────
+  // ── Tabs ──────────────────────────────────────
   function switchTab(tab) {
     if (tab !== 'preview') exitFullscreen();
     document.querySelectorAll('.tab').forEach(btn =>
@@ -165,7 +165,7 @@
     if (tab === 'preview') refreshPreview();
   }
 
-  // ── Preview ────────────────────────────────────────
+  // ── Preview ───────────────────────────────────
   function buildPreviewDoc() {
     const html   = editorVal('html');
     const css    = editorVal('css');
@@ -193,7 +193,7 @@
     });
   }
 
-  // ── Copy ───────────────────────────────────────────
+  // ── Copy ───────────────────────────────────────
   async function copyText(text) {
     if (navigator.clipboard && navigator.clipboard.writeText) {
       try {
@@ -212,7 +212,7 @@
     setTimeout(() => { ta.focus(); ta.select(); }, 150);
   }
 
-  // ── Toast ───────────────────────────────────────────
+  // ── Toast ───────────────────────────────────────
   function showToast(msg) {
     const el = document.getElementById('toast');
     el.textContent = msg;
@@ -221,7 +221,7 @@
     el._t = setTimeout(() => el.classList.remove('show'), 2200);
   }
 
-  // ── Modals ────────────────────────────────────────
+  // ── Modals ───────────────────────────────────
   function openModal(id) {
     document.getElementById(id).classList.remove('hidden');
     document.body.classList.add('modal-open');
@@ -239,7 +239,7 @@
     document.body.classList.remove('modal-open');
   }
 
-  // ── Project list UI ──────────────────────────────
+  // ── Project list UI ───────────────────────────
   function renderProjectList() {
     const list = document.getElementById('project-list');
     list.innerHTML = '';
@@ -280,7 +280,7 @@
     });
   }
 
-  // ── Export ──────────────────────────────────────────
+  // ── Export ──────────────────────────────────────
   function exportAll() {
     const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     downloadText(
@@ -290,7 +290,7 @@
     );
   }
 
-  // ── Import ──────────────────────────────────────────
+  // ── Import ──────────────────────────────────────
   function importFromFile(file) {
     const reader = new FileReader();
     reader.onload = e => {
@@ -337,7 +337,7 @@
     reader.readAsText(file);
   }
 
-  // ── 1-file HTML ────────────────────────────────────
+  // ── 1-file HTML ──────────────────────────────
   function buildSingleHtml() {
     const p     = currentProject();
     const title = p ? escAttr(p.title) : 'untitled';
@@ -370,7 +370,7 @@
       .replace(/"/g, '&quot;');
   }
 
-  // ── File download helper ────────────────────────────
+  // ── File download helper ────────────────────────
   function downloadText(filename, text, mime) {
     const blob = new Blob([text], { type: mime });
     const url  = URL.createObjectURL(blob);
@@ -383,7 +383,22 @@
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
-  // ── AI Help: build consultation text ─────────────
+  // ── Duplicate project ──────────────────────────
+  function duplicateProject() {
+    if (!currentId) { showToast('先にプロジェクトを選んでください'); return; }
+    const src  = currentProject();
+    if (!src) return;
+    const copy = buildProject(src.title + ' のコピー');
+    copy.html  = editorVal('html');
+    copy.css   = editorVal('css');
+    copy.js    = editorVal('js');
+    projects.push(copy);
+    persistProjects();
+    selectProject(copy.id);
+    showToast('コピーを作りました');
+  }
+
+  // ── AI Help: build consultation text ────────────
   function buildAiHelpText() {
     const problem  = document.querySelector('input[name="ai-problem"]:checked');
     const request  = document.querySelector('input[name="ai-request"]:checked');
@@ -436,14 +451,14 @@
     return lines.join('\n');
   }
 
-  // ── Confirm modal ──────────────────────────────
+  // ── Confirm modal ───────────────────────────
   function showConfirm(msg, cb) {
     document.getElementById('confirm-message').textContent = msg;
     confirmCallback = cb;
     openModal('modal-confirm');
   }
 
-  // ── Init & event wiring ──────────────────────────
+  // ── Init & event wiring ──────────────────────
   function init() {
     loadFromStorage();
 
@@ -604,6 +619,9 @@
         'text/html'
       );
     });
+
+    // ── Duplicate project ──
+    document.getElementById('btn-duplicate').addEventListener('click', duplicateProject);
 
     // ── Rename ──
     document.getElementById('btn-rename-ok').addEventListener('click', () => {
