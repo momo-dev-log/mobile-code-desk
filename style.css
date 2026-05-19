@@ -390,8 +390,7 @@ textarea::placeholder { color: var(--text-muted); opacity: 0.6; }
 
 /* Text inputs in modals */
 .text-input {
-  width: 100%;
-  height: 50px;
+  width: 100%;  height: 50px;
   background: var(--bg);
   color: var(--text);
   border: 1px solid var(--border);
@@ -627,6 +626,7 @@ textarea::placeholder { color: var(--text-muted); opacity: 0.6; }
 }
 
 .ai-memo {
+  flex: none;
   width: 100%;
   min-height: 80px;
   background: var(--bg);
