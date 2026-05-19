@@ -95,6 +95,7 @@
       <input type="file" id="import-file" accept=".json">
     </label>
     <button id="btn-single-html">1ファイルHTMLにまとめる</button>
+    <button id="btn-ai-help">AIに聴く</button>
   </footer>
 
   <!-- ── Modal: Project List ── -->
@@ -188,6 +189,73 @@
         <div class="modal-actions">
           <button id="btn-confirm-ok" class="btn-danger">OK</button>
           <button id="btn-confirm-cancel" class="btn-secondary">キャンセル</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Modal: AI Help ── -->
+  <div id="modal-ai-help" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-sheet">
+      <div class="modal-header">
+        <h2>困ったのでAIに聴く文を作る</h2>
+        <button class="btn-close" data-modal="modal-ai-help" aria-label="閉じる">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="ai-section-label">困っていること</p>
+        <div class="ai-options" id="ai-problem-options">
+          <label class="ai-option">
+            <input type="radio" name="ai-problem" value="ボタンが反応しない">
+            <span>ボタンが反応しない</span>
+          </label>
+          <label class="ai-option">
+            <input type="radio" name="ai-problem" value="画面が白い / 何も表示されない">
+            <span>画面が白い / 何も表示されない</span>
+          </label>
+          <label class="ai-option">
+            <input type="radio" name="ai-problem" value="見た目が崩れた">
+            <span>見た目が崩れた</span>
+          </label>
+          <label class="ai-option">
+            <input type="radio" name="ai-problem" value="エラーっぽいけど内容が分からない">
+            <span>エラーっぽいけど内容が分からない</span>
+          </label>
+          <label class="ai-option">
+            <input type="radio" name="ai-problem" value="思った通りに動かない">
+            <span>思った通りに動かない</span>
+          </label>
+        </div>
+
+        <p class="ai-section-label">AIにお願いしたいこと</p>
+        <div class="ai-options" id="ai-request-options">
+          <label class="ai-option">
+            <input type="radio" name="ai-request" value="まず原因だけ知りたい">
+            <span>まず原因だけ知りたい</span>
+          </label>
+          <label class="ai-option">
+            <input type="radio" name="ai-request" value="修正案を出してほしい">
+            <span>修正案を出してほしい</span>
+          </label>
+          <label class="ai-option">
+            <input type="radio" name="ai-request" value="コードを直してほしい">
+            <span>コードを直してほしい</span>
+          </label>
+          <label class="ai-option">
+            <input type="radio" name="ai-request" value="初心者向けに説明してほしい">
+            <span>初心者向けに説明してほしい</span>
+          </label>
+        </div>
+
+        <p class="ai-section-label">追加メモ（任意）</p>
+        <textarea id="ai-memo-input" class="ai-memo"
+          placeholder="気になっていることや補足を自由に書いてください"></textarea>
+
+        <button id="btn-generate-ai-text" class="btn-primary btn-full">相談文を作る</button>
+
+        <div id="ai-result-area" class="ai-result-area hidden">
+          <p class="ai-section-label">生成された相談文</p>
+          <textarea id="ai-result-textarea" readonly class="code-textarea ai-result-textarea"></textarea>
+          <button id="btn-copy-ai-text" class="btn-secondary btn-full">コピー</button>
         </div>
       </div>
     </div>
