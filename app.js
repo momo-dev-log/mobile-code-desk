@@ -11,7 +11,7 @@
   let confirmCallback = null;
   let renameTargetId  = null;
 
-  // ── ID generation ────────────────────────────
+  // ── ID generation ────────────────────────────────
   function genId() {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
       return crypto.randomUUID();
@@ -19,7 +19,7 @@
     return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2);
   }
 
-  // ── Storage ──────────────────────────────────
+  // ── Storage ────────────────────────────────────
   function loadFromStorage() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -40,7 +40,7 @@
     }
   }
 
-  // ── Project helpers ──────────────────────────
+  // ── Project helpers ────────────────────────────
   function findProject(id) {
     return projects.find(p => p.id === id) || null;
   }
@@ -60,7 +60,7 @@
     };
   }
 
-  // ── Editor helpers ───────────────────────────
+  // ── Editor helpers ───────────────────────────────
   function editorVal(type) {
     return document.getElementById('editor-' + type).value;
   }
@@ -80,7 +80,7 @@
     document.getElementById('editor-js').value   = project ? project.js   : '';
   }
 
-  // ── Save status ──────────────────────────────
+  // ── Save status ─────────────────────────────────
   function setSaveStatus(status) {
     const el = document.getElementById('save-status');
     el.className = 'save-status ' + status;
@@ -105,7 +105,7 @@
     setTimeout(() => setSaveStatus('saved'), 200);
   }
 
-  // ── Project title display ────────────────────
+  // ── Project title display ──────────────────────────
   function refreshTitle() {
     const p = currentProject();
     document.getElementById('project-title').textContent = p ? p.title : 'プロジェクトなし';
@@ -121,7 +121,7 @@
     }
   }
 
-  // ── Fullscreen preview ────────────────────────
+  // ── Fullscreen preview ────────────────────────────
   function exitFullscreen() {
     const pane = document.getElementById('pane-preview');
     if (!pane.classList.contains('is-fullscreen')) return;
@@ -140,7 +140,7 @@
     }
   }
 
-  // ── Select project ───────────────────────────
+  // ── Select project ───────────────────────────────
   function selectProject(id) {
     if (isDirty && currentId) performSave();
     currentId = id;
@@ -153,7 +153,7 @@
     switchTab('html');
   }
 
-  // ── Tabs ─────────────────────────────────────
+  // ── Tabs ─────────────────────────────────────────
   function switchTab(tab) {
     if (tab !== 'preview') exitFullscreen();
     document.querySelectorAll('.tab').forEach(btn =>
@@ -165,7 +165,7 @@
     if (tab === 'preview') refreshPreview();
   }
 
-  // ── Preview ──────────────────────────────────
+  // ── Preview ──────────────────────────────────────
   function buildPreviewDoc() {
     const html   = editorVal('html');
     const css    = editorVal('css');
@@ -193,7 +193,7 @@
     });
   }
 
-  // ── Copy ─────────────────────────────────────
+  // ── Copy ─────────────────────────────────────────
   async function copyText(text) {
     if (navigator.clipboard && navigator.clipboard.writeText) {
       try {
@@ -212,7 +212,7 @@
     setTimeout(() => { ta.focus(); ta.select(); }, 150);
   }
 
-  // ── Toast ─────────────────────────────────────
+  // ── Toast ─────────────────────────────────────────
   function showToast(msg) {
     const el = document.getElementById('toast');
     el.textContent = msg;
@@ -221,7 +221,7 @@
     el._t = setTimeout(() => el.classList.remove('show'), 2200);
   }
 
-  // ── Modals ───────────────────────────────────
+  // ── Modals ──────────────────────────────────────
   function openModal(id) {
     document.getElementById(id).classList.remove('hidden');
     document.body.classList.add('modal-open');
@@ -239,7 +239,7 @@
     document.body.classList.remove('modal-open');
   }
 
-  // ── Project list UI ──────────────────────────
+  // ── Project list UI ──────────────────────────────
   function renderProjectList() {
     const list = document.getElementById('project-list');
     list.innerHTML = '';
@@ -280,7 +280,7 @@
     });
   }
 
-  // ── Export ───────────────────────────────────
+  // ── Export ─────────────────────────────────────────
   function exportAll() {
     const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     downloadText(
@@ -290,7 +290,7 @@
     );
   }
 
-  // ── Import ───────────────────────────────────
+  // ── Import ─────────────────────────────────────────
   function importFromFile(file) {
     const reader = new FileReader();
     reader.onload = e => {
@@ -337,7 +337,7 @@
     reader.readAsText(file);
   }
 
-  // ── 1-file HTML ──────────────────────────────
+  // ── 1-file HTML ────────────────────────────────────
   function buildSingleHtml() {
     const p     = currentProject();
     const title = p ? escAttr(p.title) : 'untitled';
@@ -370,7 +370,7 @@
       .replace(/"/g, '&quot;');
   }
 
-  // ── File download helper ──────────────────────
+  // ── File download helper ────────────────────────────
   function downloadText(filename, text, mime) {
     const blob = new Blob([text], { type: mime });
     const url  = URL.createObjectURL(blob);
@@ -383,14 +383,73 @@
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
-  // ── Confirm modal ────────────────────────────
+  // ── AI Help: build consultation text ─────────────
+  function buildAiHelpText() {
+    const problem = document.querySelector('input[name="ai-problem"]:checked');
+    const request = document.querySelector('input[name="ai-request"]:checked');
+    const memo    = document.getElementById('ai-memo-input').value.trim();
+
+    if (!problem) { showToast('困っていることを選んでください'); return null; }
+    if (!request) { showToast('AIにお願いしたいことを選んでください'); return null; }
+
+    const p           = currentProject();
+    const projectName = p ? p.title : '（プロジェクト未選択）';
+
+    const activeTab = document.querySelector('.tab.active');
+    const tabKey    = activeTab ? activeTab.dataset.tab : '';
+    const tabLabel  = {
+      html:    '画面の中身（HTML）',
+      css:     '見た目（CSS）',
+      js:      '動き（JavaScript）',
+      preview: 'ためす'
+    }[tabKey] || tabKey;
+
+    const html = editorVal('html').trim() || '（なし）';
+    const css  = editorVal('css').trim()  || '（なし）';
+    const js   = editorVal('js').trim()   || '（なし）';
+
+    const lines = [
+      '以下のコードについて相談があります。',
+      '',
+      'プロジェクト名：' + projectName,
+      '作業中のタブ：'   + tabLabel,
+      '',
+      '「困っていること」',
+      problem.value,
+      '',
+      '「AIにお願いしたいこと」',
+      request.value,
+    ];
+
+    if (memo) {
+      lines.push('', '「追加メモ」', memo);
+    }
+
+    lines.push(
+      '',
+      '「コード」',
+      '',
+      '--- HTML ---',
+      html,
+      '',
+      '--- CSS ---',
+      css,
+      '',
+      '--- JavaScript ---',
+      js
+    );
+
+    return lines.join('\n');
+  }
+
+  // ── Confirm modal ────────────────────────────────
   function showConfirm(msg, cb) {
     document.getElementById('confirm-message').textContent = msg;
     confirmCallback = cb;
     openModal('modal-confirm');
   }
 
-  // ── Init & event wiring ──────────────────────
+  // ── Init & event wiring ──────────────────────────
   function init() {
     loadFromStorage();
 
@@ -543,7 +602,7 @@
     document.getElementById('btn-download-single-html').addEventListener('click', () => {
       const p        = currentProject();
       const safeName = p
-        ? p.title.replace(/[^\w぀-ヿ一-鿿\-]/g, '_').slice(0, 60)
+        ? p.title.replace(/[^\w぀-ヿ㐀-鿿\-]/g, '_').slice(0, 60)
         : 'untitled';
       downloadText(
         safeName + '.html',
@@ -579,6 +638,30 @@
     document.getElementById('btn-confirm-cancel').addEventListener('click', () => {
       closeModal('modal-confirm');
       confirmCallback = null;
+    });
+
+    // ── AI Help ──
+    document.getElementById('btn-ai-help').addEventListener('click', () => {
+      document.querySelectorAll('input[name="ai-problem"], input[name="ai-request"]').forEach(r => {
+        r.checked = false;
+      });
+      document.getElementById('ai-memo-input').value = '';
+      document.getElementById('ai-result-textarea').value = '';
+      document.getElementById('ai-result-area').classList.add('hidden');
+      openModal('modal-ai-help');
+    });
+
+    document.getElementById('btn-generate-ai-text').addEventListener('click', () => {
+      const text = buildAiHelpText();
+      if (!text) return;
+      document.getElementById('ai-result-textarea').value = text;
+      document.getElementById('ai-result-area').classList.remove('hidden');
+      const body = document.querySelector('#modal-ai-help .modal-body');
+      if (body) setTimeout(() => { body.scrollTop = body.scrollHeight; }, 50);
+    });
+
+    document.getElementById('btn-copy-ai-text').addEventListener('click', () => {
+      copyText(document.getElementById('ai-result-textarea').value);
     });
 
     // ── Generic close buttons ──
