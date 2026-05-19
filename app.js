@@ -383,6 +383,65 @@
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
+  // ── AI Help: build consultation text ─────────
+  function buildAiHelpText() {
+    const problem = document.querySelector('input[name="ai-problem"]:checked');
+    const request = document.querySelector('input[name="ai-request"]:checked');
+    const memo    = document.getElementById('ai-memo-input').value.trim();
+
+    if (!problem) { showToast('困っていることを選んでください'); return null; }
+    if (!request) { showToast('AIにお願いしたいことを選んでください'); return null; }
+
+    const p           = currentProject();
+    const projectName = p ? p.title : '（プロジェクト未選択）';
+
+    const activeTab = document.querySelector('.tab.active');
+    const tabKey    = activeTab ? activeTab.dataset.tab : '';
+    const tabLabel  = {
+      html:    '画面の中身（HTML）',
+      css:     '見た目（CSS）',
+      js:      '動き（JavaScript）',
+      preview: 'ためす'
+    }[tabKey] || tabKey;
+
+    const html = editorVal('html').trim() || '（なし）';
+    const css  = editorVal('css').trim()  || '（なし）';
+    const js   = editorVal('js').trim()   || '（なし）';
+
+    const lines = [
+      '以下のコードについて相談があります。',
+      '',
+      'プロジェクト名：' + projectName,
+      '作業中のタブ：'   + tabLabel,
+      '',
+      '【困っていること】',
+      problem.value,
+      '',
+      '【AIにお願いしたいこと】',
+      request.value,
+    ];
+
+    if (memo) {
+      lines.push('', '【追加メモ】', memo);
+    }
+
+    lines.push(
+      '',
+      '【コード】',
+      '',
+      '--- HTML ---',
+      html,
+      '',
+      '--- CSS ---',
+      css,
+      '',
+      '--- JavaScript ---',
+      js
+    );
+
+    return lines.join('\n');
+  }
+
   // ── Confirm modal ────────────────────────────
   function showConfirm(msg, cb) {
     document.getElementById('confirm-message').textContent = msg;
@@ -579,6 +638,30 @@
     document.getElementById('btn-confirm-cancel').addEventListener('click', () => {
       closeModal('modal-confirm');
       confirmCallback = null;
+    });
+
+    // ── AI Help ──
+    document.getElementById('btn-ai-help').addEventListener('click', () => {
+      document.querySelectorAll('input[name="ai-problem"], input[name="ai-request"]').forEach(r => {
+        r.checked = false;
+      });
+      document.getElementById('ai-memo-input').value = '';
+      document.getElementById('ai-result-textarea').value = '';
+      document.getElementById('ai-result-area').classList.add('hidden');
+      openModal('modal-ai-help');
+    });
+
+    document.getElementById('btn-generate-ai-text').addEventListener('click', () => {
+      const text = buildAiHelpText();
+      if (!text) return;
+      document.getElementById('ai-result-textarea').value = text;
+      document.getElementById('ai-result-area').classList.remove('hidden');
+      const body = document.querySelector('#modal-ai-help .modal-body');
+      if (body) setTimeout(() => { body.scrollTop = body.scrollHeight; }, 50);
+    });
+
+    document.getElementById('btn-copy-ai-text').addEventListener('click', () => {
+      copyText(document.getElementById('ai-result-textarea').value);
     });
 
     // ── Generic close buttons ──
