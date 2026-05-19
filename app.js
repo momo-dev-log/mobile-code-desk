@@ -191,8 +191,6 @@
     ].join('\n');
   }
 
-  // Updated only when switching to preview tab, entering fullscreen, or pressing refresh.
-  // Resets srcdoc to '' first to force a full reload on every call.
   function refreshPreview() {
     const iframe = document.getElementById('preview-frame');
     iframe.srcdoc = '';
@@ -369,13 +367,19 @@
       '</html>';
   }
 
-  // Escape for use inside an HTML attribute (e.g. <title>)
   function escAttr(str) {
     return String(str)
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;');
+  }
+
+  function escHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
   }
 
   // ── File download helper ────────────────────────
@@ -464,6 +468,161 @@
     document.getElementById('confirm-message').textContent = msg;
     confirmCallback = cb;
     openModal('modal-confirm');
+  }
+
+  // ── Patch Check ──────────────────────────────
+  function parsePatchJson(text) {
+    let parsed;
+    try {
+      parsed = JSON.parse(text.trim());
+    } catch (e) {
+      return { ok: false, error: 'JSONの形式が正しくありません：\n' + e.message };
+    }
+    if (!Array.isArray(parsed)) {
+      return { ok: false, error: 'JSONは配列 [ ... ] の形式にしてください' };
+    }
+    if (parsed.length === 0) {
+      return { ok: false, error: 'パッチが1件もありません' };
+    }
+
+    const VALID_TARGETS = ['html', 'css', 'js'];
+    const VALID_MODES   = ['replace', 'insertBefore', 'insertAfter'];
+    const errors = [];
+
+    parsed.forEach((patch, i) => {
+      const n = i + 1;
+      if (!patch || typeof patch !== 'object') {
+        errors.push(n + '件目：パッチの形式が正しくありません');
+        return;
+      }
+      if (!VALID_TARGETS.includes(patch.target)) {
+        errors.push(n + '件目：target は html / css / js のいずれかにしてください（現在：' + JSON.stringify(patch.target) + '）');
+      }
+      if (!VALID_MODES.includes(patch.mode)) {
+        errors.push(n + '件目：mode は replace / insertBefore / insertAfter のいずれかにしてください（現在：' + JSON.stringify(patch.mode) + '）');
+      }
+      if (typeof patch.find !== 'string' || patch.find === '') {
+        errors.push(n + '件目：find が空か指定されていません');
+      }
+      if (patch.mode === 'replace') {
+        if (typeof patch.replace !== 'string') {
+          errors.push(n + '件目：replace が指定されていません（mode が replace のとき必要です）');
+        }
+      } else if (patch.mode === 'insertBefore' || patch.mode === 'insertAfter') {
+        if (typeof patch.insert !== 'string' || patch.insert === '') {
+          errors.push(n + '件目：insert が空か指定されていません（mode が ' + patch.mode + ' のとき必要です）');
+        }
+      }
+    });
+
+    if (errors.length > 0) {
+      return { ok: false, error: errors.join('\n') };
+    }
+    return { ok: true, patches: parsed };
+  }
+
+  function countOccurrences(haystack, needle) {
+    if (!needle) return 0;
+    let count = 0;
+    let pos   = 0;
+    while ((pos = haystack.indexOf(needle, pos)) !== -1) {
+      count++;
+      pos += needle.length;
+    }
+    return count;
+  }
+
+  function runPatchCheck() {
+    if (!currentId) {
+      showToast('先にプロジェクトを選んでください');
+      return;
+    }
+
+    const jsonText  = document.getElementById('patch-json-input').value.trim();
+    const resultsEl = document.getElementById('patch-results-area');
+    const resetBtn  = document.getElementById('btn-patch-reset');
+
+    if (!jsonText) {
+      showToast('JSONを貼り付けてください');
+      return;
+    }
+
+    const parseResult = parsePatchJson(jsonText);
+
+    if (!parseResult.ok) {
+      resultsEl.innerHTML = '<div class="patch-parse-error">' + escHtml(parseResult.error) + '</div>';
+      resultsEl.classList.remove('hidden');
+      resetBtn.classList.remove('hidden');
+      return;
+    }
+
+    const sources = {
+      html: editorVal('html'),
+      css:  editorVal('css'),
+      js:   editorVal('js')
+    };
+    const targetLabel = { html: 'HTML', css: 'CSS', js: 'JavaScript' };
+    const modeLabel   = { replace: '置き換え', insertBefore: '前に挿入', insertAfter: '後に挿入' };
+
+    let hasError  = false;
+    let itemsHtml = '';
+
+    parseResult.patches.forEach((patch, i) => {
+      const source = sources[patch.target];
+      const count  = countOccurrences(source, patch.find);
+      const header = 'パッチ ' + (i + 1) + ' / ' + parseResult.patches.length +
+                     '　' + targetLabel[patch.target] + '　' + modeLabel[patch.mode];
+
+      itemsHtml += '<div class="patch-item">';
+      itemsHtml += '<div class="patch-item-header">' + escHtml(header) + '</div>';
+
+      if (count === 0) {
+        hasError = true;
+        itemsHtml += '<div class="patch-status patch-status-error">✕ 見つかりませんでした</div>';
+        itemsHtml += '<div class="patch-field-label">探した文字列</div>';
+        itemsHtml += '<pre class="patch-code patch-code-find">' + escHtml(patch.find) + '</pre>';
+
+      } else if (count > 1) {
+        hasError = true;
+        itemsHtml += '<div class="patch-status patch-status-error">✕ ' + count + '箇所で見つかりました（一意でないため確認できません）</div>';
+        itemsHtml += '<div class="patch-field-label">探した文字列</div>';
+        itemsHtml += '<pre class="patch-code patch-code-find">' + escHtml(patch.find) + '</pre>';
+
+      } else {
+        itemsHtml += '<div class="patch-status patch-status-ok">✓ 1箇所で見つかりました</div>';
+
+        if (patch.mode === 'replace') {
+          itemsHtml += '<div class="patch-field-label">変更前</div>';
+          itemsHtml += '<pre class="patch-code patch-code-before">' + escHtml(patch.find) + '</pre>';
+          itemsHtml += '<div class="patch-field-label">変更後</div>';
+          itemsHtml += '<pre class="patch-code patch-code-after">' + escHtml(patch.replace) + '</pre>';
+
+        } else if (patch.mode === 'insertBefore') {
+          itemsHtml += '<div class="patch-field-label">挿入位置（この行の前）</div>';
+          itemsHtml += '<pre class="patch-code patch-code-find">' + escHtml(patch.find) + '</pre>';
+          itemsHtml += '<div class="patch-field-label">挿入する内容</div>';
+          itemsHtml += '<pre class="patch-code patch-code-after">' + escHtml(patch.insert) + '</pre>';
+
+        } else {
+          itemsHtml += '<div class="patch-field-label">挿入位置（この行の後）</div>';
+          itemsHtml += '<pre class="patch-code patch-code-find">' + escHtml(patch.find) + '</pre>';
+          itemsHtml += '<div class="patch-field-label">挿入する内容</div>';
+          itemsHtml += '<pre class="patch-code patch-code-after">' + escHtml(patch.insert) + '</pre>';
+        }
+      }
+
+      itemsHtml += '</div>';
+    });
+
+    const summary = hasError
+      ? '<div class="patch-summary patch-summary-error">エラーがあります。AIにfindの文字列を確認・修正してもらってください。</div>'
+      : '<div class="patch-summary patch-summary-ok">すべてのパッチが1箇所で見つかりました。このコードに安全に適用できる見込みです。</div>';
+
+    resultsEl.innerHTML = summary + itemsHtml;
+    resultsEl.classList.remove('hidden');
+    resetBtn.classList.remove('hidden');
+
+    setTimeout(() => resultsEl.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
   }
 
   // ── Init & event wiring ──────────────────────
@@ -684,6 +843,23 @@
 
     document.getElementById('btn-copy-ai-text').addEventListener('click', () => {
       copyText(document.getElementById('ai-result-textarea').value);
+    });
+
+    // ── Patch Check ──
+    document.getElementById('btn-patch-check').addEventListener('click', () => {
+      document.getElementById('patch-json-input').value = '';
+      document.getElementById('patch-results-area').innerHTML = '';
+      document.getElementById('patch-results-area').classList.add('hidden');
+      document.getElementById('btn-patch-reset').classList.add('hidden');
+      openModal('modal-patch-check');
+    });
+
+    document.getElementById('btn-run-patch-check').addEventListener('click', runPatchCheck);
+
+    document.getElementById('btn-patch-reset').addEventListener('click', () => {
+      document.getElementById('patch-results-area').innerHTML = '';
+      document.getElementById('patch-results-area').classList.add('hidden');
+      document.getElementById('btn-patch-reset').classList.add('hidden');
     });
 
     // ── Generic close buttons ──

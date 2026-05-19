@@ -657,3 +657,85 @@ textarea::placeholder { color: var(--text-muted); opacity: 0.6; }
 
 /* ── Scroll lock when modal open ───────────────────────────────── */
 body.modal-open { overflow: hidden; }
+
+/* ── Patch Check Modal ──────────────────────────────────────────── */
+.patch-input-textarea {
+  min-height: 160px;
+  max-height: 28vh;
+  white-space: pre;
+}
+
+#patch-results-area {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+#patch-results-area.hidden { display: none; }
+
+.patch-parse-error {
+  background: rgba(224, 92, 92, 0.10);
+  border: 1px solid var(--danger);
+  border-radius: 10px;
+  padding: 12px 14px;
+  color: var(--danger);
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.patch-summary {
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+.patch-summary-ok    { background: rgba(80, 200, 120, 0.10); border: 1px solid var(--success); color: var(--success); }
+.patch-summary-error { background: rgba(224, 92, 92, 0.10); border: 1px solid var(--danger);  color: var(--danger); }
+
+.patch-item {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.patch-item-header {
+  background: var(--surface-2);
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.patch-status {
+  padding: 8px 12px;
+  font-size: 14px;
+  font-weight: 700;
+}
+.patch-status-ok    { background: rgba(80, 200, 120, 0.08); color: var(--success); }
+.patch-status-error { background: rgba(224, 92, 92, 0.08);  color: var(--danger); }
+
+.patch-field-label {
+  padding: 6px 12px 2px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.patch-code {
+  margin: 0;
+  padding: 8px 12px 10px;
+  font-family: 'Menlo', 'Courier New', Courier, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-all;
+  overflow-x: auto;
+}
+.patch-code-before { background: rgba(224, 92, 92, 0.10);  border-left: 3px solid var(--danger); }
+.patch-code-after  { background: rgba(80, 200, 120, 0.10); border-left: 3px solid var(--success); }
+.patch-code-find   { background: var(--surface-2); border-left: 3px solid var(--border); color: var(--text-muted); }
