@@ -21,7 +21,7 @@
   --warning:     #e08c3c;
 
   --header-h:  52px;
-  --tab-h:     46px;
+  --tab-h:     52px;
   --toolbar-h: 40px;
   --footer-h:  52px;
 }
@@ -133,6 +133,11 @@ button {
   cursor: pointer;
   transition: color 0.1s, border-color 0.1s, background 0.1s;
   letter-spacing: 0.02em;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
 }
 .tab.active {
   color: var(--accent-h);
@@ -140,6 +145,19 @@ button {
   background: var(--surface-2);
 }
 .tab:not(.active):active { background: var(--surface-2); }
+
+/* 2-line tab: Japanese label + technical name */
+.tab-ja {
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+.tab-en {
+  font-size: 10px;
+  font-weight: 600;
+  opacity: 0.65;
+  line-height: 1;
+}
 
 /* ── Main Area ────────────────────────────────── */
 #main-area {

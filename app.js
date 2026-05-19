@@ -36,7 +36,7 @@
       localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
       if (currentId) localStorage.setItem(LAST_ID_KEY, currentId);
     } catch (_) {
-      showToast('保存に失敗しました');
+      showToast('保存できませんでした');
     }
   }
 
@@ -96,7 +96,7 @@
 
   function performSave() {
     if (!currentId) {
-      showToast('保存先のプロジェクトがありません');
+      showToast('先にプロジェクトを選んでください');
       return;
     }
     setSaveStatus('saving');
@@ -298,12 +298,12 @@
       try {
         parsed = JSON.parse(e.target.result);
       } catch (_) {
-        showToast('JSONの解析に失敗しました');
+        showToast('ファイルの読み込みに失敗しました');
         return;
       }
 
       if (!Array.isArray(parsed)) {
-        showToast('形式エラー: 配列ではありません');
+        showToast('データの形式が正しくありません');
         return;
       }
 
@@ -316,7 +316,7 @@
         typeof p.js    === 'string'
       );
       if (!valid) {
-        showToast('形式エラー: id/title/html/css/js が必要です');
+        showToast('データの項目が不足しています');
         return;
       }
 
@@ -330,7 +330,7 @@
           updateGuardState();
           persistProjects();
           setSaveStatus('saved');
-          showToast('インポートしました');
+          showToast('読み込みました');
         }
       );
     };
@@ -531,7 +531,7 @@
 
     // ── 1-file HTML ──
     document.getElementById('btn-single-html').addEventListener('click', () => {
-      if (!currentId) { showToast('プロジェクトを選択してください'); return; }
+      if (!currentId) { showToast('先にプロジェクトを選んでください'); return; }
       document.getElementById('single-html-textarea').value = buildSingleHtml();
       openModal('modal-single-html');
     });
