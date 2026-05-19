@@ -95,7 +95,7 @@
       <input type="file" id="import-file" accept=".json">
     </label>
     <button id="btn-single-html">1ファイルHTMLにまとめる</button>
-    <button id="btn-ai-help">AIに聞く</button>
+    <button id="btn-ai-help">AIに聴く</button>
   </footer>
 
   <!-- ── Modal: Project List ── -->
@@ -166,7 +166,7 @@
     <div class="modal-sheet">
       <div class="modal-header">
         <h2>1ファイルHTMLにまとめる</h2>
-        <button class="btn-close" data-modal="modal-single-html" aria-label="閉じる">✕</button>
+        <button class="btn-close" data-modal="modal-single-html" aria-label="閉じる">╵</button>
       </div>
       <div class="modal-body">
         <textarea id="single-html-textarea" readonly class="code-textarea"></textarea>
@@ -198,8 +198,8 @@
   <div id="modal-ai-help" class="modal hidden" role="dialog" aria-modal="true">
     <div class="modal-sheet">
       <div class="modal-header">
-        <h2>困ったのでAIに聞く文を作る</h2>
-        <button class="btn-close" data-modal="modal-ai-help" aria-label="閉じる">✕</button>
+        <h2>困ったのでAIに聴く文を作る</h2>
+        <button class="btn-close" data-modal="modal-ai-help" aria-label="閉じる">╵</button>
       </div>
       <div class="modal-body">
         <p class="ai-section-label">困っていること</p>
@@ -245,6 +245,14 @@
             <span>初心者向けに説明してほしい</span>
           </label>
         </div>
+
+        <p class="ai-section-label">期待する動き（任意）</p>
+        <textarea id="ai-expected-input" class="ai-memo"
+          placeholder="例）ボタンを押したら文字が変わってほしい"></textarea>
+
+        <p class="ai-section-label">実際の状態（任意）</p>
+        <textarea id="ai-actual-input" class="ai-memo"
+          placeholder="例）ボタンを押しても何も変わらない"></textarea>
 
         <p class="ai-section-label">追加メモ（任意）</p>
         <textarea id="ai-memo-input" class="ai-memo"

@@ -11,7 +11,7 @@
   let confirmCallback = null;
   let renameTargetId  = null;
 
-  // ── ID generation ────────────────────────────────
+  // ── ID generation ──────────────────────────────────
   function genId() {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
       return crypto.randomUUID();
@@ -19,7 +19,7 @@
     return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2);
   }
 
-  // ── Storage ────────────────────────────────────
+  // ── Storage ─────────────────────────────────
   function loadFromStorage() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -80,7 +80,7 @@
     document.getElementById('editor-js').value   = project ? project.js   : '';
   }
 
-  // ── Save status ─────────────────────────────────
+  // ── Save status ────────────────────────────────
   function setSaveStatus(status) {
     const el = document.getElementById('save-status');
     el.className = 'save-status ' + status;
@@ -121,7 +121,7 @@
     }
   }
 
-  // ── Fullscreen preview ────────────────────────────
+  // ── Fullscreen preview ──────────────────────────────
   function exitFullscreen() {
     const pane = document.getElementById('pane-preview');
     if (!pane.classList.contains('is-fullscreen')) return;
@@ -165,12 +165,12 @@
     if (tab === 'preview') refreshPreview();
   }
 
-  // ── Preview ──────────────────────────────────────
+  // ── Preview ────────────────────────────────────────
   function buildPreviewDoc() {
     const html   = editorVal('html');
     const css    = editorVal('css');
     const js     = editorVal('js');
-    const safeJs = js.replace(/<\/script>/gi, '<\\/script>');
+    const safeJs = js.replace(/<\/script>/gi, '<\/script>');
     return [
       '<!DOCTYPE html><html lang="ja"><head>',
       '<meta charset="UTF-8">',
@@ -193,7 +193,7 @@
     });
   }
 
-  // ── Copy ─────────────────────────────────────────
+  // ── Copy ───────────────────────────────────────────
   async function copyText(text) {
     if (navigator.clipboard && navigator.clipboard.writeText) {
       try {
@@ -212,7 +212,7 @@
     setTimeout(() => { ta.focus(); ta.select(); }, 150);
   }
 
-  // ── Toast ─────────────────────────────────────────
+  // ── Toast ───────────────────────────────────────────
   function showToast(msg) {
     const el = document.getElementById('toast');
     el.textContent = msg;
@@ -221,7 +221,7 @@
     el._t = setTimeout(() => el.classList.remove('show'), 2200);
   }
 
-  // ── Modals ──────────────────────────────────────
+  // ── Modals ────────────────────────────────────────
   function openModal(id) {
     document.getElementById(id).classList.remove('hidden');
     document.body.classList.add('modal-open');
@@ -280,7 +280,7 @@
     });
   }
 
-  // ── Export ─────────────────────────────────────────
+  // ── Export ──────────────────────────────────────────
   function exportAll() {
     const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     downloadText(
@@ -290,7 +290,7 @@
     );
   }
 
-  // ── Import ─────────────────────────────────────────
+  // ── Import ──────────────────────────────────────────
   function importFromFile(file) {
     const reader = new FileReader();
     reader.onload = e => {
@@ -385,9 +385,11 @@
 
   // ── AI Help: build consultation text ─────────────
   function buildAiHelpText() {
-    const problem = document.querySelector('input[name="ai-problem"]:checked');
-    const request = document.querySelector('input[name="ai-request"]:checked');
-    const memo    = document.getElementById('ai-memo-input').value.trim();
+    const problem  = document.querySelector('input[name="ai-problem"]:checked');
+    const request  = document.querySelector('input[name="ai-request"]:checked');
+    const expected = document.getElementById('ai-expected-input').value.trim();
+    const actual   = document.getElementById('ai-actual-input').value.trim();
+    const memo     = document.getElementById('ai-memo-input').value.trim();
 
     if (!problem) { showToast('困っていることを選んでください'); return null; }
     if (!request) { showToast('AIにお願いしたいことを選んでください'); return null; }
@@ -398,10 +400,10 @@
     const activeTab = document.querySelector('.tab.active');
     const tabKey    = activeTab ? activeTab.dataset.tab : '';
     const tabLabel  = {
-      html:    '画面の中身（HTML）',
+      html:    '画面（HTML）',
       css:     '見た目（CSS）',
       js:      '動き（JavaScript）',
-      preview: 'ためす'
+      preview: 'ためす（プレビュー）'
     }[tabKey] || tabKey;
 
     const html = editorVal('html').trim() || '（なし）';
@@ -414,20 +416,12 @@
       'プロジェクト名：' + projectName,
       '作業中のタブ：'   + tabLabel,
       '',
-      '「困っていること」',
-      problem.value,
+      '困っていること：'       + problem.value,
+      'AIにお願いしたいこと：' + request.value,
       '',
-      '「AIにお願いしたいこと」',
-      request.value,
-    ];
-
-    if (memo) {
-      lines.push('', '「追加メモ」', memo);
-    }
-
-    lines.push(
-      '',
-      '「コード」',
+      '期待する動き：' + (expected || '（未入力）'),
+      '実際の状態：'   + (actual   || '（未入力）'),
+      '追加メモ：'     + (memo     || '（なし）'),
       '',
       '--- HTML ---',
       html,
@@ -437,12 +431,12 @@
       '',
       '--- JavaScript ---',
       js
-    );
+    ];
 
     return lines.join('\n');
   }
 
-  // ── Confirm modal ────────────────────────────────
+  // ── Confirm modal ──────────────────────────────
   function showConfirm(msg, cb) {
     document.getElementById('confirm-message').textContent = msg;
     confirmCallback = cb;
@@ -602,7 +596,7 @@
     document.getElementById('btn-download-single-html').addEventListener('click', () => {
       const p        = currentProject();
       const safeName = p
-        ? p.title.replace(/[^\w぀-ヿ㐀-鿿\-]/g, '_').slice(0, 60)
+        ? p.title.replace(/[^\w぀-ヿ一-鿿\-]/g, '_').slice(0, 60)
         : 'untitled';
       downloadText(
         safeName + '.html',
@@ -645,6 +639,8 @@
       document.querySelectorAll('input[name="ai-problem"], input[name="ai-request"]').forEach(r => {
         r.checked = false;
       });
+      document.getElementById('ai-expected-input').value = '';
+      document.getElementById('ai-actual-input').value = '';
       document.getElementById('ai-memo-input').value = '';
       document.getElementById('ai-result-textarea').value = '';
       document.getElementById('ai-result-area').classList.add('hidden');
