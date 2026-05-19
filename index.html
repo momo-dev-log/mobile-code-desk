@@ -279,12 +279,13 @@
         <button class="btn-close" data-modal="modal-patch-check" aria-label="閉じる">✕</button>
       </div>
       <div class="modal-body">
-        <p class="modal-note">AIからもらったJSONパッチを貼り付けると、現在のコードに当たるか確認できます。コードはまだ書き換えません。</p>
+        <p class="modal-note">AIからもらったJSONパッチを貼り付けると、現在のコードに当たるか確認できます。全パッチが安全な場合のみ、「複製してから適用」でコピーに反映できます。</p>
         <textarea id="patch-json-input" class="code-textarea patch-input-textarea"
           spellcheck="false" autocorrect="off" autocapitalize="off" autocomplete="off"
           placeholder='[&#10;  {&#10;    &quot;target&quot;: &quot;js&quot;,&#10;    &quot;mode&quot;: &quot;replace&quot;,&#10;    &quot;find&quot;: &quot;探す文字列&quot;,&#10;    &quot;replace&quot;: &quot;置き換える文字列&quot;&#10;  }&#10;]'></textarea>
         <button id="btn-run-patch-check" class="btn-primary btn-full">確認する</button>
         <div id="patch-results-area" class="hidden"></div>
+        <button id="btn-apply-patch-copy" class="btn-primary btn-full hidden">複製してから適用</button>
         <button id="btn-patch-reset" class="btn-secondary btn-full hidden">最初からやり直す</button>
       </div>
     </div>
@@ -293,6 +294,6 @@
   <!-- ── Toast ── -->
   <div id="toast" class="toast" aria-live="polite"></div>
 
-  <script src="app.js?v=patch-check-1"></script>
+  <script src="app.js?v=patch-apply-1"></script>
 </body>
 </html>

@@ -532,6 +532,13 @@
     return count;
   }
 
+  // $特殊文字を避けた安全な文字列置換
+  function safeStringReplace(haystack, needle, replacement) {
+    const idx = haystack.indexOf(needle);
+    if (idx === -1) return haystack;
+    return haystack.slice(0, idx) + replacement + haystack.slice(idx + needle.length);
+  }
+
   function runPatchCheck() {
     if (!currentId) {
       showToast('先にプロジェクトを選んでください');
@@ -541,6 +548,7 @@
     const jsonText  = document.getElementById('patch-json-input').value.trim();
     const resultsEl = document.getElementById('patch-results-area');
     const resetBtn  = document.getElementById('btn-patch-reset');
+    const applyBtn  = document.getElementById('btn-apply-patch-copy');
 
     if (!jsonText) {
       showToast('JSONを貼り付けてください');
@@ -553,6 +561,7 @@
       resultsEl.innerHTML = '<div class="patch-parse-error">' + escHtml(parseResult.error) + '</div>';
       resultsEl.classList.remove('hidden');
       resetBtn.classList.remove('hidden');
+      applyBtn.classList.add('hidden');
       return;
     }
 
@@ -621,8 +630,63 @@
     resultsEl.innerHTML = summary + itemsHtml;
     resultsEl.classList.remove('hidden');
     resetBtn.classList.remove('hidden');
+    applyBtn.classList.toggle('hidden', hasError);
 
     setTimeout(() => resultsEl.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+  }
+
+  // ── Patch Apply (copy) ─────────────────────────
+  function applyPatchesToCopy() {
+    if (!currentId) {
+      showToast('先にプロジェクトを選んでください');
+      return;
+    }
+
+    const jsonText    = document.getElementById('patch-json-input').value.trim();
+    const parseResult = parsePatchJson(jsonText);
+    if (!parseResult.ok) {
+      showToast('パッチの内容を再確認してください');
+      return;
+    }
+
+    // 元コードのスナップショット（書き換えはここで完結）
+    const sources = {
+      html: editorVal('html'),
+      css:  editorVal('css'),
+      js:   editorVal('js')
+    };
+
+    // 安全再チェック：確認後にコードが変わっていないか検証
+    for (const patch of parseResult.patches) {
+      if (countOccurrences(sources[patch.target], patch.find) !== 1) {
+        showToast('コードが変更されています。もう一度「確認する」を実行してください');
+        return;
+      }
+    }
+
+    // パッチを順番に適用
+    for (const patch of parseResult.patches) {
+      if (patch.mode === 'replace') {
+        sources[patch.target] = safeStringReplace(sources[patch.target], patch.find, patch.replace);
+      } else if (patch.mode === 'insertBefore') {
+        sources[patch.target] = safeStringReplace(sources[patch.target], patch.find, patch.insert + patch.find);
+      } else if (patch.mode === 'insertAfter') {
+        sources[patch.target] = safeStringReplace(sources[patch.target], patch.find, patch.find + patch.insert);
+      }
+    }
+
+    // 元プロジェクトを複製し、パッチ後のコードをおさめる
+    const src  = currentProject();
+    const copy = buildProject(src.title + ' のコピー');
+    copy.html  = sources.html;
+    copy.css   = sources.css;
+    copy.js    = sources.js;
+
+    projects.push(copy);
+    persistProjects();
+    closeAllModals();
+    selectProject(copy.id);
+    showToast('コピーに修正を適用しました');
   }
 
   // ── Init & event wiring ──────────────────────
@@ -850,15 +914,19 @@
       document.getElementById('patch-json-input').value = '';
       document.getElementById('patch-results-area').innerHTML = '';
       document.getElementById('patch-results-area').classList.add('hidden');
+      document.getElementById('btn-apply-patch-copy').classList.add('hidden');
       document.getElementById('btn-patch-reset').classList.add('hidden');
       openModal('modal-patch-check');
     });
 
     document.getElementById('btn-run-patch-check').addEventListener('click', runPatchCheck);
 
+    document.getElementById('btn-apply-patch-copy').addEventListener('click', applyPatchesToCopy);
+
     document.getElementById('btn-patch-reset').addEventListener('click', () => {
       document.getElementById('patch-results-area').innerHTML = '';
       document.getElementById('patch-results-area').classList.add('hidden');
+      document.getElementById('btn-apply-patch-copy').classList.add('hidden');
       document.getElementById('btn-patch-reset').classList.add('hidden');
     });
 
