@@ -20,7 +20,7 @@
     return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2);
   }
 
-  // ── Storage ────────────────────────────────
+  // ── Storage ──────────────────────────────────
   function loadFromStorage() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -137,7 +137,7 @@
       exitFullscreen();
     } else {
       pane.classList.add('is-fullscreen');
-      document.getElementById('btn-fullscreen-preview').textContent = '✕ 閃じる';
+      document.getElementById('btn-fullscreen-preview').textContent = '✕ 閉じる';
       refreshPreview();
     }
   }
@@ -155,7 +155,7 @@
     switchTab('html');
   }
 
-  // ── Tabs ──────────────────────────────────────
+  // ── Tabs ──────────────────────────────────────────
   function switchTab(tab) {
     if (tab !== 'preview') exitFullscreen();
     document.querySelectorAll('.tab').forEach(btn =>
@@ -167,7 +167,7 @@
     if (tab === 'preview') refreshPreview();
   }
 
-  // ── Preview ───────────────────────────────────
+  // ── Preview ─────────────────────────────────────
   function buildPreviewDoc() {
     const html   = editorVal('html');
     const css    = editorVal('css');
@@ -201,7 +201,7 @@
     });
   }
 
-  // ── Copy ───────────────────────────────────────
+  // ── Copy ─────────────────────────────────────────
   async function copyText(text) {
     if (navigator.clipboard && navigator.clipboard.writeText) {
       try {
@@ -220,7 +220,7 @@
     setTimeout(() => { ta.focus(); ta.select(); }, 150);
   }
 
-  // ── Toast ───────────────────────────────────────
+  // ── Toast ─────────────────────────────────────────
   function showToast(msg) {
     const el = document.getElementById('toast');
     el.textContent = msg;
@@ -288,7 +288,7 @@
     });
   }
 
-  // ── Export ──────────────────────────────────────
+  // ── Export ──────────────────────────────────────────
   function exportAll() {
     const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     downloadText(
@@ -298,7 +298,7 @@
     );
   }
 
-  // ── Import ──────────────────────────────────────
+  // ── Import ──────────────────────────────────────────
   function importFromFile(file) {
     const reader = new FileReader();
     reader.onload = e => {
@@ -397,7 +397,7 @@
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
-  // ── Duplicate project ──────────────────────────
+  // ── Duplicate project ────────────────────────────
   function duplicateProject() {
     if (!currentId) { showToast('先にプロジェクトを選んでください'); return; }
     const src  = currentProject();
@@ -412,7 +412,7 @@
     showToast('コピーを作りました');
   }
 
-  // ── AI Help: build consultation text ────────────
+  // ── AI Help: build consultation text ────────────────
   function buildAiHelpText() {
     const problem  = document.querySelector('input[name="ai-problem"]:checked');
     const request  = document.querySelector('input[name="ai-request"]:checked');
@@ -432,7 +432,7 @@
       html:    '画面（HTML）',
       css:     '見た目（CSS）',
       js:      '動き（JavaScript）',
-      preview: 'た;めす（プレビュー）'
+      preview: 'ためす（プレビュー）'
     }[tabKey] || tabKey;
 
     const html = editorVal('html').trim() || '（なし）';
@@ -636,7 +636,7 @@
     setTimeout(() => resultsEl.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
   }
 
-  // ── Patch Apply (copy) ─────────────────────────
+  // ── Patch Apply (copy) ───────────────────────────
   function applyPatchesToCopy() {
     if (!currentId) {
       showToast('先にプロジェクトを選んでください');
@@ -686,7 +686,7 @@
     showToast('コピーに修正を適用しました');
   }
 
-  // ── Code Lint ──────────────────────────────────
+  // ── Code Lint ────────────────────────────────────
   function checkHtml(code) {
     if (!code.trim()) return null;
     const issues = [];
@@ -702,7 +702,7 @@
       const opens  = (code.match(new RegExp('<' + tag + '[\\s>/]', 'gi')) || []).length;
       const closes = (code.match(new RegExp('<\\/' + tag + '\\s*>', 'gi')) || []).length;
       if (opens !== closes) {
-        issues.push('&lt;' + tag + '&gt; の開閉が合いません（開く：' + opens + '、閃じる：' + closes + '）');
+        issues.push('&lt;' + tag + '&gt; の開閉が合いません（開く：' + opens + '、閉じる：' + closes + '）');
       }
     }
 
@@ -722,7 +722,7 @@
     const commentOpens  = (code.match(/\/\*/g) || []).length;
     const commentCloses = (code.match(/\*\//g) || []).length;
     if (commentOpens !== commentCloses) {
-      issues.push('/* コメントが閃じていない可能性があります');
+      issues.push('/* コメントが閉じていない可能性があります');
     }
 
     return issues.length > 0 ? issues : null;
@@ -766,7 +766,7 @@
     lintTimers[type] = setTimeout(() => lintEditor(type), 800);
   }
 
-  // ── Init & event wiring ──────────────────────
+  // ── Init & event wiring ──────────────────────────
   function init() {
     loadFromStorage();
 
