@@ -10,27 +10,30 @@
 
   <!-- ── Header ── -->
   <header id="header">
-    <button id="btn-project-menu" aria-label="プロジェクト一覧">&#9776;</button>
-    <span id="project-title">プロジェクトなし</span>
-    <span id="save-status" class="save-status saved">保存済</span>
-    <button id="btn-save" class="btn-accent">保存</button>
+    <button id="btn-project-menu" aria-label="&#x30D7;&#x30ED;&#x30B8;&#x30A7;&#x30AF;&#x30C8;&#x4E00;&#x89A7;">&#9776;</button>
+    <span id="project-title">&#x30D7;&#x30ED;&#x30B8;&#x30A7;&#x30AF;&#x30C8;&#x306A;&#x3057;</span>
+    <span id="save-status" class="save-status saved">&#x4FDD;&#x5B58;&#x6E08;</span>
+    <button id="btn-save" class="btn-accent">&#x4FDD;&#x5B58;</button>
   </header>
 
   <!-- ── Tab Bar ── -->
   <nav id="tab-bar">
     <button class="tab active" data-tab="html">
-      <span class="tab-ja">画面</span>
+      <span class="tab-ja">&#x753B;&#x9762;</span>
       <span class="tab-en">HTML</span>
+      <span class="tab-warn hidden" aria-hidden="true">&#9888;</span>
     </button>
     <button class="tab" data-tab="css">
-      <span class="tab-ja">見た目</span>
+      <span class="tab-ja">&#x898B;&#x305F;&#x76EE;</span>
       <span class="tab-en">CSS</span>
+      <span class="tab-warn hidden" aria-hidden="true">&#9888;</span>
     </button>
     <button class="tab" data-tab="js">
-      <span class="tab-ja">動き</span>
+      <span class="tab-ja">&#x52D5;&#x304D;</span>
       <span class="tab-en">JS</span>
+      <span class="tab-warn hidden" aria-hidden="true">&#9888;</span>
     </button>
-    <button class="tab" data-tab="preview">ためす</button>
+    <button class="tab" data-tab="preview">&#x305F;&#x3081;&#x3059;</button>
   </nav>
 
   <!-- ── Main Area ── -->
@@ -38,77 +41,80 @@
     <!-- HTML Pane -->
     <div id="pane-html" class="pane active">
       <div class="pane-toolbar">
-        <span class="pane-label">画面の中身（HTML）</span>
-        <button class="btn-copy" data-target="html">コピー</button>
+        <span class="pane-label">&#x753B;&#x9762;&#x306E;&#x4E2D;&#x8EAB;&#xFF08;HTML&#xFF09;</span>
+        <button class="btn-copy" data-target="html">&#x30B3;&#x30D4;&#x30FC;</button>
       </div>
+      <div id="warn-html" class="pane-warn-banner hidden"></div>
       <textarea id="editor-html"
         spellcheck="false" autocorrect="off" autocapitalize="off" autocomplete="off"
-        placeholder="画面の構造（HTML）を書く..."></textarea>
+        placeholder="&#x753B;&#x9762;&#x306E;&#x69CB;&#x9020;&#xFF08;HTML&#xFF09;&#x3092;&#x66F8;&#x304F;..."></textarea>
     </div>
 
     <!-- CSS Pane -->
     <div id="pane-css" class="pane">
       <div class="pane-toolbar">
-        <span class="pane-label">見た目（CSS）</span>
-        <button class="btn-copy" data-target="css">コピー</button>
+        <span class="pane-label">&#x898B;&#x305F;&#x76EE;&#xFF08;CSS&#xFF09;</span>
+        <button class="btn-copy" data-target="css">&#x30B3;&#x30D4;&#x30FC;</button>
       </div>
+      <div id="warn-css" class="pane-warn-banner hidden"></div>
       <textarea id="editor-css"
         spellcheck="false" autocorrect="off" autocapitalize="off" autocomplete="off"
-        placeholder="見た目（CSS）を書く..."></textarea>
+        placeholder="&#x898B;&#x305F;&#x76EE;&#xFF08;CSS&#xFF09;&#x3092;&#x66F8;&#x304F;..."></textarea>
     </div>
 
     <!-- JS Pane -->
     <div id="pane-js" class="pane">
       <div class="pane-toolbar">
-        <span class="pane-label">動き（JavaScript）</span>
-        <button class="btn-copy" data-target="js">コピー</button>
+        <span class="pane-label">&#x52D5;&#x304D;&#xFF08;JavaScript&#xFF09;</span>
+        <button class="btn-copy" data-target="js">&#x30B3;&#x30D4;&#x30FC;</button>
       </div>
+      <div id="warn-js" class="pane-warn-banner hidden"></div>
       <textarea id="editor-js"
         spellcheck="false" autocorrect="off" autocapitalize="off" autocomplete="off"
-        placeholder="動き（JavaScript）を書く..."></textarea>
+        placeholder="&#x52D5;&#x304D;&#xFF08;JavaScript&#xFF09;&#x3092;&#x66F8;&#x304F;..."></textarea>
     </div>
 
     <!-- Preview Pane -->
     <div id="pane-preview" class="pane">
       <div class="pane-toolbar">
-        <span class="pane-label">ためしに動かす</span>
+        <span class="pane-label">&#x305F;&#x3081;&#x3057;&#x306B;&#x52D5;&#x304B;&#x3059;</span>
         <div class="toolbar-actions">
-          <button id="btn-fullscreen-preview">全画面</button>
-          <button id="btn-refresh-preview">&#8635; 更新</button>
+          <button id="btn-fullscreen-preview">&#x5168;&#x753B;&#x9762;</button>
+          <button id="btn-refresh-preview">&#8635; &#x66F4;&#x65B0;</button>
         </div>
       </div>
-      <iframe id="preview-frame" sandbox="allow-scripts allow-same-origin" title="プレビュー"></iframe>
+      <iframe id="preview-frame" sandbox="allow-scripts allow-same-origin" title="&#x30D7;&#x30EC;&#x30D3;&#x30E5;&#x30FC;"></iframe>
     </div>
 
     <!-- ── No Project Guard ── -->
     <div id="no-project-guard" class="no-project-guard hidden">
-      <p class="guard-message">作業するプロジェクトが選ばれていません</p>
-      <button id="btn-guard-create" class="btn-primary guard-btn">＋ 新規プロジェクトを作成</button>
-      <button id="btn-guard-list" class="btn-secondary guard-btn">プロジェクト一覧を開く</button>
+      <p class="guard-message">&#x4F5C;&#x696D;&#x3059;&#x308B;&#x30D7;&#x30ED;&#x30B8;&#x30A7;&#x30AF;&#x30C8;&#x304C;&#x9078;&#x3070;&#x308C;&#x3066;&#x3044;&#x307E;&#x305B;&#x3093;</p>
+      <button id="btn-guard-create" class="btn-primary guard-btn">&#xFF0B; &#x65B0;&#x898F;&#x30D7;&#x30ED;&#x30B8;&#x30A7;&#x30AF;&#x30C8;&#x3092;&#x4F5C;&#x6210;</button>
+      <button id="btn-guard-list" class="btn-secondary guard-btn">&#x30D7;&#x30ED;&#x30B8;&#x30A7;&#x30AF;&#x30C8;&#x4E00;&#x89A7;&#x3092;&#x958B;&#x304F;</button>
     </div>
   </main>
 
   <!-- ── Action Bar ── -->
   <footer id="action-bar">
-    <button id="btn-export">書き出す（JSON）</button>
-    <label class="action-label">読み込む（JSON）
+    <button id="btn-export">&#x66F8;&#x304D;&#x51FA;&#x3059;&#xFF08;JSON&#xFF09;</button>
+    <label class="action-label">&#x8AAD;&#x307F;&#x8FBC;&#x3080;&#xFF08;JSON&#xFF09;
       <input type="file" id="import-file" accept=".json">
     </label>
-    <button id="btn-single-html">1ファイルHTMLにまとめる</button>
-    <button id="btn-duplicate">複製して試す</button>
-    <button id="btn-ai-help">AIに聴く</button>
-    <button id="btn-patch-check">AIの修正を確認する</button>
+    <button id="btn-single-html">1&#x30D5;&#x30A1;&#x30A4;&#x30EB;HTML&#x306B;&#x307E;&#x3068;&#x3081;&#x308B;</button>
+    <button id="btn-duplicate">&#x8907;&#x88C5;&#x3057;&#x3066;&#x8A66;&#x3059;</button>
+    <button id="btn-ai-help">AI&#x306B;&#x8074;&#x304F;</button>
+    <button id="btn-patch-check">AI&#x306E;&#x4FEE;&#x6B63;&#x3092;&#x78BA;&#x8A8D;&#x3059;&#x308B;</button>
   </footer>
 
   <!-- ── Modal: Project List ── -->
   <div id="modal-projects" class="modal hidden" role="dialog" aria-modal="true">
     <div class="modal-sheet">
       <div class="modal-header">
-        <h2>プロジェクト</h2>
-        <button class="btn-close" data-modal="modal-projects" aria-label="閉じる">✕</button>
+        <h2>&#x30D7;&#x30ED;&#x30B8;&#x30A7;&#x30AF;&#x30C8;</h2>
+        <button class="btn-close" data-modal="modal-projects" aria-label="&#x9583;&#x3058;&#x308B;">&#x2715;</button>
       </div>
       <div class="modal-body">
-        <button id="btn-open-new-project" class="btn-primary btn-full">＋ 新規プロジェクト</button>
+        <button id="btn-open-new-project" class="btn-primary btn-full">&#xFF0B; &#x65B0;&#x898F;&#x30D7;&#x30ED;&#x30B8;&#x30A7;&#x30AF;&#x30C8;</button>
         <ul id="project-list" class="project-list"></ul>
       </div>
     </div>
@@ -118,14 +124,14 @@
   <div id="modal-new-project" class="modal hidden" role="dialog" aria-modal="true">
     <div class="modal-sheet">
       <div class="modal-header">
-        <h2>新規プロジェクト</h2>
-        <button class="btn-close" data-modal="modal-new-project" aria-label="閉じる">✕</button>
+        <h2>&#x65B0;&#x898F;&#x30D7;&#x30ED;&#x30B8;&#x30A7;&#x30AF;&#x30C8;</h2>
+        <button class="btn-close" data-modal="modal-new-project" aria-label="&#x9583;&#x3058;&#x308B;">&#x2715;</button>
       </div>
       <div class="modal-body">
-        <input type="text" id="new-project-input" class="text-input" placeholder="プロジェクト名">
+        <input type="text" id="new-project-input" class="text-input" placeholder="&#x30D7;&#x30ED;&#x30B8;&#x30A7;&#x30AF;&#x30C8;&#x540D;">
         <div class="modal-actions">
-          <button id="btn-create-project" class="btn-primary">作成</button>
-          <button class="btn-close btn-secondary" data-modal="modal-new-project">キャンセル</button>
+          <button id="btn-create-project" class="btn-primary">&#x4F5C;&#x6210;</button>
+          <button class="btn-close btn-secondary" data-modal="modal-new-project">&#x30AD;&#x30E3;&#x30F3;&#x30BB;&#x30EB;</button>
         </div>
       </div>
     </div>
@@ -135,14 +141,14 @@
   <div id="modal-rename" class="modal hidden" role="dialog" aria-modal="true">
     <div class="modal-sheet">
       <div class="modal-header">
-        <h2>名前を変更</h2>
-        <button class="btn-close" data-modal="modal-rename" aria-label="閉じる">✕</button>
+        <h2>&#x540D;&#x524D;&#x3092;&#x5909;&#x66F4;</h2>
+        <button class="btn-close" data-modal="modal-rename" aria-label="&#x9583;&#x3058;&#x308B;">&#x2715;</button>
       </div>
       <div class="modal-body">
-        <input type="text" id="rename-input" class="text-input" placeholder="プロジェクト名">
+        <input type="text" id="rename-input" class="text-input" placeholder="&#x30D7;&#x30ED;&#x30B8;&#x30A7;&#x30AF;&#x30C8;&#x540D;">
         <div class="modal-actions">
-          <button id="btn-rename-ok" class="btn-primary">変更</button>
-          <button class="btn-close btn-secondary" data-modal="modal-rename">キャンセル</button>
+          <button id="btn-rename-ok" class="btn-primary">&#x5909;&#x66F4;</button>
+          <button class="btn-close btn-secondary" data-modal="modal-rename">&#x30AD;&#x30E3;&#x30F3;&#x30BB;&#x30EB;</button>
         </div>
       </div>
     </div>
@@ -152,13 +158,13 @@
   <div id="modal-copy-fallback" class="modal hidden" role="dialog" aria-modal="true">
     <div class="modal-sheet">
       <div class="modal-header">
-        <h2>コードをコピー</h2>
-        <button class="btn-close" data-modal="modal-copy-fallback" aria-label="閉じる">✕</button>
+        <h2>&#x30B3;&#x30FC;&#x30C9;&#x3092;&#x30B3;&#x30D4;&#x30FC;</h2>
+        <button class="btn-close" data-modal="modal-copy-fallback" aria-label="&#x9583;&#x3058;&#x308B;">&#x2715;</button>
       </div>
       <div class="modal-body">
-        <p class="modal-note">自動コピーに失敗しました。以下を全選択してコピーしてください。</p>
+        <p class="modal-note">&#x81EA;&#x52D5;&#x30B3;&#x30D4;&#x30FC;&#x306B;&#x5931;&#x6557;&#x3057;&#x307E;&#x3057;&#x305F;&#x3002;&#x4EE5;&#x4E0B;&#x3092;&#x5168;&#x9078;&#x629E;&#x3057;&#x3066;&#x30B3;&#x30D4;&#x30FC;&#x3057;&#x3066;&#x304F;&#x3060;&#x3055;&#x3044;&#x3002;</p>
         <textarea id="copy-fallback-textarea" readonly class="code-textarea"></textarea>
-        <button id="btn-select-all-fallback" class="btn-secondary btn-full">全選択</button>
+        <button id="btn-select-all-fallback" class="btn-secondary btn-full">&#x5168;&#x9078;&#x629E;</button>
       </div>
     </div>
   </div>
@@ -167,14 +173,14 @@
   <div id="modal-single-html" class="modal hidden" role="dialog" aria-modal="true">
     <div class="modal-sheet">
       <div class="modal-header">
-        <h2>1ファイルHTMLにまとめる</h2>
-        <button class="btn-close" data-modal="modal-single-html" aria-label="閉じる">✕</button>
+        <h2>1&#x30D5;&#x30A1;&#x30A4;&#x30EB;HTML&#x306B;&#x307E;&#x3068;&#x3081;&#x308B;</h2>
+        <button class="btn-close" data-modal="modal-single-html" aria-label="&#x9583;&#x3058;&#x308B;">&#x2715;</button>
       </div>
       <div class="modal-body">
         <textarea id="single-html-textarea" readonly class="code-textarea"></textarea>
         <div class="modal-actions">
-          <button id="btn-copy-single-html" class="btn-primary">コピー</button>
-          <button id="btn-download-single-html" class="btn-secondary">ダウンロード</button>
+          <button id="btn-copy-single-html" class="btn-primary">&#x30B3;&#x30D4;&#x30FC;</button>
+          <button id="btn-download-single-html" class="btn-secondary">&#x30C0;&#x30A6;&#x30F3;&#x30ED;&#x30FC;&#x30C9;</button>
         </div>
       </div>
     </div>
@@ -184,13 +190,13 @@
   <div id="modal-confirm" class="modal modal-centered hidden" role="dialog" aria-modal="true">
     <div class="modal-sheet modal-dialog">
       <div class="modal-header">
-        <h2>確認</h2>
+        <h2>&#x78BA;&#x8A8D;</h2>
       </div>
       <div class="modal-body">
         <p id="confirm-message" class="confirm-text"></p>
         <div class="modal-actions">
           <button id="btn-confirm-ok" class="btn-danger">OK</button>
-          <button id="btn-confirm-cancel" class="btn-secondary">キャンセル</button>
+          <button id="btn-confirm-cancel" class="btn-secondary">&#x30AD;&#x30E3;&#x30F3;&#x30BB;&#x30EB;</button>
         </div>
       </div>
     </div>
@@ -200,72 +206,72 @@
   <div id="modal-ai-help" class="modal hidden" role="dialog" aria-modal="true">
     <div class="modal-sheet">
       <div class="modal-header">
-        <h2>困ったのでAIに聴く文を作る</h2>
-        <button class="btn-close" data-modal="modal-ai-help" aria-label="閉じる">✕</button>
+        <h2>&#x56F0;&#x3063;&#x305F;&#x306E;&#x3067;AI&#x306B;&#x8074;&#x304F;&#x6587;&#x3092;&#x4F5C;&#x308B;</h2>
+        <button class="btn-close" data-modal="modal-ai-help" aria-label="&#x9583;&#x3058;&#x308B;">&#x2715;</button>
       </div>
       <div class="modal-body">
-        <p class="ai-section-label">困っていること</p>
+        <p class="ai-section-label">&#x56F0;&#x3063;&#x3066;&#x3044;&#x308B;&#x3053;&#x3068;</p>
         <div class="ai-options" id="ai-problem-options">
           <label class="ai-option">
-            <input type="radio" name="ai-problem" value="ボタンが反応しない">
-            <span>ボタンが反応しない</span>
+            <input type="radio" name="ai-problem" value="&#x30DC;&#x30BF;&#x30F3;&#x304C;&#x53CD;&#x5FDC;&#x3057;&#x306A;&#x3044;">
+            <span>&#x30DC;&#x30BF;&#x30F3;&#x304C;&#x53CD;&#x5FDC;&#x3057;&#x306A;&#x3044;</span>
           </label>
           <label class="ai-option">
-            <input type="radio" name="ai-problem" value="画面が白い / 何も表示されない">
-            <span>画面が白い / 何も表示されない</span>
+            <input type="radio" name="ai-problem" value="&#x753B;&#x9762;&#x304C;&#x767D;&#x3044; / &#x4F55;&#x3082;&#x8868;&#x793A;&#x3055;&#x308C;&#x306A;&#x3044;">
+            <span>&#x753B;&#x9762;&#x304C;&#x767D;&#x3044; / &#x4F55;&#x3082;&#x8868;&#x793A;&#x3055;&#x308C;&#x306A;&#x3044;</span>
           </label>
           <label class="ai-option">
-            <input type="radio" name="ai-problem" value="見た目が崩れた">
-            <span>見た目が崩れた</span>
+            <input type="radio" name="ai-problem" value="&#x898B;&#x305F;&#x76EE;&#x304C;&#x5D29;&#x308C;&#x305F;">
+            <span>&#x898B;&#x305F;&#x76EE;&#x304C;&#x5D29;&#x308C;&#x305F;</span>
           </label>
           <label class="ai-option">
-            <input type="radio" name="ai-problem" value="エラーっぽいけど内容が分からない">
-            <span>エラーっぽいけど内容が分からない</span>
+            <input type="radio" name="ai-problem" value="&#x30A8;&#x30E9;&#x30FC;&#x3063;&#x307D;&#x3044;&#x3051;&#x3069;&#x5185;&#x5BB9;&#x304C;&#x5206;&#x304B;&#x3089;&#x306A;&#x3044;">
+            <span>&#x30A8;&#x30E9;&#x30FC;&#x3063;&#x307D;&#x3044;&#x3051;&#x3069;&#x5185;&#x5BB9;&#x304C;&#x5206;&#x304B;&#x3089;&#x306A;&#x3044;</span>
           </label>
           <label class="ai-option">
-            <input type="radio" name="ai-problem" value="思った通りに動かない">
-            <span>思った通りに動かない</span>
+            <input type="radio" name="ai-problem" value="&#x601D;&#x3063;&#x305F;&#x901A;&#x308A;&#x306B;&#x52D5;&#x304B;&#x306A;&#x3044;">
+            <span>&#x601D;&#x3063;&#x305F;&#x901A;&#x308A;&#x306B;&#x52D5;&#x304B;&#x306A;&#x3044;</span>
           </label>
         </div>
 
-        <p class="ai-section-label">AIにお願いしたいこと</p>
+        <p class="ai-section-label">AI&#x306B;&#x304A;&#x9858;&#x3044;&#x3057;&#x305F;&#x3044;&#x3053;&#x3068;</p>
         <div class="ai-options" id="ai-request-options">
           <label class="ai-option">
-            <input type="radio" name="ai-request" value="まず原因だけ知りたい">
-            <span>まず原因だけ知りたい</span>
+            <input type="radio" name="ai-request" value="&#x307E;&#x305A;&#x539F;&#x56E0;&#x3060;&#x3051;&#x77E5;&#x308A;&#x305F;&#x3044;">
+            <span>&#x307E;&#x305A;&#x539F;&#x56E0;&#x3060;&#x3051;&#x77E5;&#x308A;&#x305F;&#x3044;</span>
           </label>
           <label class="ai-option">
-            <input type="radio" name="ai-request" value="修正案を出してほしい">
-            <span>修正案を出してほしい</span>
+            <input type="radio" name="ai-request" value="&#x4FEE;&#x6B63;&#x6848;&#x3092;&#x51FA;&#x3057;&#x3066;&#x307B;&#x3057;&#x3044;">
+            <span>&#x4FEE;&#x6B63;&#x6848;&#x3092;&#x51FA;&#x3057;&#x3066;&#x307B;&#x3057;&#x3044;</span>
           </label>
           <label class="ai-option">
-            <input type="radio" name="ai-request" value="コードを直してほしい">
-            <span>コードを直してほしい</span>
+            <input type="radio" name="ai-request" value="&#x30B3;&#x30FC;&#x30C9;&#x3092;&#x76F4;&#x3057;&#x3066;&#x307B;&#x3057;&#x3044;">
+            <span>&#x30B3;&#x30FC;&#x30C9;&#x3092;&#x76F4;&#x3057;&#x3066;&#x307B;&#x3057;&#x3044;</span>
           </label>
           <label class="ai-option">
-            <input type="radio" name="ai-request" value="初心者向けに説明してほしい">
-            <span>初心者向けに説明してほしい</span>
+            <input type="radio" name="ai-request" value="&#x521D;&#x5FC3;&#x8005;&#x5411;&#x3051;&#x306B;&#x8AAC;&#x660E;&#x3057;&#x3066;&#x307B;&#x3057;&#x3044;">
+            <span>&#x521D;&#x5FC3;&#x8005;&#x5411;&#x3051;&#x306B;&#x8AAC;&#x660E;&#x3057;&#x3066;&#x307B;&#x3057;&#x3044;</span>
           </label>
         </div>
 
-        <p class="ai-section-label">期待する動き（任意）</p>
+        <p class="ai-section-label">&#x671F;&#x5F85;&#x3059;&#x308B;&#x52D5;&#x304D;&#xFF08;&#x4EFB;&#x610F;&#xFF09;</p>
         <textarea id="ai-expected-input" class="ai-memo"
-          placeholder="例）ボタンを押したら文字が変わってほしい"></textarea>
+          placeholder="&#x4F8B;&#xFF09;&#x30DC;&#x30BF;&#x30F3;&#x3092;&#x62BC;&#x3057;&#x305F;&#x3089;&#x6587;&#x5B57;&#x304C;&#x5909;&#x308F;&#x3063;&#x3066;&#x307B;&#x3057;&#x3044;"></textarea>
 
-        <p class="ai-section-label">実際の状態（任意）</p>
+        <p class="ai-section-label">&#x5B9F;&#x969B;&#x306E;&#x72B6;&#x614B;&#xFF08;&#x4EFB;&#x610F;&#xFF09;</p>
         <textarea id="ai-actual-input" class="ai-memo"
-          placeholder="例）ボタンを押しても何も変わらない"></textarea>
+          placeholder="&#x4F8B;&#xFF09;&#x30DC;&#x30BF;&#x30F3;&#x3092;&#x62BC;&#x3057;&#x3066;&#x3082;&#x4F55;&#x3082;&#x5909;&#x308F;&#x3089;&#x306A;&#x3044;"></textarea>
 
-        <p class="ai-section-label">追加メモ（任意）</p>
+        <p class="ai-section-label">&#x8FFD;&#x52A0;&#x30E1;&#x30E2;&#xFF08;&#x4EFB;&#x610F;&#xFF09;</p>
         <textarea id="ai-memo-input" class="ai-memo"
-          placeholder="気になっていることや補足を自由に書いてください"></textarea>
+          placeholder="&#x6C17;&#x306B;&#x306A;&#x3063;&#x3066;&#x3044;&#x308B;&#x3053;&#x3068;&#x3084;&#x88DC;&#x8DB3;&#x3092;&#x81EA;&#x7531;&#x306B;&#x66F8;&#x3044;&#x3066;&#x304F;&#x3060;&#x3055;&#x3044;"></textarea>
 
-        <button id="btn-generate-ai-text" class="btn-primary btn-full">相談文を作る</button>
+        <button id="btn-generate-ai-text" class="btn-primary btn-full">&#x76F8;&#x8AC7;&#x6587;&#x3092;&#x4F5C;&#x308B;</button>
 
         <div id="ai-result-area" class="ai-result-area hidden">
-          <p class="ai-section-label">生成された相談文</p>
+          <p class="ai-section-label">&#x751F;&#x6210;&#x3055;&#x308C;&#x305F;&#x76F8;&#x8AC7;&#x6587;</p>
           <textarea id="ai-result-textarea" readonly class="code-textarea ai-result-textarea"></textarea>
-          <button id="btn-copy-ai-text" class="btn-secondary btn-full">コピー</button>
+          <button id="btn-copy-ai-text" class="btn-secondary btn-full">&#x30B3;&#x30D4;&#x30FC;</button>
         </div>
       </div>
     </div>
@@ -275,18 +281,18 @@
   <div id="modal-patch-check" class="modal hidden" role="dialog" aria-modal="true">
     <div class="modal-sheet">
       <div class="modal-header">
-        <h2>AIの修正を確認する</h2>
-        <button class="btn-close" data-modal="modal-patch-check" aria-label="閉じる">✕</button>
+        <h2>AI&#x306E;&#x4FEE;&#x6B63;&#x3092;&#x78BA;&#x8A8D;&#x3059;&#x308B;</h2>
+        <button class="btn-close" data-modal="modal-patch-check" aria-label="&#x9583;&#x3058;&#x308B;">&#x2715;</button>
       </div>
       <div class="modal-body">
-        <p class="modal-note">AIからもらったJSONパッチを貼り付けると、現在のコードに当たるか確認できます。全パッチが安全な場合のみ、「複製してから適用」でコピーに反映できます。</p>
+        <p class="modal-note">AI&#x304B;&#x3089;&#x3082;&#x3089;&#x3063;&#x305F;JSON&#x30D1;&#x30C3;&#x30C1;&#x3092;&#x8CBC;&#x308A;&#x4ED8;&#x3051;&#x308B;&#x3068;&#x3001;&#x73FE;&#x5728;&#x306E;&#x30B3;&#x30FC;&#x30C9;&#x306B;&#x5F53;&#x305F;&#x308B;&#x304B;&#x78BA;&#x8A8D;&#x3067;&#x304D;&#x307E;&#x3059;&#x3002;&#x5168;&#x30D1;&#x30C3;&#x30C1;&#x304C;&#x5B89;&#x5168;&#x306A;&#x5834;&#x5408;&#x306E;&#x307F;&#x3001;&#x300C;&#x8907;&#x88C5;&#x3057;&#x3066;&#x304B;&#x3089;&#x9069;&#x7528;&#x300D;&#x3067;&#x30B3;&#x30D4;&#x30FC;&#x306B;&#x53CD;&#x6620;&#x3067;&#x304D;&#x307E;&#x3059;&#x3002;</p>
         <textarea id="patch-json-input" class="code-textarea patch-input-textarea"
           spellcheck="false" autocorrect="off" autocapitalize="off" autocomplete="off"
-          placeholder='[&#10;  {&#10;    &quot;target&quot;: &quot;js&quot;,&#10;    &quot;mode&quot;: &quot;replace&quot;,&#10;    &quot;find&quot;: &quot;探す文字列&quot;,&#10;    &quot;replace&quot;: &quot;置き換える文字列&quot;&#10;  }&#10;]'></textarea>
-        <button id="btn-run-patch-check" class="btn-primary btn-full">確認する</button>
+          placeholder='[&#10;  {&#10;    &quot;target&quot;: &quot;js&quot;,&#10;    &quot;mode&quot;: &quot;replace&quot;,&#10;    &quot;find&quot;: &quot;&#x63A2;&#x3059;&#x6587;&#x5B57;&#x5217;&quot;,&#10;    &quot;replace&quot;: &quot;&#x7F6E;&#x304D;&#x63DB;&#x3048;&#x308B;&#x6587;&#x5B57;&#x5217;&quot;&#10;  }&#10;]'></textarea>
+        <button id="btn-run-patch-check" class="btn-primary btn-full">&#x78BA;&#x8A8D;&#x3059;&#x308B;</button>
         <div id="patch-results-area" class="hidden"></div>
-        <button id="btn-apply-patch-copy" class="btn-primary btn-full hidden">複製してから適用</button>
-        <button id="btn-patch-reset" class="btn-secondary btn-full hidden">最初からやり直す</button>
+        <button id="btn-apply-patch-copy" class="btn-primary btn-full hidden">&#x8907;&#x88C5;&#x3057;&#x3066;&#x304B;&#x3089;&#x9069;&#x7528;</button>
+        <button id="btn-patch-reset" class="btn-secondary btn-full hidden">&#x6700;&#x521D;&#x304B;&#x3089;&#x3084;&#x308A;&#x76F4;&#x3059;</button>
       </div>
     </div>
   </div>
@@ -294,6 +300,6 @@
   <!-- ── Toast ── -->
   <div id="toast" class="toast" aria-live="polite"></div>
 
-  <script src="app.js?v=patch-apply-1"></script>
+  <script src="app.js?v=code-lint-1"></script>
 </body>
 </html>

@@ -10,6 +10,7 @@
   let saveTimer       = null;
   let confirmCallback = null;
   let renameTargetId  = null;
+  let lintTimers      = { html: null, css: null, js: null };
 
   // ── ID generation ──────────────────────────────
   function genId() {
@@ -78,6 +79,7 @@
     document.getElementById('editor-html').value = project ? project.html : '';
     document.getElementById('editor-css').value  = project ? project.css  : '';
     document.getElementById('editor-js').value   = project ? project.js   : '';
+    lintAll();
   }
 
   // ── Save status ─────────────────────────────
@@ -135,7 +137,7 @@
       exitFullscreen();
     } else {
       pane.classList.add('is-fullscreen');
-      document.getElementById('btn-fullscreen-preview').textContent = '✕ 閉じる';
+      document.getElementById('btn-fullscreen-preview').textContent = '✕ 閃じる';
       refreshPreview();
     }
   }
@@ -430,7 +432,7 @@
       html:    '画面（HTML）',
       css:     '見た目（CSS）',
       js:      '動き（JavaScript）',
-      preview: 'ためす（プレビュー）'
+      preview: 'た;めす（プレビュー）'
     }[tabKey] || tabKey;
 
     const html = editorVal('html').trim() || '（なし）';
@@ -532,7 +534,6 @@
     return count;
   }
 
-  // $特殊文字を避けた安全な文字列置換
   function safeStringReplace(haystack, needle, replacement) {
     const idx = haystack.indexOf(needle);
     if (idx === -1) return haystack;
@@ -571,7 +572,7 @@
       js:   editorVal('js')
     };
     const targetLabel = { html: 'HTML', css: 'CSS', js: 'JavaScript' };
-    const modeLabel   = { replace: '置き換え', insertBefore: '前に挿入', insertAfter: '後に挿入' };
+    const modeLabel   = { replace: '置き換え', insertBefore: '前に挿入', insertAfter: '後ろに挿入' };
 
     let hasError  = false;
     let itemsHtml = '';
@@ -649,14 +650,12 @@
       return;
     }
 
-    // 元コードのスナップショット（書き換えはここで完結）
     const sources = {
       html: editorVal('html'),
       css:  editorVal('css'),
       js:   editorVal('js')
     };
 
-    // 安全再チェック：確認後にコードが変わっていないか検証
     for (const patch of parseResult.patches) {
       if (countOccurrences(sources[patch.target], patch.find) !== 1) {
         showToast('コードが変更されています。もう一度「確認する」を実行してください');
@@ -664,7 +663,6 @@
       }
     }
 
-    // パッチを順番に適用
     for (const patch of parseResult.patches) {
       if (patch.mode === 'replace') {
         sources[patch.target] = safeStringReplace(sources[patch.target], patch.find, patch.replace);
@@ -675,7 +673,6 @@
       }
     }
 
-    // 元プロジェクトを複製し、パッチ後のコードをおさめる
     const src  = currentProject();
     const copy = buildProject(src.title + ' のコピー');
     copy.html  = sources.html;
@@ -687,6 +684,86 @@
     closeAllModals();
     selectProject(copy.id);
     showToast('コピーに修正を適用しました');
+  }
+
+  // ── Code Lint ──────────────────────────────────
+  function checkHtml(code) {
+    if (!code.trim()) return null;
+    const issues = [];
+
+    const openAngle  = (code.match(/</g)  || []).length;
+    const closeAngle = (code.match(/>/g) || []).length;
+    if (openAngle > closeAngle) {
+      issues.push('< が ' + openAngle + ' 個、> が ' + closeAngle + ' 個（タグが途中で切れている可能性）');
+    }
+
+    const pairedTags = ['div', 'script', 'style', 'form', 'ul', 'ol', 'select', 'table'];
+    for (const tag of pairedTags) {
+      const opens  = (code.match(new RegExp('<' + tag + '[\\s>/]', 'gi')) || []).length;
+      const closes = (code.match(new RegExp('<\\/' + tag + '\\s*>', 'gi')) || []).length;
+      if (opens !== closes) {
+        issues.push('&lt;' + tag + '&gt; の開閉が合いません（開く：' + opens + '、閃じる：' + closes + '）');
+      }
+    }
+
+    return issues.length > 0 ? issues : null;
+  }
+
+  function checkCss(code) {
+    if (!code.trim()) return null;
+    const issues = [];
+
+    const opens  = (code.match(/\{/g) || []).length;
+    const closes = (code.match(/\}/g) || []).length;
+    if (opens !== closes) {
+      issues.push('{ と } の数が合いません（{ が ' + opens + ' 個、} が ' + closes + ' 個）');
+    }
+
+    const commentOpens  = (code.match(/\/\*/g) || []).length;
+    const commentCloses = (code.match(/\*\//g) || []).length;
+    if (commentOpens !== commentCloses) {
+      issues.push('/* コメントが閃じていない可能性があります');
+    }
+
+    return issues.length > 0 ? issues : null;
+  }
+
+  function checkJs(code) {
+    if (!code.trim()) return null;
+    try {
+      new Function(code);
+      return null;
+    } catch (e) {
+      return ['構文エラー：' + e.message];
+    }
+  }
+
+  function lintEditor(type) {
+    const code   = editorVal(type);
+    const check  = type === 'html' ? checkHtml : type === 'css' ? checkCss : checkJs;
+    const issues = check(code);
+
+    const banner  = document.getElementById('warn-' + type);
+    const tabWarn = document.querySelector('[data-tab="' + type + '"] .tab-warn');
+
+    if (issues && issues.length > 0) {
+      banner.innerHTML = issues.map(s => '<span class="warn-item">&#9888; ' + s + '</span>').join('');
+      banner.classList.remove('hidden');
+      if (tabWarn) tabWarn.classList.remove('hidden');
+    } else {
+      banner.innerHTML = '';
+      banner.classList.add('hidden');
+      if (tabWarn) tabWarn.classList.add('hidden');
+    }
+  }
+
+  function lintAll() {
+    ['html', 'css', 'js'].forEach(lintEditor);
+  }
+
+  function debounceLint(type) {
+    clearTimeout(lintTimers[type]);
+    lintTimers[type] = setTimeout(() => lintEditor(type), 800);
   }
 
   // ── Init & event wiring ──────────────────────
@@ -710,9 +787,12 @@
       btn.addEventListener('click', () => switchTab(btn.dataset.tab))
     );
 
-    // ── Editors: auto-save on input ──
+    // ── Editors: auto-save + lint on input ──
     ['html', 'css', 'js'].forEach(t =>
-      document.getElementById('editor-' + t).addEventListener('input', markUnsaved)
+      document.getElementById('editor-' + t).addEventListener('input', () => {
+        markUnsaved();
+        debounceLint(t);
+      })
     );
 
     // ── Manual save button ──

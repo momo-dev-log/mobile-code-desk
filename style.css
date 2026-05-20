@@ -222,7 +222,7 @@ textarea {
   resize: none;
   padding: 12px;
   font-family: 'Menlo', 'Courier New', Courier, monospace;
-  font-size: 16px; /* ≥16px prevents iOS auto-zoom */
+  font-size: 16px; /* >=16px prevents iOS auto-zoom */
   line-height: 1.6;
   tab-size: 2;
   white-space: pre;
@@ -396,7 +396,7 @@ textarea::placeholder { color: var(--text-muted); opacity: 0.6; }
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 0 14px;
-  font-size: 16px; /* ≥16px prevents iOS auto-zoom */
+  font-size: 16px; /* >=16px prevents iOS auto-zoom */
   font-family: inherit;
   outline: none;
 }
@@ -739,3 +739,28 @@ body.modal-open { overflow: hidden; }
 .patch-code-before { background: rgba(224, 92, 92, 0.10);  border-left: 3px solid var(--danger); }
 .patch-code-after  { background: rgba(80, 200, 120, 0.10); border-left: 3px solid var(--success); }
 .patch-code-find   { background: var(--surface-2); border-left: 3px solid var(--border); color: var(--text-muted); }
+
+/* ── Code Lint (tab warn + pane banner) ─────────────────── */
+.tab-warn {
+  font-size: 9px;
+  color: var(--warning);
+  line-height: 1;
+}
+.tab-warn.hidden { display: none; }
+
+.pane-warn-banner {
+  flex-shrink: 0;
+  background: rgba(224, 140, 60, 0.10);
+  border-bottom: 1px solid rgba(224, 140, 60, 0.30);
+  padding: 6px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.pane-warn-banner.hidden { display: none; }
+
+.warn-item {
+  font-size: 12px;
+  color: var(--warning);
+  line-height: 1.5;
+}
