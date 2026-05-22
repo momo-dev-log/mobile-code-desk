@@ -194,10 +194,11 @@ button {
   letter-spacing: 0.08em;
 }
 
-/* Toolbar buttons (copy / refresh) */
+/* Toolbar buttons (copy / refresh / console toggle) */
 .btn-copy,
 #btn-refresh-preview,
-#btn-fullscreen-preview {
+#btn-fullscreen-preview,
+#btn-toggle-console {
   height: 30px;
   padding: 0 14px;
   background: var(--surface-3);
@@ -209,7 +210,8 @@ button {
   white-space: nowrap;
 }
 .btn-copy:active,
-#btn-refresh-preview:active { background: var(--surface); }
+#btn-refresh-preview:active,
+#btn-toggle-console:active { background: var(--surface); }
 
 /* ── Code Editors ───────────────────────────────────── */
 textarea {
@@ -770,7 +772,7 @@ body.modal-open { overflow: hidden; }
 .console-panel {
   flex-shrink: 0;
   max-height: 28vh;
-  background: #0d0d17;
+  background: var(--bg);
   border-bottom: 1px solid var(--border);
   display: flex;
   flex-direction: column;
@@ -835,18 +837,6 @@ body.modal-open { overflow: hidden; }
 .console-item-warn  { color: #facc15; background: rgba(250, 204, 21, 0.05); }
 .console-item-error { color: #f38ba8; background: rgba(243, 139, 168, 0.08); }
 
-#btn-toggle-console {
-  height: 30px;
-  padding: 0 12px;
-  background: var(--surface-3);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  font-size: 12px;
-  cursor: pointer;
-  white-space: nowrap;
-}
-#btn-toggle-console:active { background: var(--surface); }
 #btn-toggle-console.console-btn-error {
   border-color: rgba(243, 139, 168, 0.5);
   color: #f38ba8;
