@@ -743,15 +743,16 @@ body.modal-open { overflow: hidden; }
 /* ── Code Lint (tab warn + pane banner) ─────────────────── */
 .tab-warn {
   font-size: 9px;
-  color: var(--warning);
+  color: #facc15;
+  text-shadow: 0 0 6px rgba(250, 204, 21, 0.45);
   line-height: 1;
 }
 .tab-warn.hidden { display: none; }
 
 .pane-warn-banner {
   flex-shrink: 0;
-  background: rgba(224, 140, 60, 0.10);
-  border-bottom: 1px solid rgba(224, 140, 60, 0.30);
+  background: rgba(250, 204, 21, 0.08);
+  border-bottom: 1px solid rgba(250, 204, 21, 0.55);
   padding: 6px 12px;
   display: flex;
   flex-direction: column;
@@ -761,6 +762,6 @@ body.modal-open { overflow: hidden; }
 
 .warn-item {
   font-size: 12px;
-  color: var(--warning);
+  color: #fde68a;
   line-height: 1.5;
 }

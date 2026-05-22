@@ -734,17 +734,24 @@
       new Function(code);
       return null;
     } catch (e) {
+      if (!(e instanceof SyntaxError)) return null;
       return ['構文エラー：' + e.message];
     }
   }
 
   function lintEditor(type) {
-    const code   = editorVal(type);
-    const check  = type === 'html' ? checkHtml : type === 'css' ? checkCss : checkJs;
-    const issues = check(code);
-
     const banner  = document.getElementById('warn-' + type);
     const tabWarn = document.querySelector('[data-tab="' + type + '"] .tab-warn');
+    if (!banner) return;
+
+    let issues = null;
+    try {
+      const code  = editorVal(type);
+      const check = type === 'html' ? checkHtml : type === 'css' ? checkCss : checkJs;
+      issues = check(code);
+    } catch (_) {
+      issues = null;
+    }
 
     if (issues && issues.length > 0) {
       banner.innerHTML = issues.map(s => '<span class="warn-item">&#9888; ' + s + '</span>').join('');
