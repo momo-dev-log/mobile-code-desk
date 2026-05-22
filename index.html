@@ -79,9 +79,20 @@
       <div class="pane-toolbar">
         <span class="pane-label">&#x305F;&#x3081;&#x3057;&#x306B;&#x52D5;&#x304B;&#x3059;</span>
         <div class="toolbar-actions">
+          <button id="btn-toggle-console">&#x30ED;&#x30B0; &#x25BC;</button>
           <button id="btn-fullscreen-preview">&#x5168;&#x753B;&#x9762;</button>
           <button id="btn-refresh-preview">&#8635; &#x66F4;&#x65B0;</button>
         </div>
+      </div>
+      <div id="console-panel" class="console-panel hidden">
+        <div class="console-header">
+          <span class="console-label">&#x30B3;&#x30F3;&#x30BD;&#x30FC;&#x30EB;</span>
+          <div class="console-actions">
+            <button id="btn-copy-console">&#x30B3;&#x30D4;&#x30FC;</button>
+            <button id="btn-clear-console">&#x30AF;&#x30EA;&#x30A2;</button>
+          </div>
+        </div>
+        <div id="console-log-list" class="console-log-list"></div>
       </div>
       <iframe id="preview-frame" sandbox="allow-scripts allow-same-origin" title="&#x30D7;&#x30EC;&#x30D3;&#x30E5;&#x30FC;"></iframe>
     </div>
@@ -300,6 +311,6 @@
   <!-- ── Toast ── -->
   <div id="toast" class="toast" aria-live="polite"></div>
 
-  <script src="app.js?v=code-lint-2"></script>
+  <script src="app.js?v=console-log-1"></script>
 </body>
 </html>

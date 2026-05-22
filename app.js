@@ -11,6 +11,7 @@
   let confirmCallback = null;
   let renameTargetId  = null;
   let lintTimers      = { html: null, css: null, js: null };
+  let consoleLogs     = [];
 
   // ── ID generation ──────────────────────────────
   function genId() {
@@ -180,10 +181,37 @@
       'svg, svg * { -webkit-user-select: none; user-select: none; }\n' +
       'input, textarea, [contenteditable] { -webkit-user-select: text; user-select: text; touch-action: auto; }\n' +
       '</style>';
+    const consoleInterceptor =
+      '<script id="mcd-ci">(function(){' +
+      'var _post=function(lv,args){' +
+        'var txt=Array.prototype.slice.call(args).map(function(a){' +
+          'if(a===null)return"null";' +
+          'if(a===undefined)return"undefined";' +
+          'if(typeof a==="object"||typeof a==="function"){try{return JSON.stringify(a);}catch(e){return String(a);}}' +
+          'return String(a);' +
+        '}).join(" ");' +
+        'try{window.parent.postMessage({type:"mcd-log",level:lv,text:txt},"*");}catch(_){}' +
+      '};' +
+      'var _c=window.console;' +
+      'window.console={' +
+        'log:function(){_post("log",arguments);_c.log&&_c.log.apply(_c,arguments);},'+
+        'info:function(){_post("log",arguments);_c.info&&_c.info.apply(_c,arguments);},'+
+        'warn:function(){_post("warn",arguments);_c.warn&&_c.warn.apply(_c,arguments);},'+
+        'error:function(){_post("error",arguments);_c.error&&_c.error.apply(_c,arguments);}'+
+      '};'+
+      'window.onerror=function(msg,src,line,col,err){'+
+        '_post("error",["[エラー] "+msg+" (行 "+line+")"]);'+
+      '};'+
+      'window.addEventListener("unhandledrejection",function(e){'+
+        'var r=e.reason;'+
+        '_post("error",["[Promise] "+(r instanceof Error?r.message:String(r))]);'+
+      '});'+
+      '})();<\/script>';
     return [
       '<!DOCTYPE html><html lang="ja"><head>',
       '<meta charset="UTF-8">',
       '<meta name="viewport" content="width=device-width,initial-scale=1">',
+      consoleInterceptor,
       previewTouchStyle,
       '<style>', css, '</style>',
       '</head><body>',
@@ -194,6 +222,7 @@
   }
 
   function refreshPreview() {
+    clearConsoleLogs();
     const iframe = document.getElementById('preview-frame');
     iframe.srcdoc = '';
     requestAnimationFrame(() => {
@@ -773,6 +802,50 @@
     lintTimers[type] = setTimeout(() => lintEditor(type), 800);
   }
 
+  // ── Console Panel ────────────────────────────────
+  function appendConsoleLog(level, text) {
+    consoleLogs.push({ level: level, text: text });
+    const list = document.getElementById('console-log-list');
+    if (!list) return;
+    const item = document.createElement('div');
+    item.className = 'console-item console-item-' + level;
+    item.textContent = text;
+    list.appendChild(item);
+    list.scrollTop = list.scrollHeight;
+    updateConsoleBadge();
+  }
+
+  function clearConsoleLogs() {
+    consoleLogs = [];
+    const list = document.getElementById('console-log-list');
+    if (list) list.innerHTML = '';
+    updateConsoleBadge();
+  }
+
+  function updateConsoleBadge() {
+    const btn = document.getElementById('btn-toggle-console');
+    if (!btn) return;
+    const panel    = document.getElementById('console-panel');
+    const isOpen   = panel && !panel.classList.contains('hidden');
+    const errCount = consoleLogs.filter(l => l.level === 'error').length;
+    btn.textContent = isOpen ? 'ログ ▲' : 'ログ ▼';
+    btn.classList.toggle('console-btn-error', errCount > 0);
+  }
+
+  function toggleConsole() {
+    const panel = document.getElementById('console-panel');
+    if (!panel) return;
+    panel.classList.toggle('hidden');
+    updateConsoleBadge();
+  }
+
+  function copyConsoleLogs() {
+    const text = consoleLogs
+      .map(l => '[' + l.level.toUpperCase() + '] ' + l.text)
+      .join('\n');
+    copyText(text || '（ログなし）');
+  }
+
   // ── Init & event wiring ──────────────────────────
   function init() {
     loadFromStorage();
@@ -893,6 +966,17 @@
 
     // ── Preview refresh ──
     document.getElementById('btn-refresh-preview').addEventListener('click', refreshPreview);
+
+    // ── Console Panel ──
+    window.addEventListener('message', function(e) {
+      if (!e.data || e.data.type !== 'mcd-log') return;
+      const iframe = document.getElementById('preview-frame');
+      if (!iframe || e.source !== iframe.contentWindow) return;
+      appendConsoleLog(String(e.data.level || 'log'), String(e.data.text || ''));
+    });
+    document.getElementById('btn-toggle-console').addEventListener('click', toggleConsole);
+    document.getElementById('btn-clear-console').addEventListener('click', clearConsoleLogs);
+    document.getElementById('btn-copy-console').addEventListener('click', copyConsoleLogs);
 
     // ── Copy buttons (per tab) ──
     document.querySelectorAll('.btn-copy').forEach(btn =>
