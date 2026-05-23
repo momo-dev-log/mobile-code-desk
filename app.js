@@ -834,7 +834,7 @@
     const panel    = document.getElementById('console-panel');
     const isOpen   = panel && !panel.classList.contains('hidden');
     const errCount = consoleLogs.filter(l => l.level === 'error').length;
-    btn.textContent = isOpen ? 'ログ ▲' : 'ログ ▼';
+    btn.textContent = isOpen ? 'コンソール ▲' : 'コンソール ▼';
     btn.classList.toggle('console-btn-error', errCount > 0);
   }
 
@@ -849,7 +849,7 @@
     const text = consoleLogs
       .map(l => '[' + l.level.toUpperCase() + '] ' + l.text)
       .join('\n');
-    copyText(text || '（ログなし）');
+    copyText(text || '（コンソールなし）');
   }
 
   // ── Init & event wiring ──────────────────────────
