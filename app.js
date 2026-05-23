@@ -443,53 +443,59 @@
 
   // ── AI Help: build consultation text ────────────────
   function buildAiHelpText() {
-    const problem  = document.querySelector('input[name="ai-problem"]:checked');
-    const request  = document.querySelector('input[name="ai-request"]:checked');
-    const expected = document.getElementById('ai-expected-input').value.trim();
-    const actual   = document.getElementById('ai-actual-input').value.trim();
-    const memo     = document.getElementById('ai-memo-input').value.trim();
-
-    if (!problem) { showToast('困っていることを選んでください'); return null; }
-    if (!request) { showToast('AIにお願いしたいことを選んでください'); return null; }
+    const expected  = document.getElementById('ai-expected-input').value.trim();
+    const actual    = document.getElementById('ai-actual-input').value.trim();
+    const memo      = document.getElementById('ai-memo-input').value.trim();
+    const inclHtml  = document.getElementById('ai-incl-html').checked;
+    const inclCss   = document.getElementById('ai-incl-css').checked;
+    const inclJs    = document.getElementById('ai-incl-js').checked;
+    const inclLog   = document.getElementById('ai-incl-log').checked;
+    const formatSel = document.querySelector('input[name="ai-format"]:checked');
+    const isPatch   = formatSel && formatSel.value === 'patch';
 
     const p           = currentProject();
     const projectName = p ? p.title : '（プロジェクト未選択）';
 
-    const activeTab = document.querySelector('.tab.active');
-    const tabKey    = activeTab ? activeTab.dataset.tab : '';
-    const tabLabel  = {
-      html:    '画面（HTML）',
-      css:     '見た目（CSS）',
-      js:      '動き（JavaScript）',
-      preview: 'ためす（プレビュー）'
-    }[tabKey] || tabKey;
-
-    const html = editorVal('html').trim() || '（なし）';
-    const css  = editorVal('css').trim()  || '（なし）';
-    const js   = editorVal('js').trim()   || '（なし）';
-
     const lines = [
-      '以下のコードについて相談があります。',
+      'コードについて相談があります。',
       '',
       'プロジェクト名：' + projectName,
-      '作業中のタブ：'   + tabLabel,
-      '',
-      '困っていること：'       + problem.value,
-      'AIにお願いしたいこと：' + request.value,
       '',
       '期待する動き：' + (expected || '（未入力）'),
       '実際の状態：'   + (actual   || '（未入力）'),
       '追加メモ：'     + (memo     || '（なし）'),
-      '',
-      '--- HTML ---',
-      html,
-      '',
-      '--- CSS ---',
-      css,
-      '',
-      '--- JavaScript ---',
-      js
     ];
+
+    if (inclHtml) {
+      lines.push('', '--- HTML ---', editorVal('html').trim() || '（なし）');
+    }
+    if (inclCss) {
+      lines.push('', '--- CSS ---', editorVal('css').trim() || '（なし）');
+    }
+    if (inclJs) {
+      lines.push('', '--- JavaScript ---', editorVal('js').trim() || '（なし）');
+    }
+    if (inclLog && consoleLogs.length > 0) {
+      const logText = consoleLogs
+        .map(l => '[' + l.level.toUpperCase() + '] ' + l.text)
+        .join('\n');
+      lines.push('', '--- コンソールログ ---', logText);
+    }
+
+    if (isPatch) {
+      lines.push(
+        '',
+        '--- 返答形式の指定 ---',
+        'JSONのみ返してください（挨拶・解説は不要）。',
+        '',
+        '・CodeDeskのJSONパッチ形式（配列）で返す',
+        '・target: "html" / "css" / "js" のいずれか',
+        '・mode: "replace" / "insertBefore" / "insertAfter" のいずれか',
+        '・find: 現在のコード内に1回だけ出てくる文字列にする',
+        '・replace: 置き換え後の文字列（mode が "replace" のとき）',
+        '・insert: 挿入する文字列（mode が "insertBefore" または "insertAfter" のとき）'
+      );
+    }
 
     return lines.join('\n');
   }
@@ -1056,12 +1062,17 @@
 
     // ── AI Help ──
     document.getElementById('btn-ai-help').addEventListener('click', () => {
-      document.querySelectorAll('input[name="ai-problem"], input[name="ai-request"]').forEach(r => {
-        r.checked = false;
-      });
       document.getElementById('ai-expected-input').value = '';
       document.getElementById('ai-actual-input').value = '';
       document.getElementById('ai-memo-input').value = '';
+      document.getElementById('ai-incl-html').checked = !!editorVal('html').trim();
+      document.getElementById('ai-incl-css').checked  = !!editorVal('css').trim();
+      document.getElementById('ai-incl-js').checked   = !!editorVal('js').trim();
+      const logBox = document.getElementById('ai-incl-log');
+      logBox.disabled = consoleLogs.length === 0;
+      logBox.checked  = consoleLogs.length > 0;
+      const firstFormat = document.querySelector('input[name="ai-format"]');
+      if (firstFormat) firstFormat.checked = true;
       document.getElementById('ai-result-textarea').value = '';
       document.getElementById('ai-result-area').classList.add('hidden');
       openModal('modal-ai-help');
