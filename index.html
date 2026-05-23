@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Mobile Code Desk</title>
-  <link rel="stylesheet" href="style.css?v=history-1">
+  <link rel="stylesheet" href="style.css?v=history-detail-1">
 </head>
 <body>
 
@@ -142,6 +142,40 @@
       <div class="modal-body">
         <button id="btn-save-manual-history" class="btn-secondary btn-full">&#x4ECA;&#x3059;&#x3050;&#x30D0;&#x30C3;&#x30AF;&#x30A2;&#x30C3;&#x30D7;</button>
         <ul id="history-list" class="history-list"></ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Modal: History Detail ── -->
+  <div id="modal-history-detail" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-sheet">
+      <div class="modal-header">
+        <h2>&#x5C65;&#x6B74;&#x8A73;&#x7D30;</h2>
+        <button class="btn-close" data-modal="modal-history-detail" aria-label="&#x9583;&#x3058;&#x308B;">&#x2715;</button>
+      </div>
+      <div class="modal-body">
+        <div class="hd-heading">
+          <span id="hd-time" class="history-item-time"></span>
+          <span id="hd-reason" class="history-item-reason"></span>
+        </div>
+        <div class="hd-tabs">
+          <button class="hd-tab active" data-hd-tab="html">HTML</button>
+          <button class="hd-tab" data-hd-tab="css">CSS</button>
+          <button class="hd-tab" data-hd-tab="js">JS</button>
+        </div>
+        <div id="hd-pane-html" class="hd-pane active">
+          <textarea id="hd-code-html" readonly class="code-textarea hd-code"
+            spellcheck="false" autocorrect="off" autocapitalize="off"></textarea>
+        </div>
+        <div id="hd-pane-css" class="hd-pane">
+          <textarea id="hd-code-css" readonly class="code-textarea hd-code"
+            spellcheck="false" autocorrect="off" autocapitalize="off"></textarea>
+        </div>
+        <div id="hd-pane-js" class="hd-pane">
+          <textarea id="hd-code-js" readonly class="code-textarea hd-code"
+            spellcheck="false" autocorrect="off" autocapitalize="off"></textarea>
+        </div>
+        <button id="btn-restore-from-detail" class="btn-danger btn-full">&#x3053;&#x306E;&#x72B6;&#x614B;&#x306B;&#x5FA9;&#x5143;&#x3059;&#x308B;</button>
       </div>
     </div>
   </div>
@@ -311,6 +345,6 @@
   <!-- ── Toast ── -->
   <div id="toast" class="toast" aria-live="polite"></div>
 
-  <script src="app.js?v=history-1"></script>
+  <script src="app.js?v=history-detail-1"></script>
 </body>
 </html>
