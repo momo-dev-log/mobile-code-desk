@@ -925,3 +925,69 @@ body.modal-open { overflow: hidden; }
   font-size: 14px;
   padding: 28px 0;
 }
+
+.history-item-chars {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin-top: 2px;
+  word-break: break-word;
+}
+
+.btn-detail {
+  flex-shrink: 0;
+  height: 36px;
+  padding: 0 14px;
+  background: var(--surface-3);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn-detail:active { background: var(--surface); }
+
+/* ── History Detail Modal ───────────────────────────── */
+.hd-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 0 2px;
+}
+
+.hd-tabs {
+  display: flex;
+  background: var(--surface-2);
+  border-radius: 10px;
+  padding: 3px;
+  gap: 3px;
+}
+
+.hd-tab {
+  flex: 1;
+  height: 36px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 700;
+  font-family: inherit;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.hd-tab.active {
+  background: var(--surface-3);
+  color: var(--text);
+}
+.hd-tab:not(.active):active { background: var(--surface-3); }
+
+.hd-pane { display: none; }
+.hd-pane.active { display: flex; flex-direction: column; }
+
+.hd-code {
+  min-height: 200px;
+  max-height: 40vh;
+  flex: none;
+}
