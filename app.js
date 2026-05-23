@@ -37,9 +37,34 @@
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
       if (currentId) localStorage.setItem(LAST_ID_KEY, currentId);
-    } catch (_) {
-      showToast('保存できませんでした');
+    } catch (e) {
+      if (e.name === 'QuotaExceededError' || (e.code && e.code === 22)) {
+        projects.forEach(p => {
+          if (Array.isArray(p.history) && p.history.length > 0) {
+            p.history = p.history.slice(-Math.max(1, Math.floor(p.history.length / 2)));
+          }
+        });
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+          if (currentId) localStorage.setItem(LAST_ID_KEY, currentId);
+        } catch (_) { showToast('保存できませんでした'); }
+      } else {
+        showToast('保存できませんでした');
+      }
     }
+  }
+
+  // ── History snapshot ──────────────────────────────
+  function saveHistorySnapshot(reason, snap) {
+    const p = currentProject();
+    if (!p) return false;
+    if (!snap.html.trim() && !snap.css.trim() && !snap.js.trim()) return false;
+    if (!Array.isArray(p.history)) p.history = [];
+    const last = p.history[p.history.length - 1];
+    if (last && last.html === snap.html && last.css === snap.css && last.js === snap.js) return false;
+    p.history.push({ id: genId(), reason: reason, savedAt: new Date().toISOString(), html: snap.html, css: snap.css, js: snap.js });
+    if (p.history.length > 10) p.history = p.history.slice(-10);
+    return true;
   }
 
   // ── Project helpers ──────────────────────────
@@ -102,6 +127,8 @@
       showToast('先にプロジェクトを選んでください');
       return;
     }
+    const p = currentProject();
+    if (p) saveHistorySnapshot('保存前', { html: p.html, css: p.css, js: p.js });
     setSaveStatus('saving');
     captureEditors();
     persistProjects();
@@ -222,6 +249,10 @@
   }
 
   function refreshPreview() {
+    if (currentId) {
+      const added = saveHistorySnapshot('プレビュー前', { html: editorVal('html'), css: editorVal('css'), js: editorVal('js') });
+      if (added) persistProjects();
+    }
     clearConsoleLogs();
     const iframe = document.getElementById('preview-frame');
     iframe.srcdoc = '';
@@ -852,6 +883,67 @@
     copyText(text || '（コンソールなし）');
   }
 
+  // ── History UI ───────────────────────────────────────
+  function formatHistoryDate(isoStr) {
+    const d   = new Date(isoStr);
+    const pad = n => String(n).padStart(2, '0');
+    return d.getFullYear() + '/' + pad(d.getMonth() + 1) + '/' + pad(d.getDate()) +
+           ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  }
+
+  function renderHistoryList() {
+    const p    = currentProject();
+    const list = document.getElementById('history-list');
+    if (!list) return;
+    if (!p || !Array.isArray(p.history) || p.history.length === 0) {
+      list.innerHTML = '<li class="no-history">履歴がありません</li>';
+      return;
+    }
+    list.innerHTML = '';
+    [...p.history].reverse().forEach(entry => {
+      const li   = document.createElement('li');
+      li.className = 'history-item';
+      const meta = document.createElement('div');
+      meta.className = 'history-item-meta';
+      const time = document.createElement('span');
+      time.className   = 'history-item-time';
+      time.textContent = formatHistoryDate(entry.savedAt);
+      const lbl  = document.createElement('span');
+      lbl.className   = 'history-item-reason';
+      lbl.textContent = entry.reason;
+      meta.append(time, lbl);
+      const btn  = document.createElement('button');
+      btn.className   = 'btn-restore';
+      btn.textContent = '復元';
+      btn.addEventListener('click', () => {
+        closeModal('modal-history');
+        restoreFromHistory(entry);
+      });
+      li.append(meta, btn);
+      list.appendChild(li);
+    });
+  }
+
+  function openHistoryModal() {
+    if (!currentId) { showToast('先にプロジェクトを選んでください'); return; }
+    renderHistoryList();
+    openModal('modal-history');
+  }
+
+  function restoreFromHistory(entry) {
+    showConfirm(
+      '現在のHTML/CSS/JavaScriptを、この履歴の状態に戻します。よろしいですか？',
+      () => {
+        document.getElementById('editor-html').value = entry.html;
+        document.getElementById('editor-css').value  = entry.css;
+        document.getElementById('editor-js').value   = entry.js;
+        lintAll();
+        markUnsaved();
+        showToast('履歴を復元しました');
+      }
+    );
+  }
+
   // ── Init & event wiring ──────────────────────────
   function init() {
     loadFromStorage();
@@ -983,6 +1075,23 @@
     document.getElementById('btn-toggle-console').addEventListener('click', toggleConsole);
     document.getElementById('btn-clear-console').addEventListener('click', clearConsoleLogs);
     document.getElementById('btn-copy-console').addEventListener('click', copyConsoleLogs);
+
+    // ── History ──
+    document.getElementById('btn-open-history').addEventListener('click', () => {
+      closeAllModals();
+      openHistoryModal();
+    });
+    document.getElementById('btn-save-manual-history').addEventListener('click', () => {
+      if (!currentId) return;
+      const added = saveHistorySnapshot('手動バックアップ', { html: editorVal('html'), css: editorVal('css'), js: editorVal('js') });
+      if (added) {
+        persistProjects();
+        renderHistoryList();
+        showToast('バックアップを保存しました');
+      } else {
+        showToast('変更がないためスキップしました');
+      }
+    });
 
     // ── Copy buttons (per tab) ──
     document.querySelectorAll('.btn-copy').forEach(btn =>

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Mobile Code Desk</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=history-1">
 </head>
 <body>
 
@@ -126,7 +126,22 @@
       </div>
       <div class="modal-body">
         <button id="btn-open-new-project" class="btn-primary btn-full">&#xFF0B; &#x65B0;&#x898F;&#x30D7;&#x30ED;&#x30B8;&#x30A7;&#x30AF;&#x30C8;</button>
+        <button id="btn-open-history" class="btn-secondary btn-full">&#x5C65;&#x6B74;</button>
         <ul id="project-list" class="project-list"></ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Modal: History ── -->
+  <div id="modal-history" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-sheet">
+      <div class="modal-header">
+        <h2>&#x5C65;&#x6B74;</h2>
+        <button class="btn-close" data-modal="modal-history" aria-label="&#x9583;&#x3058;&#x308B;">&#x2715;</button>
+      </div>
+      <div class="modal-body">
+        <button id="btn-save-manual-history" class="btn-secondary btn-full">&#x4ECA;&#x3059;&#x3050;&#x30D0;&#x30C3;&#x30AF;&#x30A2;&#x30C3;&#x30D7;</button>
+        <ul id="history-list" class="history-list"></ul>
       </div>
     </div>
   </div>
@@ -296,6 +311,6 @@
   <!-- ── Toast ── -->
   <div id="toast" class="toast" aria-live="polite"></div>
 
-  <script src="app.js?v=wording-fix-1"></script>
+  <script src="app.js?v=history-1"></script>
 </body>
 </html>
