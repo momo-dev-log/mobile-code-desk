@@ -8,8 +8,9 @@
   let currentId       = null;
   let isDirty         = false;
   let saveTimer       = null;
-  let confirmCallback = null;
-  let renameTargetId  = null;
+  let confirmCallback    = null;
+  let renameTargetId     = null;
+  let historyDetailEntry = null;
   let lintTimers      = { html: null, css: null, js: null };
   let consoleLogs     = [];
 
@@ -884,6 +885,21 @@
   }
 
   // ── History UI ───────────────────────────────────────
+  function historyCharInfo(entry, olderEntry) {
+    return ['html', 'css', 'js'].map(type => {
+      const label = { html: 'HTML', css: 'CSS', js: 'JS' }[type];
+      const count = entry[type].length;
+      if (count === 0) return label + ': 空';
+      let str = label + ': ' + count + '文字';
+      if (olderEntry !== null) {
+        const diff = count - olderEntry[type].length;
+        if (diff > 0)      str += '（+' + diff + '）';
+        else if (diff < 0) str += '（' + diff + '）';
+      }
+      return str;
+    }).join(' / ');
+  }
+
   function formatHistoryDate(isoStr) {
     const d   = new Date(isoStr);
     const pad = n => String(n).padStart(2, '0');
@@ -900,7 +916,9 @@
       return;
     }
     list.innerHTML = '';
-    [...p.history].reverse().forEach(entry => {
+    const reversed = [...p.history].reverse();
+    reversed.forEach((entry, i) => {
+      const olderEntry = reversed[i + 1] || null;
       const li   = document.createElement('li');
       li.className = 'history-item';
       const meta = document.createElement('div');
@@ -911,13 +929,16 @@
       const lbl  = document.createElement('span');
       lbl.className   = 'history-item-reason';
       lbl.textContent = entry.reason;
-      meta.append(time, lbl);
+      const chars = document.createElement('span');
+      chars.className   = 'history-item-chars';
+      chars.textContent = historyCharInfo(entry, olderEntry);
+      meta.append(time, lbl, chars);
       const btn  = document.createElement('button');
-      btn.className   = 'btn-restore';
-      btn.textContent = '復元';
+      btn.className   = 'btn-detail';
+      btn.textContent = '詳細';
       btn.addEventListener('click', () => {
         closeModal('modal-history');
-        restoreFromHistory(entry);
+        openHistoryDetailModal(entry);
       });
       li.append(meta, btn);
       list.appendChild(li);
@@ -928,6 +949,26 @@
     if (!currentId) { showToast('先にプロジェクトを選んでください'); return; }
     renderHistoryList();
     openModal('modal-history');
+  }
+
+  function openHistoryDetailModal(entry) {
+    historyDetailEntry = entry;
+    document.getElementById('hd-time').textContent   = formatHistoryDate(entry.savedAt);
+    document.getElementById('hd-reason').textContent = entry.reason;
+    document.getElementById('hd-code-html').value = entry.html;
+    document.getElementById('hd-code-css').value  = entry.css;
+    document.getElementById('hd-code-js').value   = entry.js;
+    switchHistoryDetailTab('html');
+    openModal('modal-history-detail');
+  }
+
+  function switchHistoryDetailTab(tab) {
+    document.querySelectorAll('.hd-tab').forEach(btn =>
+      btn.classList.toggle('active', btn.dataset.hdTab === tab)
+    );
+    document.querySelectorAll('.hd-pane').forEach(pane =>
+      pane.classList.toggle('active', pane.id === 'hd-pane-' + tab)
+    );
   }
 
   function restoreFromHistory(entry) {
@@ -1091,6 +1132,16 @@
       } else {
         showToast('変更がないためスキップしました');
       }
+    });
+
+    // ── History detail ──
+    document.querySelectorAll('.hd-tab').forEach(btn =>
+      btn.addEventListener('click', () => switchHistoryDetailTab(btn.dataset.hdTab))
+    );
+    document.getElementById('btn-restore-from-detail').addEventListener('click', () => {
+      if (!historyDetailEntry) return;
+      closeModal('modal-history-detail');
+      restoreFromHistory(historyDetailEntry);
     });
 
     // ── Copy buttons (per tab) ──
