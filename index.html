@@ -113,7 +113,7 @@
     </label>
     <button id="btn-single-html">1&#x30D5;&#x30A1;&#x30A4;&#x30EB;HTML&#x306B;&#x307E;&#x3068;&#x3081;&#x308B;</button>
     <button id="btn-duplicate">&#x8907;&#x88C5;&#x3057;&#x3066;&#x8A66;&#x3059;</button>
-    <button id="btn-ai-help">AI&#x306B;&#x805E;&#x304F;</button>
+    <button id="btn-ai-help">&#x56F0;&#x308A;&#x3054;&#x3068;&#x6574;&#x7406;</button>
     <button id="btn-patch-check">AI&#x306E;&#x4FEE;&#x6B63;&#x3092;&#x78BA;&#x8A8D;&#x3059;&#x308B;</button>
   </footer>
 
@@ -217,65 +217,50 @@
   <div id="modal-ai-help" class="modal hidden" role="dialog" aria-modal="true">
     <div class="modal-sheet">
       <div class="modal-header">
-        <h2>&#x56F0;&#x3063;&#x305F;&#x306E;&#x3067;AI&#x306B;&#x805E;&#x304F;&#x6587;&#x3092;&#x4F5C;&#x308B;</h2>
-        <button class="btn-close" data-modal="modal-ai-help" aria-label="&#x9583;&#x3058;&#x308B;">&#x2715;</button>
+        <h2>&#x56F0;&#x308A;&#x3054;&#x3068;&#x6574;&#x7406;</h2>
+        <button class="btn-close" data-modal="modal-ai-help" aria-label="&#x9589;&#x3058;&#x308B;">&#x2715;</button>
       </div>
       <div class="modal-body">
-        <p class="ai-section-label">&#x56F0;&#x3063;&#x3066;&#x3044;&#x308B;&#x3053;&#x3068;</p>
-        <div class="ai-options" id="ai-problem-options">
-          <label class="ai-option">
-            <input type="radio" name="ai-problem" value="&#x30DC;&#x30BF;&#x30F3;&#x304C;&#x53CD;&#x5FDC;&#x3057;&#x306A;&#x3044;">
-            <span>&#x30DC;&#x30BF;&#x30F3;&#x304C;&#x53CD;&#x5FDC;&#x3057;&#x306A;&#x3044;</span>
-          </label>
-          <label class="ai-option">
-            <input type="radio" name="ai-problem" value="&#x753B;&#x9762;&#x304C;&#x767D;&#x3044; / &#x4F55;&#x3082;&#x8868;&#x793A;&#x3055;&#x308C;&#x306A;&#x3044;">
-            <span>&#x753B;&#x9762;&#x304C;&#x767D;&#x3044; / &#x4F55;&#x3082;&#x8868;&#x793A;&#x3055;&#x308C;&#x306A;&#x3044;</span>
-          </label>
-          <label class="ai-option">
-            <input type="radio" name="ai-problem" value="&#x898B;&#x305F;&#x76EE;&#x304C;&#x5D29;&#x308C;&#x305F;">
-            <span>&#x898B;&#x305F;&#x76EE;&#x304C;&#x5D29;&#x308C;&#x305F;</span>
-          </label>
-          <label class="ai-option">
-            <input type="radio" name="ai-problem" value="&#x30A8;&#x30E9;&#x30FC;&#x3063;&#x307D;&#x3044;&#x3051;&#x3069;&#x5185;&#x5BB9;&#x304C;&#x5206;&#x304B;&#x3089;&#x306A;&#x3044;">
-            <span>&#x30A8;&#x30E9;&#x30FC;&#x3063;&#x307D;&#x3044;&#x3051;&#x3069;&#x5185;&#x5BB9;&#x304C;&#x5206;&#x304B;&#x3089;&#x306A;&#x3044;</span>
-          </label>
-          <label class="ai-option">
-            <input type="radio" name="ai-problem" value="&#x601D;&#x3063;&#x305F;&#x901A;&#x308A;&#x306B;&#x52D5;&#x304B;&#x306A;&#x3044;">
-            <span>&#x601D;&#x3063;&#x305F;&#x901A;&#x308A;&#x306B;&#x52D5;&#x304B;&#x306A;&#x3044;</span>
-          </label>
-        </div>
 
-        <p class="ai-section-label">AI&#x306B;&#x304A;&#x9858;&#x3044;&#x3057;&#x305F;&#x3044;&#x3053;&#x3068;</p>
-        <div class="ai-options" id="ai-request-options">
-          <label class="ai-option">
-            <input type="radio" name="ai-request" value="&#x307E;&#x305A;&#x539F;&#x56E0;&#x3060;&#x3051;&#x77E5;&#x308A;&#x305F;&#x3044;">
-            <span>&#x307E;&#x305A;&#x539F;&#x56E0;&#x3060;&#x3051;&#x77E5;&#x308A;&#x305F;&#x3044;</span>
-          </label>
-          <label class="ai-option">
-            <input type="radio" name="ai-request" value="&#x4FEE;&#x6B63;&#x6848;&#x3092;&#x51FA;&#x3057;&#x3066;&#x307B;&#x3057;&#x3044;">
-            <span>&#x4FEE;&#x6B63;&#x6848;&#x3092;&#x51FA;&#x3057;&#x3066;&#x307B;&#x3057;&#x3044;</span>
-          </label>
-          <label class="ai-option">
-            <input type="radio" name="ai-request" value="&#x30B3;&#x30FC;&#x30C9;&#x3092;&#x76F4;&#x3057;&#x3066;&#x307B;&#x3057;&#x3044;">
-            <span>&#x30B3;&#x30FC;&#x30C9;&#x3092;&#x76F4;&#x3057;&#x3066;&#x307B;&#x3057;&#x3044;</span>
-          </label>
-          <label class="ai-option">
-            <input type="radio" name="ai-request" value="&#x521D;&#x5FC3;&#x8005;&#x5411;&#x3051;&#x306B;&#x8AAC;&#x660E;&#x3057;&#x3066;&#x307B;&#x3057;&#x3044;">
-            <span>&#x521D;&#x5FC3;&#x8005;&#x5411;&#x3051;&#x306B;&#x8AAC;&#x660E;&#x3057;&#x3066;&#x307B;&#x3057;&#x3044;</span>
-          </label>
-        </div>
-
-        <p class="ai-section-label">&#x671F;&#x5F85;&#x3059;&#x308B;&#x52D5;&#x304D;&#xFF08;&#x4EFB;&#x610F;&#xFF09;</p>
+        <p class="ai-section-label">&#x72B6;&#x6CC1;&#x30E1;&#x30E2;&#xFF08;&#x4EFB;&#x610F;&#xFF09;</p>
         <textarea id="ai-expected-input" class="ai-memo"
-          placeholder="&#x4F8B;&#xFF09;&#x30DC;&#x30BF;&#x30F3;&#x3092;&#x62BC;&#x3057;&#x305F;&#x3089;&#x6587;&#x5B57;&#x304C;&#x5909;&#x308F;&#x3063;&#x3066;&#x307B;&#x3057;&#x3044;"></textarea>
-
-        <p class="ai-section-label">&#x5B9F;&#x969B;&#x306E;&#x72B6;&#x614B;&#xFF08;&#x4EFB;&#x610F;&#xFF09;</p>
+          placeholder="&#x671F;&#x5F85;&#x3059;&#x308B;&#x52D5;&#x304D;"></textarea>
         <textarea id="ai-actual-input" class="ai-memo"
-          placeholder="&#x4F8B;&#xFF09;&#x30DC;&#x30BF;&#x30F3;&#x3092;&#x62BC;&#x3057;&#x3066;&#x3082;&#x4F55;&#x3082;&#x5909;&#x308F;&#x3089;&#x306A;&#x3044;"></textarea>
-
-        <p class="ai-section-label">&#x8FFD;&#x52A0;&#x30E1;&#x30E2;&#xFF08;&#x4EFB;&#x610F;&#xFF09;</p>
+          placeholder="&#x5B9F;&#x969B;&#x306E;&#x72B6;&#x614B;"></textarea>
         <textarea id="ai-memo-input" class="ai-memo"
-          placeholder="&#x6C17;&#x306B;&#x306A;&#x3063;&#x3066;&#x3044;&#x308B;&#x3053;&#x3068;&#x3084;&#x88DC;&#x8DB3;&#x3092;&#x81EA;&#x7531;&#x306B;&#x66F8;&#x3044;&#x3066;&#x304F;&#x3060;&#x3055;&#x3044;"></textarea>
+          placeholder="&#x8FFD;&#x52A0;&#x30E1;&#x30E2;"></textarea>
+
+        <p class="ai-section-label">AI&#x306B;&#x6E21;&#x3059;&#x60C5;&#x5831;&#x3092;&#x9078;&#x3076;</p>
+        <div class="ai-options">
+          <label class="ai-option">
+            <input type="checkbox" id="ai-incl-html">
+            <span>HTML&#x3092;&#x542B;&#x3081;&#x308B;</span>
+          </label>
+          <label class="ai-option">
+            <input type="checkbox" id="ai-incl-css">
+            <span>CSS&#x3092;&#x542B;&#x3081;&#x308B;</span>
+          </label>
+          <label class="ai-option">
+            <input type="checkbox" id="ai-incl-js">
+            <span>JavaScript&#x3092;&#x542B;&#x3081;&#x308B;</span>
+          </label>
+          <label class="ai-option">
+            <input type="checkbox" id="ai-incl-log">
+            <span>&#x30B3;&#x30F3;&#x30BD;&#x30FC;&#x30EB;&#x30ED;&#x30B0;&#x3092;&#x542B;&#x3081;&#x308B;</span>
+          </label>
+        </div>
+
+        <p class="ai-section-label">&#x8FD4;&#x7B54;&#x5F62;&#x5F0F;</p>
+        <div class="ai-options">
+          <label class="ai-option">
+            <input type="radio" name="ai-format" value="explain" checked>
+            <span>&#x539F;&#x56E0;&#x3068;&#x89E3;&#x8AAC;&#x3060;&#x3051;&#x6559;&#x3048;&#x3066;</span>
+          </label>
+          <label class="ai-option">
+            <input type="radio" name="ai-format" value="patch">
+            <span>CodeDesk&#x7528;JSON&#x30D1;&#x30C3;&#x30C1;&#x3067;&#x8FD4;&#x3057;&#x3066;</span>
+          </label>
+        </div>
 
         <button id="btn-generate-ai-text" class="btn-primary btn-full">&#x76F8;&#x8AC7;&#x6587;&#x3092;&#x4F5C;&#x308B;</button>
 
@@ -311,6 +296,6 @@
   <!-- ── Toast ── -->
   <div id="toast" class="toast" aria-live="polite"></div>
 
-  <script src="app.js?v=console-log-1"></script>
+  <script src="app.js?v=ai-redesign-1"></script>
 </body>
 </html>

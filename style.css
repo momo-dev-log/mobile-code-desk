@@ -613,12 +613,20 @@ textarea::placeholder { color: var(--text-muted); opacity: 0.6; }
   color: var(--text);
   line-height: 1.4;
 }
-.ai-option input[type="radio"] {
+.ai-option input[type="radio"],
+.ai-option input[type="checkbox"] {
   width: 18px;
   height: 18px;
   accent-color: var(--accent);
   flex-shrink: 0;
   cursor: pointer;
+}
+.ai-option:has(input:disabled) {
+  opacity: 0.4;
+  cursor: default;
+}
+.ai-option:has(input:disabled) input {
+  cursor: not-allowed;
 }
 .ai-option:has(input:checked) {
   border-color: var(--accent);
