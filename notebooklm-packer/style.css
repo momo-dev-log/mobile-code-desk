@@ -632,7 +632,104 @@ body {
     max-height: 42vh;
   }
 
-  .sitemap-url-item-text {
-    font-size: 0.7rem;
+  /* Phase 7.6 スマホ調整 */
+  .sitemap-url-label {
+    font-size: 0.8rem;
   }
+
+  .sitemap-url-domain {
+    font-size: 0.62rem;
+  }
+
+  .url-badge {
+    font-size: 0.58rem;
+    padding: 2px 5px;
+  }
+
+  .url-aux-hint {
+    font-size: 0.58rem;
+  }
+}
+
+/* -----------------------------------------------
+   Phase 7.6：URL 候補表示改善
+   ----------------------------------------------- */
+
+/* info ブロック（ラベル行 ＋ ドメイン行） */
+.sitemap-url-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0; /* flex overflow 防止 */
+}
+
+/* ラベル行：ラベルテキスト ＋ バッジ [＋ 補助ヒント] */
+.sitemap-url-label-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  row-gap: 3px;
+}
+
+/* pathname ラベル（メインテキスト） */
+.sitemap-url-label {
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--text);
+  word-break: break-word;
+  line-height: 1.3;
+}
+
+/* ドメイン ＋ パス（小さめ・1行切り） */
+.sitemap-url-domain {
+  font-family: var(--font-mono);
+  font-size: 0.67rem;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+/* ─── タイプバッジ ─── */
+.url-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.62rem;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  flex-shrink: 0;
+  line-height: 1.5;
+}
+
+.badge-faq     { background: rgba(123, 140, 222, 0.18); color: #8fa0ee; }
+.badge-blog    { background: rgba(76,  175, 125, 0.18); color: #5ac58d; }
+.badge-article { background: rgba(123, 140, 222, 0.10); color: #7b8cde; }
+.badge-home    { background: rgba(122, 127, 154, 0.15); color: #9095b0; }
+.badge-nav     { background: rgba(170, 130, 230, 0.15); color: #b08ed8; }
+.badge-aux     { background: rgba(240, 180,  41, 0.15); color: #c89830; }
+.badge-other   { background: rgba(122, 127, 154, 0.12); color: #7a7f9a; }
+
+/* 補助ページヒント（斜体・小さめ） */
+.url-aux-hint {
+  font-size: 0.62rem;
+  color: var(--text-muted);
+  font-style: italic;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* 補助ページ：行全体を少し抑える（操作は妨げない） */
+.sitemap-url-item--aux {
+  opacity: 0.68;
+}
+
+.sitemap-url-item--aux:hover {
+  opacity: 1;
 }
