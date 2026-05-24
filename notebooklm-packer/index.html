@@ -182,23 +182,34 @@
 
     <!-- Sitemap 結果カード -->
     <section id="sitemap-result-card" class="card result-card" hidden>
+
+      <!-- 上段：URL一覧コピー + 取得件数 -->
       <div class="action-bar">
         <button id="copy-sitemap-btn" class="action-btn">📋 URL一覧をコピー</button>
-        <button id="to-pack-btn"      class="action-btn">📤 資料パック欄へ反映</button>
         <span id="sitemap-copy-feedback" class="copy-feedback" hidden></span>
         <span id="sitemap-url-count" class="char-count"></span>
       </div>
-      <textarea
-        id="sitemap-url-list"
-        class="result-area result-area-mono sitemap-url-list"
-        readonly
-        placeholder="URL 候補がここに表示されます（1行1URL）"
-      ></textarea>
+
+      <!-- 選択コントロールバー -->
+      <div class="sitemap-select-bar">
+        <button id="sitemap-select-all-btn"   class="select-ctrl-btn">全選択</button>
+        <button id="sitemap-deselect-all-btn" class="select-ctrl-btn">全解除</button>
+        <span id="sitemap-select-count" class="select-count-text"></span>
+      </div>
+
+      <!-- URL チェックボックスリスト -->
+      <div id="sitemap-url-checkboxes" class="sitemap-checkbox-list"></div>
+
+      <!-- 反映ボタン（全幅） -->
+      <button id="to-pack-btn" class="fetch-btn sitemap-to-pack-btn">
+        📤 選択したURLを資料パック欄へ反映
+      </button>
+
       <p class="result-note" id="sitemap-result-note"></p>
     </section>
 
   </main>
 
-  <script src="app.js?v=phase7"></script>
+  <script src="app.js?v=phase7.5"></script>
 </body>
 </html>
