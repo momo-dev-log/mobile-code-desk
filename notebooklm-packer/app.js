@@ -6,7 +6,7 @@
 const WORKER_URL = 'https://notebooklm-packer.momo19830831.workers.dev';
 
 // -----------------------------------------------
-// DOM 要素の取得
+// DOM 要素の取得 — 単一URL セクション（Phase 1–5）
 // -----------------------------------------------
 const urlInput       = document.getElementById('url-input');
 const fetchBtn       = document.getElementById('fetch-btn');
@@ -17,54 +17,74 @@ const resultCard     = document.getElementById('result-card');
 const charCount      = document.getElementById('char-count');
 const resultNote     = document.getElementById('result-note');
 
-// タブボタン
 const tabHtmlBtn      = document.getElementById('tab-html');
 const tabTextBtn      = document.getElementById('tab-text');
 const tabMarkdownBtn  = document.getElementById('tab-markdown');
 
-// パネル
 const panelHtml      = document.getElementById('panel-html');
 const panelText      = document.getElementById('panel-text');
 const panelMarkdown  = document.getElementById('panel-markdown');
 
-// テキストエリア
 const resultHtml     = document.getElementById('result-html');
 const resultText     = document.getElementById('result-text');
 const resultMarkdown = document.getElementById('result-markdown');
 const extractMeta    = document.getElementById('extract-meta');
 
-// アクションバー（Phase 5）
 const copyMarkdownBtn = document.getElementById('copy-markdown-btn');
 const downloadTxtBtn  = document.getElementById('download-txt-btn');
 const downloadMdBtn   = document.getElementById('download-md-btn');
 const copyFeedback    = document.getElementById('copy-feedback');
 
 // -----------------------------------------------
+// DOM 要素の取得 — 複数URL セクション（Phase 6）
+// -----------------------------------------------
+const multiUrlInput      = document.getElementById('multi-url-input');
+const packBtn            = document.getElementById('pack-btn');
+const packStatusBar      = document.getElementById('pack-status-bar');
+const packStatusIcon     = document.getElementById('pack-status-icon');
+const packStatusText     = document.getElementById('pack-status-text');
+const packProgressCard   = document.getElementById('pack-progress-card');
+const progressList       = document.getElementById('progress-list');
+const packResultCard     = document.getElementById('pack-result-card');
+const packResultMarkdown = document.getElementById('pack-result-markdown');
+const packCharCount      = document.getElementById('pack-char-count');
+const packResultNote     = document.getElementById('pack-result-note');
+const copyPackBtn        = document.getElementById('copy-pack-btn');
+const downloadPackTxtBtn = document.getElementById('download-pack-txt-btn');
+const downloadPackMdBtn  = document.getElementById('download-pack-md-btn');
+const packCopyFeedback   = document.getElementById('pack-copy-feedback');
+
+// -----------------------------------------------
 // 状態管理
 // -----------------------------------------------
-let lastHtml     = '';   // 取得した HTML ソース
-let lastText     = '';   // 抽出した本文テキスト
-let lastMarkdown = '';   // Markdown 変換結果
-let lastTitle    = '';   // ページタイトル（ファイル名生成用）
-let currentTab   = 'html';
+let lastHtml         = '';   // 取得した HTML ソース
+let lastText         = '';   // 抽出した本文テキスト
+let lastMarkdown     = '';   // 単一URL Markdown
+let lastTitle        = '';   // ページタイトル（ファイル名生成用）
+let currentTab       = 'html';
+let lastPackMarkdown = '';   // 結合 Markdown（Phase 6）
 
 // -----------------------------------------------
-// イベントリスナー
+// イベントリスナー — 単一URL
 // -----------------------------------------------
 fetchBtn.addEventListener('click', handleFetch);
-
-urlInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') handleFetch();
-});
+urlInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleFetch(); });
 
 tabHtmlBtn    .addEventListener('click', () => switchTab('html'));
 tabTextBtn    .addEventListener('click', () => switchTab('text'));
 tabMarkdownBtn.addEventListener('click', () => switchTab('markdown'));
 
-// アクションバー（Phase 5）
 copyMarkdownBtn.addEventListener('click', copyMarkdown);
 downloadTxtBtn .addEventListener('click', () => downloadMarkdown('txt'));
 downloadMdBtn  .addEventListener('click', () => downloadMarkdown('md'));
+
+// -----------------------------------------------
+// イベントリスナー — 複数URL（Phase 6）
+// -----------------------------------------------
+packBtn         .addEventListener('click', handleBatchFetch);
+copyPackBtn     .addEventListener('click', copyPackMarkdown);
+downloadPackTxtBtn.addEventListener('click', () => downloadPackMarkdown('txt'));
+downloadPackMdBtn .addEventListener('click', () => downloadPackMarkdown('md'));
 
 // -----------------------------------------------
 // タブ切り替え
@@ -72,17 +92,14 @@ downloadMdBtn  .addEventListener('click', () => downloadMarkdown('md'));
 function switchTab(tab) {
   currentTab = tab;
 
-  // タブボタンのアクティブ状態
   tabHtmlBtn    .classList.toggle('tab-active', tab === 'html');
   tabTextBtn    .classList.toggle('tab-active', tab === 'text');
   tabMarkdownBtn.classList.toggle('tab-active', tab === 'markdown');
 
-  // パネルの表示切り替え
   panelHtml     .hidden = tab !== 'html';
   panelText     .hidden = tab !== 'text';
   panelMarkdown .hidden = tab !== 'markdown';
 
-  // 文字数カウント
   const count =
     tab === 'html'     ? lastHtml.length :
     tab === 'text'     ? lastText.length :
@@ -97,67 +114,62 @@ function switchTab(tab) {
 }
 
 // -----------------------------------------------
-// メイン処理：URL → Worker → HTML 取得 → 変換
+// 共通：Worker 経由で HTML を取得する
+// -----------------------------------------------
+async function fetchHtmlFromWorker(url) {
+  const endpoint = `${WORKER_URL}/?url=${encodeURIComponent(url)}`;
+  const response = await fetch(endpoint);
+  if (!response.ok) {
+    let errMsg = `HTTP ${response.status}`;
+    try {
+      const errData = await response.json();
+      if (errData.error) errMsg = errData.error;
+    } catch { /* 無視 */ }
+    throw new Error(errMsg);
+  }
+  return response.text();
+}
+
+// -----------------------------------------------
+// 単一URL 処理
 // -----------------------------------------------
 async function handleFetch() {
   const targetUrl = urlInput.value.trim();
 
-  // 入力チェック
   if (!targetUrl) {
     setStatus('error', '❌', 'URL を入力してください');
     return;
   }
-  try {
-    new URL(targetUrl);
-  } catch {
+  try { new URL(targetUrl); } catch {
     setStatus('error', '❌', 'URL の形式が正しくありません（https:// から始まる URL を入力してください）');
     return;
   }
 
-  // 取得開始
   fetchBtn.disabled = true;
   resultCard.hidden = true;
   setStatus('loading', '⏳', '取得中...');
 
   try {
-    const endpoint = `${WORKER_URL}/?url=${encodeURIComponent(targetUrl)}`;
-    const response = await fetch(endpoint);
-
-    if (!response.ok) {
-      let errMsg = `HTTP ${response.status}`;
-      try {
-        const errData = await response.json();
-        if (errData.error) errMsg = errData.error;
-      } catch { /* 無視 */ }
-      setStatus('error', '❌', `取得失敗：${errMsg}`);
-      return;
-    }
-
-    const html = await response.text();
+    const html = await fetchHtmlFromWorker(targetUrl);
     lastHtml = html;
     resultHtml.value = html;
 
-    // ページタイトルを抽出してファイル名生成に使う（Phase 5）
     const tmpDoc = new DOMParser().parseFromString(html, 'text/html');
     lastTitle = (tmpDoc.title || '').trim();
 
-    // 本文抽出
     setStatus('loading', '⏳', '本文を抽出中...');
     const { text, usedSelector } = extractBodyText(html);
     lastText = text;
     resultText.value = text;
     extractMeta.textContent = `抽出元：${usedSelector}`;
 
-    // Markdown 変換
     setStatus('loading', '⏳', 'Markdown に変換中...');
     lastMarkdown = htmlToMarkdown(html, targetUrl);
     resultMarkdown.value = lastMarkdown;
 
-    // 注記更新
     resultNote.textContent =
       '※ Markdown タブの「コピー」または「ダウンロード」ボタンで NotebookLM に追加できます。';
 
-    // 現在のタブに合わせて表示
     resultCard.hidden = false;
     switchTab(currentTab);
     resultCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -171,15 +183,8 @@ async function handleFetch() {
 }
 
 // -----------------------------------------------
-// Phase 5：コピー・ダウンロード機能
+// Phase 5：単一URL コピー・ダウンロード
 // -----------------------------------------------
-
-/**
- * ページタイトルと現在日付から安全なファイル名を生成する
- * @param {string} title   ページタイトル
- * @param {string} ext     拡張子（"txt" or "md"）
- * @returns {string}        例：Claude_AIアシスタント_20260524.md
- */
 function generateFilename(title, ext) {
   const now  = new Date();
   const yyyy = now.getFullYear();
@@ -187,22 +192,17 @@ function generateFilename(title, ext) {
   const dd   = String(now.getDate()).padStart(2, '0');
   const dateStr = `${yyyy}${mm}${dd}`;
 
-  // ファイル名として安全な文字だけ残す（日本語・英数字・ハイフン・アンダースコア）
   let safeName = title
-    .replace(/[\r\n\t]/g, ' ')        // 改行・タブ → 空白
-    .replace(/[\\/:*?"<>|]/g, '')     // Windowsで禁止の文字を除去
-    .replace(/\s+/g, '_')             // 連続する空白 → アンダースコア
-    .replace(/^[._]+|[._]+$/g, '')    // 先頭・末尾のドット・アンダースコアを除去
-    .slice(0, 50);                     // 最大 50 文字
+    .replace(/[\r\n\t]/g, ' ')
+    .replace(/[\\/:*?"<>|]/g, '')
+    .replace(/\s+/g, '_')
+    .replace(/^[._]+|[._]+$/g, '')
+    .slice(0, 50);
 
   if (!safeName) safeName = 'notebooklm-resource';
-
   return `${safeName}_${dateStr}.${ext}`;
 }
 
-/**
- * Markdown の内容をクリップボードにコピーする
- */
 async function copyMarkdown() {
   if (!lastMarkdown) {
     showCopyFeedback('❌ コピーする内容がありません', false);
@@ -212,7 +212,6 @@ async function copyMarkdown() {
     await navigator.clipboard.writeText(lastMarkdown);
     showCopyFeedback('✅ コピー完了', true);
   } catch {
-    // clipboard API が使えない場合（非セキュアコンテキストなど）はフォールバック
     try {
       resultMarkdown.select();
       document.execCommand('copy');
@@ -223,36 +222,233 @@ async function copyMarkdown() {
   }
 }
 
-/**
- * コピー結果のフィードバックを 3 秒間表示する
- * @param {string}  message  表示するメッセージ
- * @param {boolean} success  成功 / 失敗
- */
 function showCopyFeedback(message, success) {
   copyFeedback.hidden = false;
   copyFeedback.textContent = message;
   copyFeedback.className = `copy-feedback ${success ? 'copy-success' : 'copy-error'}`;
   clearTimeout(copyFeedback._timer);
-  copyFeedback._timer = setTimeout(() => {
-    copyFeedback.hidden = true;
-  }, 3000);
+  copyFeedback._timer = setTimeout(() => { copyFeedback.hidden = true; }, 3000);
 }
 
-/**
- * Markdown の内容をファイルとしてダウンロードする
- * @param {string} ext  "txt" or "md"
- */
 function downloadMarkdown(ext) {
   if (!lastMarkdown) return;
   const filename = generateFilename(lastTitle, ext);
   const blob = new Blob([lastMarkdown], { type: 'text/plain; charset=utf-8' });
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
-  a.href     = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// -----------------------------------------------
+// Phase 6：複数URL 一括処理
+// -----------------------------------------------
+
+/**
+ * 入力テキストを解析し、有効・ユニークな URL の配列を返す
+ */
+function parseUrls(rawInput) {
+  const seen = new Set();
+  return rawInput
+    .split('\n')
+    .map(l => l.trim())
+    .filter(l => {
+      if (!l) return false;
+      try { new URL(l); return true; } catch { return false; }
+    })
+    .filter(l => {
+      if (seen.has(l)) return false;
+      seen.add(l); return true;
+    });
+}
+
+/**
+ * 成功ページだけを 1 つの Markdown ドキュメントにまとめる
+ */
+function buildPackMarkdown(results) {
+  const successItems = results.filter(r => r.success);
+  if (!successItems.length) return '';
+
+  const now   = new Date();
+  const yyyy  = now.getFullYear();
+  const mm    = String(now.getMonth() + 1).padStart(2, '0');
+  const dd    = String(now.getDate()).padStart(2, '0');
+
+  const header =
+    `# NotebookLM 資料パック\n\n` +
+    `作成日：${yyyy}-${mm}-${dd}　取得ページ数：${successItems.length}\n\n---\n\n`;
+
+  const sections = successItems.map((item, idx) =>
+    `## ${idx + 1}. ${item.title}\n\n` +
+    `Source: ${item.url}\n\n` +
+    `${item.md}`
+  );
+
+  return (header + sections.join('\n\n---\n\n'))
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+/**
+ * 処理状況リストに URL 1件分の行を追加し、その li 要素を返す
+ */
+function addProgressItem(url) {
+  const li = document.createElement('li');
+  li.className = 'progress-item progress-pending';
+  li.innerHTML =
+    `<span class="progress-status-icon">⏸</span>` +
+    `<div class="progress-info">` +
+      `<span class="progress-url-text">${escapeHtml(url)}</span>` +
+      `<span class="progress-detail-text">待機中</span>` +
+    `</div>`;
+  progressList.appendChild(li);
+  return li;
+}
+
+/**
+ * li 要素の状態を更新する
+ * @param {HTMLElement} li
+ * @param {'pending'|'loading'|'success'|'error'} state
+ * @param {string} detail  表示する詳細テキスト
+ */
+function updateProgressItem(li, state, detail) {
+  const icons = { pending: '⏸', loading: '⏳', success: '✅', error: '❌' };
+  li.className = `progress-item progress-${state}`;
+  li.querySelector('.progress-status-icon').textContent = icons[state] || '•';
+  li.querySelector('.progress-detail-text').textContent = detail;
+}
+
+/** HTML エスケープ（innerHTML 用） */
+function escapeHtml(str) {
+  return str
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/** パック用ステータスバーを更新する */
+function setPackStatus(type, icon, message) {
+  packStatusBar.hidden = false;
+  packStatusBar.className = `status-bar status-${type}`;
+  packStatusIcon.textContent = icon;
+  packStatusText.textContent = message;
+}
+
+/**
+ * メイン処理：複数URL を順番に取得・変換して結合 Markdown を作る
+ */
+async function handleBatchFetch() {
+  const urls = parseUrls(multiUrlInput.value);
+
+  if (urls.length === 0) {
+    setPackStatus('error', '❌', 'URL を1件以上入力してください（1行1URL）');
+    return;
+  }
+
+  // 初期化
+  packBtn.disabled     = true;
+  packResultCard.hidden = true;
+  packProgressCard.hidden = false;
+  progressList.innerHTML  = '';
+  lastPackMarkdown = '';
+  setPackStatus('loading', '⏳', `0 / ${urls.length} 処理中...`);
+
+  // 全行を「待機中」で表示
+  const items = urls.map(url => addProgressItem(url));
+
+  const results = [];
+
+  for (let i = 0; i < urls.length; i++) {
+    const url = urls[i];
+    setPackStatus('loading', '⏳', `${i + 1} / ${urls.length} 処理中...`);
+    updateProgressItem(items[i], 'loading', '取得中...');
+
+    try {
+      const html  = await fetchHtmlFromWorker(url);
+      const tmpDoc = new DOMParser().parseFromString(html, 'text/html');
+      const title = (tmpDoc.title || url).trim() || url;
+      const md    = htmlToMarkdown(html, url);
+
+      results.push({ url, title, md, success: true });
+      updateProgressItem(items[i], 'success', title);
+
+    } catch (e) {
+      results.push({ url, title: url, md: '', success: false, error: e.message });
+      updateProgressItem(items[i], 'error', `取得失敗：${e.message}`);
+    }
+  }
+
+  const successCount = results.filter(r => r.success).length;
+
+  if (successCount === 0) {
+    setPackStatus('error', '❌', 'すべての URL の取得に失敗しました');
+    packBtn.disabled = false;
+    return;
+  }
+
+  // 結合 Markdown を生成して表示
+  lastPackMarkdown = buildPackMarkdown(results);
+  packResultMarkdown.value = lastPackMarkdown;
+  packCharCount.textContent =
+    `${lastPackMarkdown.length.toLocaleString()} 文字`;
+  packResultNote.textContent =
+    `※ ${successCount} / ${urls.length} ページを結合しました。` +
+    `「コピー」または「ダウンロード」で NotebookLM に追加できます。`;
+
+  packResultCard.hidden = false;
+  setPackStatus(
+    'success', '✅',
+    `完了：${successCount} / ${urls.length} ページ取得成功`
+  );
+  packResultCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  packBtn.disabled = false;
+}
+
+// -----------------------------------------------
+// Phase 6：パック用 コピー・ダウンロード
+// -----------------------------------------------
+async function copyPackMarkdown() {
+  if (!lastPackMarkdown) {
+    showPackCopyFeedback('❌ コピーする内容がありません', false);
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(lastPackMarkdown);
+    showPackCopyFeedback('✅ コピー完了', true);
+  } catch {
+    try {
+      packResultMarkdown.select();
+      document.execCommand('copy');
+      showPackCopyFeedback('✅ コピー完了', true);
+    } catch {
+      showPackCopyFeedback('❌ コピーに失敗しました', false);
+    }
+  }
+}
+
+function showPackCopyFeedback(message, success) {
+  packCopyFeedback.hidden = false;
+  packCopyFeedback.textContent = message;
+  packCopyFeedback.className =
+    `copy-feedback ${success ? 'copy-success' : 'copy-error'}`;
+  clearTimeout(packCopyFeedback._timer);
+  packCopyFeedback._timer = setTimeout(() => {
+    packCopyFeedback.hidden = true;
+  }, 3000);
+}
+
+function downloadPackMarkdown(ext) {
+  if (!lastPackMarkdown) return;
+  const now     = new Date();
+  const yyyy    = now.getFullYear();
+  const mm      = String(now.getMonth() + 1).padStart(2, '0');
+  const dd      = String(now.getDate()).padStart(2, '0');
+  const filename = `NotebookLM資料パック_${yyyy}${mm}${dd}.${ext}`;
+  const blob    = new Blob([lastPackMarkdown], { type: 'text/plain; charset=utf-8' });
+  const url     = URL.createObjectURL(blob);
+  const a       = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
 
@@ -263,7 +459,6 @@ function prepareDoc(rawHtml) {
   const parser = new DOMParser();
   const doc = parser.parseFromString(rawHtml, 'text/html');
 
-  // 不要要素を除去
   [
     'script', 'style', 'noscript',
     'nav', 'header', 'footer', 'aside',
@@ -271,7 +466,6 @@ function prepareDoc(rawHtml) {
     '[aria-hidden="true"]',
   ].forEach(sel => doc.querySelectorAll(sel).forEach(el => el.remove()));
 
-  // メインコンテンツ候補（優先順）
   const selectors = [
     'main', 'article', '[role="main"]',
     '#main', '#content',
@@ -292,16 +486,13 @@ function prepareDoc(rawHtml) {
 }
 
 // -----------------------------------------------
-// 本文抽出：プレーンテキストを返す（Phase 3 から継続）
+// 本文抽出：プレーンテキストを返す
 // -----------------------------------------------
 function extractBodyText(rawHtml) {
   const { doc, mainEl, usedSelector } = prepareDoc(rawHtml);
   const title = (doc.title || '').trim();
   const bodyText = nodeToPlainText(mainEl);
 
-  // document.title と本文内の最初の h1 が同じ場合は重複を防ぐ
-  // 一致 → bodyText のみ（h1 が本文に含まれるので title を追加不要）
-  // 不一致 → title を先頭に追加（区切り線なし）
   let text;
   if (!title) {
     text = bodyText;
@@ -316,7 +507,7 @@ function extractBodyText(rawHtml) {
 }
 
 // -----------------------------------------------
-// Markdown 変換：HTML → Markdown テキストを返す（Phase 4 新規）
+// Markdown 変換：HTML → Markdown テキストを返す
 // -----------------------------------------------
 function htmlToMarkdown(rawHtml, sourceUrl) {
   const { doc, mainEl } = prepareDoc(rawHtml);
@@ -324,8 +515,6 @@ function htmlToMarkdown(rawHtml, sourceUrl) {
 
   const md = nodeToMarkdown(mainEl, sourceUrl);
 
-  // document.title と本文内の最初の h1 が同じ文字列の場合は
-  // h1 を優先し、title の追加を省略して重複を防ぐ
   let result;
   if (!title) {
     result = md;
@@ -337,7 +526,7 @@ function htmlToMarkdown(rawHtml, sourceUrl) {
   }
 
   return result
-    .replace(/\n{3,}/g, '\n\n')   // 3行以上の空行を2行に圧縮
+    .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
 
@@ -348,24 +537,16 @@ function nodeToMarkdown(node, baseUrl) {
   if (!node) return '';
 
   function convert(n) {
-    // テキストノード
     if (n.nodeType === Node.TEXT_NODE) {
       return n.textContent.replace(/[\r\n\t]+/g, ' ');
     }
     if (n.nodeType !== Node.ELEMENT_NODE) return '';
 
     const tag = n.tagName.toLowerCase();
-
-    // 子ノードを再帰変換（ブロック・インライン共通）
-    const children = () =>
-      Array.from(n.childNodes).map(convert).join('');
-
-    // インライン要素として子を結合（前後の空白をトリム）
-    const inline = () => children().trim();
+    const children = () => Array.from(n.childNodes).map(convert).join('');
+    const inline   = () => children().trim();
 
     switch (tag) {
-
-      // ---- 見出し ----
       case 'h1': return `\n\n# ${inline()}\n\n`;
       case 'h2': return `\n\n## ${inline()}\n\n`;
       case 'h3': return `\n\n### ${inline()}\n\n`;
@@ -373,34 +554,22 @@ function nodeToMarkdown(node, baseUrl) {
       case 'h5': return `\n\n##### ${inline()}\n\n`;
       case 'h6': return `\n\n###### ${inline()}\n\n`;
 
-      // ---- 段落 ----
-      case 'p': {
-        const t = inline();
-        return t ? `\n\n${t}\n\n` : '';
-      }
-
-      // ---- 改行・区切り ----
+      case 'p': { const t = inline(); return t ? `\n\n${t}\n\n` : ''; }
       case 'br': return '\n';
       case 'hr': return '\n\n---\n\n';
 
-      // ---- インライン装飾 ----
       case 'strong': case 'b': {
-        const t = inline();
-        return t ? `**${t}**` : '';
+        const t = inline(); return t ? `**${t}**` : '';
       }
       case 'em': case 'i': {
-        const t = inline();
-        return t ? `*${t}*` : '';
+        const t = inline(); return t ? `*${t}*` : '';
       }
 
-      // ---- コード ----
       case 'code': {
-        // pre の直下の code はバッククォートを付けない（pre 側で処理）
         if (n.parentElement && n.parentElement.tagName.toLowerCase() === 'pre') {
           return n.textContent;
         }
-        const t = n.textContent;
-        return t ? `\`${t}\`` : '';
+        const t = n.textContent; return t ? `\`${t}\`` : '';
       }
       case 'pre': {
         const codeEl = n.querySelector('code');
@@ -408,50 +577,31 @@ function nodeToMarkdown(node, baseUrl) {
         return `\n\n\`\`\`\n${content}\n\`\`\`\n\n`;
       }
 
-      // ---- 引用 ----
       case 'blockquote': {
-        const inner = inline()
-          .split('\n')
-          .map(l => `> ${l}`)
-          .join('\n');
+        const inner = inline().split('\n').map(l => `> ${l}`).join('\n');
         return `\n\n${inner}\n\n`;
       }
 
-      // ---- リンク ----
       case 'a': {
         const href = (n.getAttribute('href') || '').trim();
         const text = inline() || href;
-        if (!href || href.startsWith('#') || href.startsWith('javascript:')) {
-          return text;
-        }
-        try {
-          const abs = new URL(href, baseUrl).href;
-          return `[${text}](${abs})`;
-        } catch {
-          return text;
-        }
+        if (!href || href.startsWith('#') || href.startsWith('javascript:')) return text;
+        try { return `[${text}](${new URL(href, baseUrl).href})`; }
+        catch { return text; }
       }
 
-      // ---- 画像 ----
       case 'img': {
         const src = (n.getAttribute('src') || '').trim();
         const alt = (n.getAttribute('alt') || '').trim();
         if (!src) return alt;
-        try {
-          const abs = new URL(src, baseUrl).href;
-          return `![${alt}](${abs})`;
-        } catch {
-          return alt;
-        }
+        try { return `![${alt}](${new URL(src, baseUrl).href})`; }
+        catch { return alt; }
       }
 
-      // ---- リスト ----
       case 'ul': {
         const items = Array.from(n.children)
           .filter(c => c.tagName.toLowerCase() === 'li')
-          .map(li =>
-            `- ${Array.from(li.childNodes).map(convert).join('').trim()}`
-          )
+          .map(li => `- ${Array.from(li.childNodes).map(convert).join('').trim()}`)
           .join('\n');
         return items ? `\n\n${items}\n\n` : '';
       }
@@ -459,57 +609,46 @@ function nodeToMarkdown(node, baseUrl) {
         const items = Array.from(n.children)
           .filter(c => c.tagName.toLowerCase() === 'li')
           .map((li, idx) =>
-            `${idx + 1}. ${Array.from(li.childNodes).map(convert).join('').trim()}`
-          )
+            `${idx + 1}. ${Array.from(li.childNodes).map(convert).join('').trim()}`)
           .join('\n');
         return items ? `\n\n${items}\n\n` : '';
       }
-      case 'li': return children();  // ul / ol に委ねる
+      case 'li': return children();
 
-      // ---- テーブル ----
       case 'table': return `\n\n${convertTable(n)}\n\n`;
-      case 'thead': case 'tbody': case 'tfoot': return children();
-      case 'tr': return children();
-      case 'th': case 'td': return children();
+      case 'thead': case 'tbody': case 'tfoot':
+      case 'tr': case 'th': case 'td': return children();
 
-      // ---- ブロック要素（汎用） ----
       case 'div': case 'section': case 'article':
       case 'main': case 'figure': case 'figcaption':
       case 'aside': case 'dl': case 'dt': case 'dd': {
-        const t = children();
-        return t ? `\n${t}\n` : '';
+        const t = children(); return t ? `\n${t}\n` : '';
       }
 
-      // ---- その他（インライン扱い） ----
       default: return children();
     }
   }
 
-  // テーブルをシンプルな Markdown テーブルに変換
   function convertTable(tableNode) {
     const rows = Array.from(tableNode.querySelectorAll('tr'));
     if (!rows.length) return '';
-
-    const lines = rows.map((row, i) => {
+    return rows.map((row, i) => {
       const cells = Array.from(row.querySelectorAll('th, td'));
       const line = '| ' +
-        cells.map(c => c.textContent.trim().replace(/\|/g, '\\|')).join(' | ') +
-        ' |';
+        cells.map(c => c.textContent.trim().replace(/\|/g, '\\|')).join(' | ') + ' |';
       if (i === 0) {
         const sep = '| ' + cells.map(() => '---').join(' | ') + ' |';
         return `${line}\n${sep}`;
       }
       return line;
-    });
-
-    return lines.join('\n');
+    }).join('\n');
   }
 
   return convert(node);
 }
 
 // -----------------------------------------------
-// DOM → プレーンテキスト変換（Phase 3 から継続）
+// DOM → プレーンテキスト変換
 // -----------------------------------------------
 const BLOCK_TAGS = new Set([
   'p', 'div', 'section', 'article', 'main', 'aside',
@@ -548,7 +687,7 @@ function nodeToPlainText(node) {
 }
 
 // -----------------------------------------------
-// ステータスバーの表示を更新する
+// 単一URL ステータスバーの表示を更新する
 // -----------------------------------------------
 function setStatus(type, icon, message) {
   statusBar.hidden = false;

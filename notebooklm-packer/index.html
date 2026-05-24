@@ -4,20 +4,24 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NotebookLM 資料化ツール</title>
-  <link rel="stylesheet" href="style.css?v=phase5">
+  <link rel="stylesheet" href="style.css?v=phase6">
 </head>
 <body>
 
   <header class="app-header">
     <h1>📄 NotebookLM 資料化ツール</h1>
-    <p class="app-subtitle">Phase 5 — コピー・保存</p>
+    <p class="app-subtitle">Phase 6 — 複数URL 資料パック</p>
   </header>
 
   <main class="app-main">
 
+    <!-- ======================================================
+         単一URL セクション（Phase 1–5 からそのまま）
+         ====================================================== -->
+
     <!-- URL 入力エリア -->
     <section class="card input-card">
-      <label class="input-label" for="url-input">取得するページの URL</label>
+      <label class="input-label" for="url-input">単一URL — 取得・プレビュー</label>
       <input
         type="url"
         id="url-input"
@@ -71,7 +75,6 @@
 
       <!-- Markdown パネル -->
       <div id="panel-markdown" hidden>
-        <!-- アクションバー：コピー・ダウンロード -->
         <div class="action-bar">
           <button id="copy-markdown-btn" class="action-btn">📋 コピー</button>
           <button id="download-txt-btn"  class="action-btn">💾 .txt</button>
@@ -89,8 +92,64 @@
       <p class="result-note" id="result-note"></p>
     </section>
 
+    <!-- ======================================================
+         複数URL セクション（Phase 6 新規）
+         ====================================================== -->
+
+    <!-- セクション区切り -->
+    <div class="section-divider"><span>複数URL 資料パック</span></div>
+
+    <!-- 複数URL 入力エリア -->
+    <section class="card input-card">
+      <label class="input-label" for="multi-url-input">
+        取得するページの URL（1行1URL）
+      </label>
+      <textarea
+        id="multi-url-input"
+        class="multi-url-input"
+        placeholder="https://example.com/page-1&#10;https://example.com/page-2&#10;https://example.com/page-3"
+        autocomplete="off"
+        autocorrect="off"
+        autocapitalize="off"
+        spellcheck="false"
+        rows="6"
+      ></textarea>
+      <p class="multi-url-hint">空行・重複・無効な URL は自動でスキップされます</p>
+      <button id="pack-btn" class="fetch-btn">パックを作成</button>
+    </section>
+
+    <!-- パックステータス表示 -->
+    <div id="pack-status-bar" class="status-bar" hidden>
+      <span id="pack-status-icon"></span>
+      <span id="pack-status-text"></span>
+    </div>
+
+    <!-- 処理状況カード -->
+    <section id="pack-progress-card" class="card" hidden>
+      <p class="input-label">処理状況</p>
+      <ul id="progress-list" class="progress-list"></ul>
+    </section>
+
+    <!-- 結合Markdown 結果カード -->
+    <section id="pack-result-card" class="card result-card" hidden>
+      <div class="action-bar">
+        <button id="copy-pack-btn"         class="action-btn">📋 コピー</button>
+        <button id="download-pack-txt-btn" class="action-btn">💾 .txt</button>
+        <button id="download-pack-md-btn"  class="action-btn">📥 .md</button>
+        <span id="pack-copy-feedback" class="copy-feedback" hidden></span>
+        <span id="pack-char-count" class="char-count"></span>
+      </div>
+      <textarea
+        id="pack-result-markdown"
+        class="result-area result-area-markdown"
+        readonly
+        placeholder="結合 Markdown がここに表示されます"
+      ></textarea>
+      <p class="result-note" id="pack-result-note"></p>
+    </section>
+
   </main>
 
-  <script src="app.js?v=phase5"></script>
+  <script src="app.js?v=phase6"></script>
 </body>
 </html>
