@@ -55,6 +55,22 @@ const downloadPackMdBtn  = document.getElementById('download-pack-md-btn');
 const packCopyFeedback   = document.getElementById('pack-copy-feedback');
 
 // -----------------------------------------------
+// DOM 要素の取得 — Sitemap セクション（Phase 7）
+// -----------------------------------------------
+const sitemapInput        = document.getElementById('sitemap-input');
+const sitemapFetchBtn     = document.getElementById('sitemap-fetch-btn');
+const sitemapStatusBar    = document.getElementById('sitemap-status-bar');
+const sitemapStatusIcon   = document.getElementById('sitemap-status-icon');
+const sitemapStatusText   = document.getElementById('sitemap-status-text');
+const sitemapResultCard   = document.getElementById('sitemap-result-card');
+const sitemapUrlList      = document.getElementById('sitemap-url-list');
+const sitemapUrlCount     = document.getElementById('sitemap-url-count');
+const sitemapResultNote   = document.getElementById('sitemap-result-note');
+const copySitemapBtn      = document.getElementById('copy-sitemap-btn');
+const toPackBtn           = document.getElementById('to-pack-btn');
+const sitemapCopyFeedback = document.getElementById('sitemap-copy-feedback');
+
+// -----------------------------------------------
 // 状態管理
 // -----------------------------------------------
 let lastHtml         = '';   // 取得した HTML ソース
@@ -63,6 +79,7 @@ let lastMarkdown     = '';   // 単一URL Markdown
 let lastTitle        = '';   // ページタイトル（ファイル名生成用）
 let currentTab       = 'html';
 let lastPackMarkdown = '';   // 結合 Markdown（Phase 6）
+let lastSitemapUrls  = [];   // URL 候補（Phase 7）
 
 // -----------------------------------------------
 // イベントリスナー — 単一URL
@@ -85,6 +102,14 @@ packBtn         .addEventListener('click', handleBatchFetch);
 copyPackBtn     .addEventListener('click', copyPackMarkdown);
 downloadPackTxtBtn.addEventListener('click', () => downloadPackMarkdown('txt'));
 downloadPackMdBtn .addEventListener('click', () => downloadPackMarkdown('md'));
+
+// -----------------------------------------------
+// イベントリスナー — Sitemap（Phase 7）
+// -----------------------------------------------
+sitemapFetchBtn .addEventListener('click', handleSitemapFetch);
+sitemapInput    .addEventListener('keydown', (e) => { if (e.key === 'Enter') handleSitemapFetch(); });
+copySitemapBtn  .addEventListener('click', copySitemapUrls);
+toPackBtn       .addEventListener('click', sendToPackInput);
 
 // -----------------------------------------------
 // タブ切り替え
@@ -750,4 +775,276 @@ function setStatus(type, icon, message) {
   statusBar.className = `status-bar status-${type}`;
   statusIcon.textContent = icon;
   statusText.textContent = message;
+}
+
+// ===============================================
+// Phase 7：Sitemap から URL 候補を取得
+// ===============================================
+
+/** 取得する URL 候補の上限件数 */
+const SITEMAP_URL_LIMIT = 50;
+
+/**
+ * サイト URL のオリジンから試みる sitemap 候補パスを返す
+ * @param {string} siteUrl
+ * @returns {string[]}
+ */
+function getSitemapCandidates(siteUrl) {
+  const origin = new URL(siteUrl).origin;
+  return [
+    `${origin}/sitemap.xml`,
+    `${origin}/sitemap_index.xml`,
+    `${origin}/wp-sitemap.xml`,
+  ];
+}
+
+/**
+ * 入力が sitemap XML URL のように見えるか判定する。
+ * パスが .xml で終わるか "sitemap" を含む場合に true。
+ * @param {string} urlStr
+ * @returns {boolean}
+ */
+function looksLikeSitemapUrl(urlStr) {
+  try {
+    const pathname = new URL(urlStr).pathname.toLowerCase();
+    return pathname.endsWith('.xml') || pathname.includes('sitemap');
+  } catch { return false; }
+}
+
+/**
+ * Cloudflare Worker 経由で sitemap XML を取得し DOMParser で解析する。
+ * @param {string} sitemapUrl
+ * @returns {Promise<
+ *   { type: 'index',  sitemapUrls: string[] } |
+ *   { type: 'urlset', urls: string[] } |
+ *   { type: 'empty',  urls: string[] }
+ * >}
+ */
+async function fetchAndParseSitemap(sitemapUrl) {
+  const xml = await fetchHtmlFromWorker(sitemapUrl);
+
+  const xmlDoc = new DOMParser().parseFromString(xml, 'application/xml');
+
+  // パースエラーチェック（Firefox / Chrome 共通のフォールバック）
+  if (xmlDoc.querySelector('parsererror')) {
+    throw new Error('XML として解析できませんでした');
+  }
+
+  // ── sitemap index かどうか確認 ──
+  // <sitemapindex> > <sitemap> > <loc>
+  const sitemapLocs = [
+    ...xmlDoc.querySelectorAll('sitemapindex > sitemap > loc'),
+  ];
+  if (sitemapLocs.length > 0) {
+    return {
+      type: 'index',
+      sitemapUrls: sitemapLocs
+        .map(el => el.textContent.trim())
+        .filter(Boolean),
+    };
+  }
+
+  // ── 通常 sitemap ──
+  // <urlset> > <url> > <loc>
+  const urlLocs = [...xmlDoc.querySelectorAll('urlset > url > loc')];
+  if (urlLocs.length > 0) {
+    return {
+      type: 'urlset',
+      urls: urlLocs.map(el => el.textContent.trim()).filter(Boolean),
+    };
+  }
+
+  return { type: 'empty', urls: [] };
+}
+
+/**
+ * Sitemap index の sub-sitemap を順番に取得して URL を収集する（1 階層のみ）。
+ * SITEMAP_URL_LIMIT に達した時点で打ち切る。
+ * @param {string[]} sitemapUrls  sub-sitemap の URL 一覧
+ * @returns {Promise<string[]>}
+ */
+async function collectUrlsFromIndex(sitemapUrls) {
+  const collected = [];
+  for (const sitemapUrl of sitemapUrls) {
+    if (collected.length >= SITEMAP_URL_LIMIT) break;
+    setSitemapStatus(
+      'loading', '⏳',
+      `Sub-sitemap を取得中… ${collected.length} 件収集済み`
+    );
+    try {
+      const result = await fetchAndParseSitemap(sitemapUrl);
+      if (result.type === 'urlset') {
+        for (const url of result.urls) {
+          if (collected.length >= SITEMAP_URL_LIMIT) break;
+          collected.push(url);
+        }
+      }
+    } catch { /* 取得失敗は無視して次へ */ }
+  }
+  return collected;
+}
+
+/** Sitemap ステータスバーを更新する */
+function setSitemapStatus(type, icon, message) {
+  sitemapStatusBar.hidden = false;
+  sitemapStatusBar.className = `status-bar status-${type}`;
+  sitemapStatusIcon.textContent = icon;
+  sitemapStatusText.textContent = message;
+}
+
+/**
+ * メイン処理：Sitemap 取得 → 解析 → URL 候補一覧表示
+ */
+async function handleSitemapFetch() {
+  const rawInput = sitemapInput.value.trim();
+
+  if (!rawInput) {
+    setSitemapStatus('error', '❌', 'URL を入力してください');
+    return;
+  }
+  try { new URL(rawInput); } catch {
+    setSitemapStatus(
+      'error', '❌',
+      'URL の形式が正しくありません（https:// から始まる URL を入力してください）'
+    );
+    return;
+  }
+
+  sitemapFetchBtn.disabled = true;
+  sitemapResultCard.hidden = true;
+  lastSitemapUrls = [];
+
+  try {
+    let collectedUrls = [];
+    let noteText      = '';
+
+    if (looksLikeSitemapUrl(rawInput)) {
+      // ── 直接 sitemap URL として扱う ──
+      setSitemapStatus('loading', '⏳', 'Sitemap を取得中…');
+      const result = await fetchAndParseSitemap(rawInput);
+
+      if (result.type === 'index') {
+        setSitemapStatus(
+          'loading', '⏳',
+          `Sitemap index を検出 — ${result.sitemapUrls.length} 件の sub-sitemap から URL 候補を収集中…`
+        );
+        collectedUrls = await collectUrlsFromIndex(result.sitemapUrls);
+        noteText = `${rawInput}（Sitemap index）配下 ${result.sitemapUrls.length} 件の sub-sitemap から URL 候補を収集しました。`;
+
+      } else if (result.type === 'urlset') {
+        collectedUrls = result.urls;
+        noteText = `${rawInput} から URL 候補を取得しました。`;
+
+      } else {
+        throw new Error(
+          'URL 候補が 0 件でした（sitemap に <url><loc> エントリが見つかりません）'
+        );
+      }
+
+    } else {
+      // ── サイト URL → 候補パスを順に試みる ──
+      const candidates = getSitemapCandidates(rawInput);
+      let found = false;
+
+      for (const candidate of candidates) {
+        setSitemapStatus('loading', '⏳', `試行中：${candidate}`);
+        try {
+          const result = await fetchAndParseSitemap(candidate);
+
+          if (result.type === 'index') {
+            setSitemapStatus(
+              'loading', '⏳',
+              `Sitemap index を検出 — ${result.sitemapUrls.length} 件の sub-sitemap から URL 候補を収集中…`
+            );
+            collectedUrls = await collectUrlsFromIndex(result.sitemapUrls);
+            noteText = `${candidate}（Sitemap index）配下から URL 候補を収集しました。`;
+            found = true;
+            break;
+
+          } else if (result.type === 'urlset' && result.urls.length > 0) {
+            collectedUrls = result.urls;
+            noteText = `${candidate} から URL 候補を取得しました。`;
+            found = true;
+            break;
+          }
+          // type === 'empty' の場合は次の候補へ
+
+        } catch { /* 取得失敗 → 次の候補へ */ }
+      }
+
+      if (!found) {
+        throw new Error(
+          'Sitemap が見つかりませんでした\n' +
+          '（/sitemap.xml / /sitemap_index.xml / /wp-sitemap.xml を試しましたが取得できませんでした）'
+        );
+      }
+    }
+
+    // ── URL 上限を適用して表示 ──
+    const total    = collectedUrls.length;
+    const limited  = collectedUrls.slice(0, SITEMAP_URL_LIMIT);
+    const truncated = total > SITEMAP_URL_LIMIT;
+
+    lastSitemapUrls      = limited;
+    sitemapUrlList.value = limited.join('\n');
+    sitemapUrlCount.textContent = truncated
+      ? `${limited.length} 件表示（全 ${total} 件中）`
+      : `${limited.length} 件`;
+    sitemapResultNote.textContent = truncated
+      ? `${noteText}　上限 ${SITEMAP_URL_LIMIT} 件を表示しています（全 ${total} 件）。`
+      : noteText;
+
+    sitemapResultCard.hidden = false;
+    setSitemapStatus('success', '✅', `URL 候補 ${limited.length} 件を取得しました`);
+    sitemapResultCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  } catch (e) {
+    setSitemapStatus('error', '❌', `エラー：${e.message}`);
+  } finally {
+    sitemapFetchBtn.disabled = false;
+  }
+}
+
+/**
+ * Sitemap URL 一覧をクリップボードにコピーする
+ */
+async function copySitemapUrls() {
+  if (!lastSitemapUrls.length) {
+    showSitemapCopyFeedback('❌ コピーする内容がありません', false);
+    return;
+  }
+  const text = lastSitemapUrls.join('\n');
+  try {
+    await navigator.clipboard.writeText(text);
+    showSitemapCopyFeedback('✅ コピー完了', true);
+  } catch {
+    try {
+      sitemapUrlList.select();
+      document.execCommand('copy');
+      showSitemapCopyFeedback('✅ コピー完了', true);
+    } catch {
+      showSitemapCopyFeedback('❌ コピーに失敗しました', false);
+    }
+  }
+}
+
+/**
+ * URL 候補を複数URL 資料パック入力欄に転記する
+ */
+function sendToPackInput() {
+  if (!lastSitemapUrls.length) return;
+  multiUrlInput.value = lastSitemapUrls.join('\n');
+  multiUrlInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  showSitemapCopyFeedback('✅ 資料パック欄に反映しました', true);
+}
+
+function showSitemapCopyFeedback(message, success) {
+  sitemapCopyFeedback.hidden = false;
+  sitemapCopyFeedback.textContent = message;
+  sitemapCopyFeedback.className =
+    `copy-feedback ${success ? 'copy-success' : 'copy-error'}`;
+  clearTimeout(sitemapCopyFeedback._timer);
+  sitemapCopyFeedback._timer = setTimeout(() => {
+    sitemapCopyFeedback.hidden = true;
+  }, 3000);
 }
