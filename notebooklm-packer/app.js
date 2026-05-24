@@ -196,9 +196,20 @@ function extractBodyText(rawHtml) {
   const { doc, mainEl, usedSelector } = prepareDoc(rawHtml);
   const title = (doc.title || '').trim();
   const bodyText = nodeToPlainText(mainEl);
-  const text = title
-    ? `${title}\n${'─'.repeat(Math.min(title.length * 2, 40))}\n\n${bodyText}`
-    : bodyText;
+
+  // document.title と本文内の最初の h1 が同じ場合は重複を防ぐ
+  // 一致 → bodyText のみ（h1 が本文に含まれるので title を追加不要）
+  // 不一致 → title を先頭に追加（区切り線なし）
+  let text;
+  if (!title) {
+    text = bodyText;
+  } else {
+    const firstH1 = mainEl.querySelector('h1');
+    const firstH1Text = firstH1 ? firstH1.textContent.trim() : '';
+    const isDuplicate = firstH1Text.toLowerCase() === title.toLowerCase();
+    text = isDuplicate ? bodyText : `${title}\n\n${bodyText}`;
+  }
+
   return { text, usedSelector };
 }
 
