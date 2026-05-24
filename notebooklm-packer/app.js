@@ -364,11 +364,9 @@ async function handleBatchFetch() {
     updateProgressItem(items[i], 'loading', '取得中...');
 
     try {
-      const html  = await fetchHtmlFromWorker(url);
-      const tmpDoc = new DOMParser().parseFromString(html, 'text/html');
-      const title = (tmpDoc.title || url).trim() || url;
-      // パック用変換：DOM レベルで H1 を除去してから変換（重複防止）
-      const md    = htmlToMarkdownForPack(html, url);
+      const html = await fetchHtmlFromWorker(url);
+      // タイトル取得と Markdown 変換を 1 回のパースでまとめて行う
+      const { title, md } = processForPack(html, url);
 
       results.push({ url, title, md, success: true });
       updateProgressItem(items[i], 'success', title);
@@ -532,35 +530,58 @@ function htmlToMarkdown(rawHtml, sourceUrl) {
 }
 
 // -----------------------------------------------
-// Markdown 変換（資料パック専用）：DOM レベルで H1 を除去してから変換
+// 資料パック専用：1 回のパースでタイトルと Markdown を取得する
 //
-// 問題の構造：
-//   nodeToMarkdown() は <h1>Example Domain</h1> を "# Example Domain" に変換する。
-//   buildPackMarkdown() はパック側で "## N. Example Domain" を付ける。
-//   → 変換後の文字列で正規表現処理すると空白・改行の混入で失敗することがある。
+// 旧実装の問題（htmlToMarkdownForPack + tmpDoc 二重パース）：
+//   - タイトル取得：tmpDoc.title のみ参照 → <title> タグがないページで URL にフォールバック
+//   - H1 除去：doc.title が空だと if (title) が false になり H1 が残る
+//   → httpbin.org/html など <title> なしのページで両方の問題が発生
 //
-// 解決策：
-//   nodeToMarkdown() を呼ぶ前に DOM から <h1> ノードを remove() する。
-//   文字列を一切触らないので確実に除去できる。
-//   単体 Markdown タブ（htmlToMarkdown）は変更しない。
+// 新実装（processForPack）：
+//   - prepareDoc で 1 回だけパース
+//   - タイトル取得優先順位: 先頭 H1 テキスト > doc.title > URL
+//   - 先頭 H1 は常に DOM から remove() → パック見出し "## N. Title" と重複しない
+//   - H2〜H6 は残す
+//   - 単体 Markdown タブ（htmlToMarkdown）は変更なし
 // -----------------------------------------------
-function htmlToMarkdownForPack(rawHtml, sourceUrl) {
-  const { doc, mainEl } = prepareDoc(rawHtml);
-  const title = (doc.title || '').trim();
 
-  // パック用：ページタイトルと同じ H1 を DOM から直接 remove() する
-  // → "## N. Title" と "# Title" の二重見出しを確実に防ぐ
-  if (title) {
-    const firstH1 = mainEl.querySelector('h1');
-    if (firstH1 && firstH1.textContent.trim().toLowerCase() === title.toLowerCase()) {
-      firstH1.remove();
-    }
+/**
+ * パック用 HTML 処理：タイトルと Markdown を 1 回のパースで返す。
+ *
+ * タイトル取得優先順位：
+ *   1. HTML 内の先頭 H1 テキスト（ページ本文の主見出し）
+ *   2. document.title（<title> タグ）
+ *   3. sourceUrl（どちらも空のフォールバック）
+ *
+ * @param {string} rawHtml    Worker から取得した HTML 文字列
+ * @param {string} sourceUrl  元の URL（タイトルフォールバック用）
+ * @returns {{ title: string, md: string }}
+ */
+function processForPack(rawHtml, sourceUrl) {
+  const { doc, mainEl } = prepareDoc(rawHtml);
+  const docTitle = (doc.title || '').trim();
+
+  // 先頭 H1 を取得（prepareDoc でノイズ除去済みの mainEl から）
+  const firstH1 = mainEl.querySelector('h1');
+  const h1Text  = firstH1 ? firstH1.textContent.trim() : '';
+
+  // タイトル優先順位: H1 > doc.title > URL
+  const title = h1Text || docTitle || sourceUrl;
+
+  // パック用：先頭 H1 を DOM から除去してから変換
+  // タイトルが H1 になる場合もなら "## N. Title" + "# H1" の二重見出しを防ぐ
+  // ※ doc.title を使う場合でも H1 がタイトルと同じなら除去
+  if (firstH1) {
+    const h1Lower    = h1Text.toLowerCase();
+    const titleLower = title.toLowerCase();
+    if (h1Lower === titleLower) firstH1.remove();
   }
 
-  // パックでは "## N. Title" が付くため、ここでは # title を追加しない
-  return nodeToMarkdown(mainEl, sourceUrl)
+  const md = nodeToMarkdown(mainEl, sourceUrl)
     .replace(/\n{3,}/g, '\n\n')
     .trim();
+
+  return { title, md };
 }
 
 // -----------------------------------------------
