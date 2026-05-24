@@ -526,11 +526,113 @@ body {
 }
 
 /* -----------------------------------------------
-   Phase 7：Sitemap URL 候補取得
+   Phase 7.5：Sitemap URL 選択チェックボックス
    ----------------------------------------------- */
 
-/* URL 候補テキストエリア：URL の一覧なので低め固定高さ */
-.sitemap-url-list {
-  height: 36vh;
-  min-height: 160px;
+/* 選択コントロールバー（全選択 / 全解除 / 選択件数） */
+.sitemap-select-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.select-ctrl-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 7px 16px;
+  min-height: 40px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.select-ctrl-btn:hover {
+  background: var(--border);
+  color: var(--text);
+}
+
+.select-count-text {
+  font-size: 0.82rem;
+  color: var(--accent);
+  font-weight: 600;
+  margin-left: auto;
+}
+
+/* URL チェックボックスリスト */
+.sitemap-checkbox-list {
+  max-height: 36vh;
+  min-height: 80px;
+  overflow-y: auto;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px 0;
+}
+
+/* 1行分の URL アイテム（label 要素） */
+.sitemap-url-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.1s;
+  min-height: 44px; /* タッチターゲット確保 */
+}
+
+.sitemap-url-item:last-child {
+  border-bottom: none;
+}
+
+.sitemap-url-item:hover {
+  background: rgba(123, 140, 222, 0.08);
+}
+
+/* チェックボックス本体 */
+.sitemap-url-check {
+  flex-shrink: 0;
+  margin-top: 2px;
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+
+/* URL テキスト */
+.sitemap-url-item-text {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text);
+  word-break: break-all;
+  line-height: 1.5;
+  flex: 1;
+}
+
+/* 反映ボタン：上マージン確保 */
+.sitemap-to-pack-btn {
+  margin-top: 12px;
+}
+
+/* スマホ最適化 */
+@media (max-width: 480px) {
+  .select-ctrl-btn {
+    flex: 1;
+    text-align: center;
+    padding: 7px 10px;
+  }
+
+  .sitemap-checkbox-list {
+    max-height: 42vh;
+  }
+
+  .sitemap-url-item-text {
+    font-size: 0.7rem;
+  }
 }

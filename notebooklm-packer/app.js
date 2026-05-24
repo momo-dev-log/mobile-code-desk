@@ -55,20 +55,24 @@ const downloadPackMdBtn  = document.getElementById('download-pack-md-btn');
 const packCopyFeedback   = document.getElementById('pack-copy-feedback');
 
 // -----------------------------------------------
-// DOM 要素の取得 — Sitemap セクション（Phase 7）
+// DOM 要素の取得 — Sitemap セクション（Phase 7 / 7.5）
 // -----------------------------------------------
-const sitemapInput        = document.getElementById('sitemap-input');
-const sitemapFetchBtn     = document.getElementById('sitemap-fetch-btn');
-const sitemapStatusBar    = document.getElementById('sitemap-status-bar');
-const sitemapStatusIcon   = document.getElementById('sitemap-status-icon');
-const sitemapStatusText   = document.getElementById('sitemap-status-text');
-const sitemapResultCard   = document.getElementById('sitemap-result-card');
-const sitemapUrlList      = document.getElementById('sitemap-url-list');
-const sitemapUrlCount     = document.getElementById('sitemap-url-count');
-const sitemapResultNote   = document.getElementById('sitemap-result-note');
-const copySitemapBtn      = document.getElementById('copy-sitemap-btn');
-const toPackBtn           = document.getElementById('to-pack-btn');
-const sitemapCopyFeedback = document.getElementById('sitemap-copy-feedback');
+const sitemapInput          = document.getElementById('sitemap-input');
+const sitemapFetchBtn       = document.getElementById('sitemap-fetch-btn');
+const sitemapStatusBar      = document.getElementById('sitemap-status-bar');
+const sitemapStatusIcon     = document.getElementById('sitemap-status-icon');
+const sitemapStatusText     = document.getElementById('sitemap-status-text');
+const sitemapResultCard     = document.getElementById('sitemap-result-card');
+const sitemapUrlCount       = document.getElementById('sitemap-url-count');
+const sitemapResultNote     = document.getElementById('sitemap-result-note');
+const copySitemapBtn        = document.getElementById('copy-sitemap-btn');
+const toPackBtn             = document.getElementById('to-pack-btn');
+const sitemapCopyFeedback   = document.getElementById('sitemap-copy-feedback');
+// Phase 7.5 追加
+const sitemapUrlCheckboxes  = document.getElementById('sitemap-url-checkboxes');
+const sitemapSelectAllBtn   = document.getElementById('sitemap-select-all-btn');
+const sitemapDeselectAllBtn = document.getElementById('sitemap-deselect-all-btn');
+const sitemapSelectCount    = document.getElementById('sitemap-select-count');
 
 // -----------------------------------------------
 // 状態管理
@@ -106,10 +110,12 @@ downloadPackMdBtn .addEventListener('click', () => downloadPackMarkdown('md'));
 // -----------------------------------------------
 // イベントリスナー — Sitemap（Phase 7）
 // -----------------------------------------------
-sitemapFetchBtn .addEventListener('click', handleSitemapFetch);
-sitemapInput    .addEventListener('keydown', (e) => { if (e.key === 'Enter') handleSitemapFetch(); });
-copySitemapBtn  .addEventListener('click', copySitemapUrls);
-toPackBtn       .addEventListener('click', sendToPackInput);
+sitemapFetchBtn    .addEventListener('click', handleSitemapFetch);
+sitemapInput       .addEventListener('keydown', (e) => { if (e.key === 'Enter') handleSitemapFetch(); });
+copySitemapBtn     .addEventListener('click', copySitemapUrls);
+toPackBtn          .addEventListener('click', sendToPackInput);
+sitemapSelectAllBtn  .addEventListener('click', () => setSitemapCheckAll(true));
+sitemapDeselectAllBtn.addEventListener('click', () => setSitemapCheckAll(false));
 
 // -----------------------------------------------
 // タブ切り替え
@@ -985,10 +991,10 @@ async function handleSitemapFetch() {
     const limited  = collectedUrls.slice(0, SITEMAP_URL_LIMIT);
     const truncated = total > SITEMAP_URL_LIMIT;
 
-    lastSitemapUrls      = limited;
-    sitemapUrlList.value = limited.join('\n');
+    lastSitemapUrls = limited;
+    renderSitemapCheckboxList(limited);
     sitemapUrlCount.textContent = truncated
-      ? `${limited.length} 件表示（全 ${total} 件中）`
+      ? `${limited.length} 件（全 ${total} 件中）`
       : `${limited.length} 件`;
     sitemapResultNote.textContent = truncated
       ? `${noteText}　上限 ${SITEMAP_URL_LIMIT} 件を表示しています（全 ${total} 件）。`
@@ -1006,7 +1012,7 @@ async function handleSitemapFetch() {
 }
 
 /**
- * Sitemap URL 一覧をクリップボードにコピーする
+ * Sitemap URL 一覧（全件）をクリップボードにコピーする
  */
 async function copySitemapUrls() {
   if (!lastSitemapUrls.length) {
@@ -1016,26 +1022,27 @@ async function copySitemapUrls() {
   const text = lastSitemapUrls.join('\n');
   try {
     await navigator.clipboard.writeText(text);
-    showSitemapCopyFeedback('✅ コピー完了', true);
+    showSitemapCopyFeedback(`✅ ${lastSitemapUrls.length} 件をコピーしました`, true);
   } catch {
-    try {
-      sitemapUrlList.select();
-      document.execCommand('copy');
-      showSitemapCopyFeedback('✅ コピー完了', true);
-    } catch {
-      showSitemapCopyFeedback('❌ コピーに失敗しました', false);
-    }
+    showSitemapCopyFeedback('❌ コピーに失敗しました', false);
   }
 }
 
 /**
- * URL 候補を複数URL 資料パック入力欄に転記する
+ * チェックされた URL だけを複数URL 資料パック入力欄に転記する
  */
 function sendToPackInput() {
-  if (!lastSitemapUrls.length) return;
-  multiUrlInput.value = lastSitemapUrls.join('\n');
+  const checkedUrls = [
+    ...sitemapUrlCheckboxes.querySelectorAll('.sitemap-url-check:checked'),
+  ].map(cb => cb.value);
+
+  if (!checkedUrls.length) {
+    showSitemapCopyFeedback('❌ チェックされた URL がありません', false);
+    return;
+  }
+  multiUrlInput.value = checkedUrls.join('\n');
   multiUrlInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  showSitemapCopyFeedback('✅ 資料パック欄に反映しました', true);
+  showSitemapCopyFeedback(`✅ ${checkedUrls.length} 件を資料パック欄に反映しました`, true);
 }
 
 function showSitemapCopyFeedback(message, success) {
@@ -1047,4 +1054,57 @@ function showSitemapCopyFeedback(message, success) {
   sitemapCopyFeedback._timer = setTimeout(() => {
     sitemapCopyFeedback.hidden = true;
   }, 3000);
+}
+
+// ===============================================
+// Phase 7.5：Sitemap URL 選択チェックボックス
+// ===============================================
+
+/**
+ * URL 候補をチェックボックスリストとしてレンダリングする。
+ * 初期状態は全件チェック済み。
+ * @param {string[]} urls
+ */
+function renderSitemapCheckboxList(urls) {
+  sitemapUrlCheckboxes.innerHTML = '';
+  urls.forEach(url => {
+    const label = document.createElement('label');
+    label.className = 'sitemap-url-item';
+
+    const cb = document.createElement('input');
+    cb.type      = 'checkbox';
+    cb.className = 'sitemap-url-check';
+    cb.value     = url;
+    cb.checked   = true;
+    cb.addEventListener('change', updateSitemapSelectCount);
+
+    const span = document.createElement('span');
+    span.className   = 'sitemap-url-item-text';
+    span.textContent = url;
+
+    label.appendChild(cb);
+    label.appendChild(span);
+    sitemapUrlCheckboxes.appendChild(label);
+  });
+  updateSitemapSelectCount();
+}
+
+/**
+ * 選択件数表示を更新する
+ */
+function updateSitemapSelectCount() {
+  const total   = sitemapUrlCheckboxes.querySelectorAll('.sitemap-url-check').length;
+  const checked = sitemapUrlCheckboxes.querySelectorAll('.sitemap-url-check:checked').length;
+  sitemapSelectCount.textContent = `${checked} / ${total} 件選択中`;
+}
+
+/**
+ * 全チェックボックスを一括で ON / OFF する
+ * @param {boolean} checked
+ */
+function setSitemapCheckAll(checked) {
+  sitemapUrlCheckboxes
+    .querySelectorAll('.sitemap-url-check')
+    .forEach(cb => { cb.checked = checked; });
+  updateSitemapSelectCount();
 }
