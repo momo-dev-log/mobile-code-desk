@@ -10,7 +10,7 @@
 
   <header class="app-header">
     <h1>📄 NotebookLM 資料化ツール</h1>
-    <p class="app-subtitle">Phase 2 — URL取得 動作確認</p>
+    <p class="app-subtitle">Phase 3 — 本文抽出</p>
   </header>
 
   <main class="app-main">
@@ -39,20 +39,36 @@
 
     <!-- 取得結果エリア -->
     <section id="result-card" class="card result-card" hidden>
-      <div class="result-header">
-        <h2 class="result-title">取得結果（HTML ソース）</h2>
+
+      <!-- タブ切り替えバー -->
+      <div class="tab-bar">
+        <button class="tab-btn tab-active" id="tab-html">HTML ソース</button>
+        <button class="tab-btn" id="tab-text">抽出本文</button>
         <span id="char-count" class="char-count"></span>
       </div>
-      <textarea
-        id="result-area"
-        class="result-area"
-        readonly
-        placeholder="ここに取得した HTML が表示されます"
-      ></textarea>
-      <p class="result-note">
-        ※ Phase 2 では HTML ソースをそのまま表示しています。<br>
-        本文抽出・Markdown 変換は Phase 3 で追加します。
-      </p>
+
+      <!-- HTML ソースパネル -->
+      <div id="panel-html">
+        <textarea
+          id="result-html"
+          class="result-area result-area-mono"
+          readonly
+          placeholder="ここに取得した HTML が表示されます"
+        ></textarea>
+      </div>
+
+      <!-- 抽出本文パネル -->
+      <div id="panel-text" hidden>
+        <div id="extract-meta" class="extract-meta"></div>
+        <textarea
+          id="result-text"
+          class="result-area result-area-prose"
+          readonly
+          placeholder="本文を抽出中..."
+        ></textarea>
+      </div>
+
+      <p class="result-note" id="result-note"></p>
     </section>
 
   </main>

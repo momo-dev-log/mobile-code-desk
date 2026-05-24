@@ -1,5 +1,5 @@
 /* -----------------------------------------------
-   NotebookLM 資料化ツール — Phase 2 スタイル
+   NotebookLM 資料化ツール — Phase 3 スタイル
    スマホファースト・シンプル
    ----------------------------------------------- */
 
@@ -189,27 +189,48 @@ body {
   display: none;
 }
 
-.result-header {
+/* --- タブ切り替えバー --- */
+.tab-bar {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 14px;
   flex-wrap: wrap;
 }
 
-.result-title {
-  font-size: 0.9rem;
-  font-weight: 700;
+.tab-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 8px 16px;
+  min-height: 40px;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.tab-btn:hover {
+  background: var(--border);
   color: var(--text);
 }
 
+.tab-btn.tab-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
 .char-count {
-  font-size: 0.78rem;
+  font-size: 0.75rem;
   color: var(--text-muted);
+  margin-left: auto;
   white-space: nowrap;
 }
 
+/* --- 共通テキストエリア --- */
 .result-area {
   display: block;
   width: 100%;
@@ -217,15 +238,36 @@ body {
   border: 1px solid var(--border);
   border-radius: 8px;
   color: var(--text);
-  font-family: var(--font-mono);
   font-size: 0.78rem;
   line-height: 1.55;
   padding: 14px;
   resize: vertical;
   outline: none;
-  /* スマホで縦に十分な高さ確保 */
   height: 52vh;
   min-height: 200px;
+}
+
+/* HTML ソース表示：等幅フォント */
+.result-area-mono {
+  font-family: var(--font-mono);
+}
+
+/* 抽出本文表示：プロポーショナルフォントで読みやすく */
+.result-area-prose {
+  font-family: var(--font);
+  font-size: 0.88rem;
+  line-height: 1.75;
+}
+
+/* 抽出メタ情報（使用セレクタ表示） */
+.extract-meta {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  padding: 4px 10px;
+  background: var(--surface2);
+  border-left: 2px solid var(--accent);
+  border-radius: 0 4px 4px 0;
 }
 
 .result-note {
@@ -256,6 +298,18 @@ body {
 
   .result-area {
     height: 45vh;
+  }
+
+  .result-area-mono {
     font-size: 0.72rem;
+  }
+
+  .result-area-prose {
+    font-size: 0.84rem;
+  }
+
+  .tab-btn {
+    font-size: 0.78rem;
+    padding: 7px 13px;
   }
 }
