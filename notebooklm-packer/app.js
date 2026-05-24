@@ -1061,16 +1061,24 @@ function showSitemapCopyFeedback(message, success) {
 // ===============================================
 
 /**
- * URL 候補をチェックボックスリストとしてレンダリングする。
+ * URL 候補をチェックボックスリストとしてレンダリングする（Phase 7.6：ラベル表示版）。
  * 初期状態は全件チェック済み。
  * @param {string[]} urls
  */
 function renderSitemapCheckboxList(urls) {
   sitemapUrlCheckboxes.innerHTML = '';
   urls.forEach(url => {
-    const label = document.createElement('label');
-    label.className = 'sitemap-url-item';
+    const isAux            = isAuxiliaryUrl(url);
+    const { type, css }    = classifyUrl(url);
+    const labelText        = getUrlLabel(url);
+    const shortHostText    = getUrlShortPath(url);
 
+    // ── ルート要素（label）──
+    const item = document.createElement('label');
+    item.className = `sitemap-url-item${isAux ? ' sitemap-url-item--aux' : ''}`;
+    item.title = url;   // ロングプレス / ホバーで full URL
+
+    // チェックボックス
     const cb = document.createElement('input');
     cb.type      = 'checkbox';
     cb.className = 'sitemap-url-check';
@@ -1078,13 +1086,43 @@ function renderSitemapCheckboxList(urls) {
     cb.checked   = true;
     cb.addEventListener('change', updateSitemapSelectCount);
 
-    const span = document.createElement('span');
-    span.className   = 'sitemap-url-item-text';
-    span.textContent = url;
+    // ── info ブロック（右側 2 行） ──
+    const info = document.createElement('div');
+    info.className = 'sitemap-url-info';
 
-    label.appendChild(cb);
-    label.appendChild(span);
-    sitemapUrlCheckboxes.appendChild(label);
+    // 1 行目：ラベル + タイプバッジ [+ 補助ページヒント]
+    const labelRow = document.createElement('div');
+    labelRow.className = 'sitemap-url-label-row';
+
+    const labelSpan = document.createElement('span');
+    labelSpan.className   = 'sitemap-url-label';
+    labelSpan.textContent = labelText;
+
+    const badge = document.createElement('span');
+    badge.className   = `url-badge ${css}`;
+    badge.textContent = type;
+
+    labelRow.appendChild(labelSpan);
+    labelRow.appendChild(badge);
+
+    if (isAux) {
+      const auxHint = document.createElement('span');
+      auxHint.className   = 'url-aux-hint';
+      auxHint.textContent = '補助ページ';
+      labelRow.appendChild(auxHint);
+    }
+
+    // 2 行目：ドメイン＋パス（小さめ）
+    const domainSpan = document.createElement('span');
+    domainSpan.className   = 'sitemap-url-domain';
+    domainSpan.textContent = shortHostText;
+
+    info.appendChild(labelRow);
+    info.appendChild(domainSpan);
+
+    item.appendChild(cb);
+    item.appendChild(info);
+    sitemapUrlCheckboxes.appendChild(item);
   });
   updateSitemapSelectCount();
 }
@@ -1107,4 +1145,106 @@ function setSitemapCheckAll(checked) {
     .querySelectorAll('.sitemap-url-check')
     .forEach(cb => { cb.checked = checked; });
   updateSitemapSelectCount();
+}
+
+// ===============================================
+// Phase 7.6：URL 表示ヘルパー
+// ===============================================
+
+/**
+ * pathname のセグメントを " / " でつなぎ、人が読みやすいラベルを返す。
+ * 例: /blog/example-post/ → "blog / example-post"
+ *     /protocol.html      → "protocol.html"
+ *     /                   → "Home"
+ * @param {string} url
+ * @returns {string}
+ */
+function getUrlLabel(url) {
+  try {
+    const segments = new URL(url).pathname
+      .split('/')
+      .filter(s => s.length > 0);
+    return segments.length === 0 ? 'Home' : segments.join(' / ');
+  } catch {
+    return url;
+  }
+}
+
+/**
+ * "hostname + pathname" 形式（プロトコル省略）を返す。
+ * ドメイン行に small text として表示する。
+ * @param {string} url
+ * @returns {string}
+ */
+function getUrlShortPath(url) {
+  try {
+    const u = new URL(url);
+    return u.hostname + u.pathname;
+  } catch {
+    return url;
+  }
+}
+
+/**
+ * URL パスからページの種類を推定し、バッジラベルと CSS クラスを返す。
+ * @param {string} url
+ * @returns {{ type: string, css: string }}
+ */
+function classifyUrl(url) {
+  try {
+    const path = new URL(url).pathname.toLowerCase();
+
+    if (path === '/' || path === '')
+      return { type: 'Home',     css: 'badge-home'    };
+    if (/\/faq|\/help|\/frequently[\-_]asked/.test(path))
+      return { type: 'FAQ',      css: 'badge-faq'     };
+    if (/\/blog|\/news/.test(path))
+      return { type: 'Blog',     css: 'badge-blog'    };
+    if (/\/articles?\//.test(path))
+      return { type: 'Article',  css: 'badge-article' };
+    if (/\/privacy/.test(path))
+      return { type: 'Privacy',  css: 'badge-aux'     };
+    if (/\/terms|\/tos\b|\/legal/.test(path))
+      return { type: 'Terms',    css: 'badge-aux'     };
+    if (/\/categor/.test(path))
+      return { type: 'Category', css: 'badge-nav'     };
+    if (/\/tag/.test(path))
+      return { type: 'Tag',      css: 'badge-nav'     };
+
+    // 拡張子なし・セグメント有 → Article 扱い
+    return { type: 'Article', css: 'badge-article' };
+  } catch {
+    return { type: 'Other', css: 'badge-other' };
+  }
+}
+
+/**
+ * NotebookLM 資料に不要な「補助ページ」かどうか判定する。
+ * privacy / terms / tag / category / archive / login / search などが該当。
+ * @param {string} url
+ * @returns {boolean}
+ */
+function isAuxiliaryUrl(url) {
+  try {
+    const path = new URL(url).pathname.toLowerCase();
+    return [
+      /\/privacy/,
+      /\/terms/,
+      /\/tos\b/,
+      /\/legal/,
+      /\/disclaimer/,
+      /\/tags?(\/|$)/,
+      /\/categor/,
+      /\/archive/,
+      /\/login|\/signin|\/signup|\/register/,
+      /\/search/,
+      /\/contact/,
+      /\/sitemap/,
+      /\/feed|\/rss/,
+      /\/author/,
+      /\/page\/\d/,   // ページネーション（/page/2/ など）
+    ].some(p => p.test(path));
+  } catch {
+    return false;
+  }
 }
