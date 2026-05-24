@@ -279,15 +279,49 @@ function buildPackMarkdown(results) {
     `# NotebookLM 資料パック\n\n` +
     `作成日：${yyyy}-${mm}-${dd}　取得ページ数：${successItems.length}\n\n---\n\n`;
 
-  const sections = successItems.map((item, idx) =>
-    `## ${idx + 1}. ${item.title}\n\n` +
-    `Source: ${item.url}\n\n` +
-    `${item.md}`
-  );
+  const sections = successItems.map((item, idx) => {
+    // パックの "## N. Title" と本文内 "# Title" の重複を防ぐ
+    const cleanMd = stripLeadingH1(item.md, item.title);
+    return (
+      `## ${idx + 1}. ${item.title}\n\n` +
+      `Source: ${item.url}\n\n` +
+      `${cleanMd}`
+    );
+  });
 
   return (header + sections.join('\n\n---\n\n'))
     .replace(/\n{3,}/g, '\n\n')
     .trim();
+}
+
+/**
+ * 本文 Markdown の先頭 H1 がページタイトルと一致する場合に除去する。
+ *
+ * 問題の構造：
+ *   - buildPackMarkdown が "## N. Title" を付ける（パック側の見出し）
+ *   - htmlToMarkdown が返す md は、ページ内の <h1> を "# Title" に変換している
+ *   - 結果として "## N. Title" → "# Title" の二重見出しになる
+ *
+ * 修正方針：
+ *   パックに埋め込む前に、md 先頭の "# Title" がページタイトルと同じなら除去する。
+ *   タイトル不一致の場合（独立した H1 がある場合）はそのまま残す。
+ *
+ * @param {string} md     htmlToMarkdown() の出力（trim 済み）
+ * @param {string} title  ページタイトル（doc.title）
+ * @returns {string}
+ */
+function stripLeadingH1(md, title) {
+  if (!md || !title) return md;
+
+  // 先頭が "# " で始まるか確認（H1 のみ対象。H2〜H6 は残す）
+  const match = md.match(/^# (.+?)(?:\n|$)/);
+  if (!match) return md;
+
+  const headingText = match[1].trim();
+  if (headingText.toLowerCase() !== title.toLowerCase()) return md;
+
+  // H1 行を取り除き、直後の空行もまとめて除去
+  return md.slice(match[0].length).replace(/^\n+/, '');
 }
 
 /**
