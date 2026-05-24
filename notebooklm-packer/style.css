@@ -1,5 +1,5 @@
 /* -----------------------------------------------
-   NotebookLM 資料化ツール — Phase 3 スタイル
+   NotebookLM 資料化ツール — Phase 4 スタイル
    スマホファースト・シンプル
    ----------------------------------------------- */
 
@@ -257,6 +257,13 @@ body {
   font-family: var(--font);
   font-size: 0.88rem;
   line-height: 1.75;
+}
+
+/* Markdown 表示：等幅フォント + 行間を広めに */
+.result-area-markdown {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  line-height: 1.7;
 }
 
 /* 抽出メタ情報（使用セレクタ表示） */

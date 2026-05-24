@@ -4,13 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NotebookLM 資料化ツール</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=phase4">
 </head>
 <body>
 
   <header class="app-header">
     <h1>📄 NotebookLM 資料化ツール</h1>
-    <p class="app-subtitle">Phase 3 — 本文抽出</p>
+    <p class="app-subtitle">Phase 4 — Markdown 変換</p>
   </header>
 
   <main class="app-main">
@@ -44,6 +44,7 @@
       <div class="tab-bar">
         <button class="tab-btn tab-active" id="tab-html">HTML ソース</button>
         <button class="tab-btn" id="tab-text">抽出本文</button>
+        <button class="tab-btn" id="tab-markdown">Markdown</button>
         <span id="char-count" class="char-count"></span>
       </div>
 
@@ -68,11 +69,21 @@
         ></textarea>
       </div>
 
+      <!-- Markdown パネル -->
+      <div id="panel-markdown" hidden>
+        <textarea
+          id="result-markdown"
+          class="result-area result-area-markdown"
+          readonly
+          placeholder="Markdown に変換中..."
+        ></textarea>
+      </div>
+
       <p class="result-note" id="result-note"></p>
     </section>
 
   </main>
 
-  <script src="app.js"></script>
+  <script src="app.js?v=phase4"></script>
 </body>
 </html>
