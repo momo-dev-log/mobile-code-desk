@@ -530,51 +530,53 @@ function htmlToMarkdown(rawHtml, sourceUrl) {
 }
 
 // -----------------------------------------------
-// 資料パック専用：1 回のパースでタイトルと Markdown を取得する
+// 資料パック専用処理：タイトル取得と Markdown 変換
 //
-// 旧実装の問題（htmlToMarkdownForPack + tmpDoc 二重パース）：
-//   - タイトル取得：tmpDoc.title のみ参照 → <title> タグがないページで URL にフォールバック
-//   - H1 除去：doc.title が空だと if (title) が false になり H1 が残る
-//   → httpbin.org/html など <title> なしのページで両方の問題が発生
+// ── 旧実装の問題 ──
+//   processForPack は prepareDoc() 後の mainEl から H1 を探していた。
+//   prepareDoc は <header> 要素を除去するため、H1 が <header> 内にあると
+//   mainEl.querySelector('h1') が null を返し、URL にフォールバックしていた。
+//   さらに H1 除去条件も満たされず、本文内に H1 が残っていた。
 //
-// 新実装（processForPack）：
-//   - prepareDoc で 1 回だけパース
-//   - タイトル取得優先順位: 先頭 H1 テキスト > doc.title > URL
-//   - 先頭 H1 は常に DOM から remove() → パック見出し "## N. Title" と重複しない
-//   - H2〜H6 は残す
-//   - 単体 Markdown タブ（htmlToMarkdown）は変更なし
+// ── 新実装の方針 ──
+//   タイトル取得 → ノイズ除去「前」の rawDoc.body から H1 を検索（確実）
+//   Markdown 変換 → ノイズ除去「後」の prepareDoc の mainEl を使用
+//   H1 除去       → mainEl 内に一致する H1 があれば remove()
+//                    （<header> 内の H1 は prepareDoc で既に消えているため不要）
+//
+// タイトル優先順位: 先頭 H1 > doc.title > URL
 // -----------------------------------------------
 
 /**
- * パック用 HTML 処理：タイトルと Markdown を 1 回のパースで返す。
+ * パック用 HTML 処理。
+ * rawDoc（ノイズ除去前）でタイトルを確実に取得し、
+ * prepareDoc（ノイズ除去後）の mainEl で Markdown を生成する。
  *
- * タイトル取得優先順位：
- *   1. HTML 内の先頭 H1 テキスト（ページ本文の主見出し）
- *   2. document.title（<title> タグ）
- *   3. sourceUrl（どちらも空のフォールバック）
- *
- * @param {string} rawHtml    Worker から取得した HTML 文字列
- * @param {string} sourceUrl  元の URL（タイトルフォールバック用）
+ * @param {string} rawHtml
+ * @param {string} sourceUrl
  * @returns {{ title: string, md: string }}
  */
 function processForPack(rawHtml, sourceUrl) {
-  const { doc, mainEl } = prepareDoc(rawHtml);
-  const docTitle = (doc.title || '').trim();
-
-  // 先頭 H1 を取得（prepareDoc でノイズ除去済みの mainEl から）
-  const firstH1 = mainEl.querySelector('h1');
-  const h1Text  = firstH1 ? firstH1.textContent.trim() : '';
+  // ── Step 1：ノイズ除去前の rawDoc からタイトル・H1 を取得 ──
+  // prepareDoc は <header>/<nav>/<footer> 等を除去するため、
+  // そこに含まれる H1 が mainEl から消えてしまう。
+  // rawDoc.body.querySelector('h1') なら除去前に確実に取得できる。
+  const rawDoc   = new DOMParser().parseFromString(rawHtml, 'text/html');
+  const docTitle = (rawDoc.title || '').trim();
+  const rawH1    = rawDoc.body ? rawDoc.body.querySelector('h1') : null;
+  const h1Text   = rawH1 ? rawH1.textContent.trim() : '';
 
   // タイトル優先順位: H1 > doc.title > URL
   const title = h1Text || docTitle || sourceUrl;
 
-  // パック用：先頭 H1 を DOM から除去してから変換
-  // タイトルが H1 になる場合もなら "## N. Title" + "# H1" の二重見出しを防ぐ
-  // ※ doc.title を使う場合でも H1 がタイトルと同じなら除去
-  if (firstH1) {
-    const h1Lower    = h1Text.toLowerCase();
-    const titleLower = title.toLowerCase();
-    if (h1Lower === titleLower) firstH1.remove();
+  // ── Step 2：ノイズ除去後の mainEl から Markdown を生成 ──
+  const { mainEl } = prepareDoc(rawHtml);
+
+  // mainEl 内に title と同テキストの H1 が残っている場合は除去
+  // （<header> 内の H1 は prepareDoc 時点で消えているため、ここでは何もしなくてよい）
+  const contentH1 = mainEl.querySelector('h1');
+  if (contentH1 && contentH1.textContent.trim().toLowerCase() === title.toLowerCase()) {
+    contentH1.remove();
   }
 
   const md = nodeToMarkdown(mainEl, sourceUrl)
