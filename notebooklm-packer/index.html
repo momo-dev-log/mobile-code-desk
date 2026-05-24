@@ -10,7 +10,7 @@
 
   <header class="app-header">
     <h1>📄 NotebookLM 資料化ツール</h1>
-    <p class="app-subtitle">Phase 6 — 複数URL 資料パック</p>
+    <p class="app-subtitle">Phase 7 — Sitemap URL 候補取得</p>
   </header>
 
   <main class="app-main">
@@ -148,8 +148,57 @@
       <p class="result-note" id="pack-result-note"></p>
     </section>
 
+    <!-- ======================================================
+         Sitemap から URL 候補を取得（Phase 7 新規）
+         ====================================================== -->
+
+    <!-- セクション区切り -->
+    <div class="section-divider"><span>Sitemap から URL 候補を取得</span></div>
+
+    <!-- Sitemap 入力エリア -->
+    <section class="card input-card">
+      <label class="input-label" for="sitemap-input">
+        サイト URL または Sitemap URL
+      </label>
+      <input
+        type="url"
+        id="sitemap-input"
+        class="url-input"
+        placeholder="https://example.com  または  https://example.com/sitemap.xml"
+        autocomplete="off"
+        autocorrect="off"
+        autocapitalize="off"
+        spellcheck="false"
+      >
+      <p class="multi-url-hint">サイトURLを入れると /sitemap.xml など候補を自動で試みます　※ sitemap.xml を直接入れても OK</p>
+      <button id="sitemap-fetch-btn" class="fetch-btn">URL 候補を取得</button>
+    </section>
+
+    <!-- Sitemap ステータス -->
+    <div id="sitemap-status-bar" class="status-bar" hidden>
+      <span id="sitemap-status-icon"></span>
+      <span id="sitemap-status-text"></span>
+    </div>
+
+    <!-- Sitemap 結果カード -->
+    <section id="sitemap-result-card" class="card result-card" hidden>
+      <div class="action-bar">
+        <button id="copy-sitemap-btn" class="action-btn">📋 URL一覧をコピー</button>
+        <button id="to-pack-btn"      class="action-btn">📤 資料パック欄へ反映</button>
+        <span id="sitemap-copy-feedback" class="copy-feedback" hidden></span>
+        <span id="sitemap-url-count" class="char-count"></span>
+      </div>
+      <textarea
+        id="sitemap-url-list"
+        class="result-area result-area-mono sitemap-url-list"
+        readonly
+        placeholder="URL 候補がここに表示されます（1行1URL）"
+      ></textarea>
+      <p class="result-note" id="sitemap-result-note"></p>
+    </section>
+
   </main>
 
-  <script src="app.js?v=phase6-fix4"></script>
+  <script src="app.js?v=phase7"></script>
 </body>
 </html>
