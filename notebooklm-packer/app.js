@@ -210,7 +210,18 @@ function htmlToMarkdown(rawHtml, sourceUrl) {
   const title = (doc.title || '').trim();
 
   const md = nodeToMarkdown(mainEl, sourceUrl);
-  const result = title ? `# ${title}\n\n${md}` : md;
+
+  // document.title と本文内の最初の h1 が同じ文字列の場合は
+  // h1 を優先し、title の追加を省略して重複を防ぐ
+  let result;
+  if (!title) {
+    result = md;
+  } else {
+    const firstH1 = mainEl.querySelector('h1');
+    const firstH1Text = firstH1 ? firstH1.textContent.trim() : '';
+    const isDuplicate = firstH1Text.toLowerCase() === title.toLowerCase();
+    result = isDuplicate ? md : `# ${title}\n\n${md}`;
+  }
 
   return result
     .replace(/\n{3,}/g, '\n\n')   // 3行以上の空行を2行に圧縮
