@@ -4,13 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NotebookLM 資料化ツール</title>
-  <link rel="stylesheet" href="style.css?v=phase4">
+  <link rel="stylesheet" href="style.css?v=phase5">
 </head>
 <body>
 
   <header class="app-header">
     <h1>📄 NotebookLM 資料化ツール</h1>
-    <p class="app-subtitle">Phase 4 — Markdown 変換</p>
+    <p class="app-subtitle">Phase 5 — コピー・保存</p>
   </header>
 
   <main class="app-main">
@@ -71,6 +71,13 @@
 
       <!-- Markdown パネル -->
       <div id="panel-markdown" hidden>
+        <!-- アクションバー：コピー・ダウンロード -->
+        <div class="action-bar">
+          <button id="copy-markdown-btn" class="action-btn">📋 コピー</button>
+          <button id="download-txt-btn"  class="action-btn">💾 .txt</button>
+          <button id="download-md-btn"   class="action-btn">📥 .md</button>
+          <span id="copy-feedback" class="copy-feedback" hidden></span>
+        </div>
         <textarea
           id="result-markdown"
           class="result-area result-area-markdown"
@@ -84,6 +91,6 @@
 
   </main>
 
-  <script src="app.js?v=phase4-fix2"></script>
+  <script src="app.js?v=phase5"></script>
 </body>
 </html>
