@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NotebookLM 資料化ツール</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <header class="app-header">
+    <h1>📄 NotebookLM 資料化ツール</h1>
+    <p class="app-subtitle">Phase 2 — URL取得 動作確認</p>
+  </header>
+
+  <main class="app-main">
+
+    <!-- URL 入力エリア -->
+    <section class="card input-card">
+      <label class="input-label" for="url-input">取得するページの URL</label>
+      <input
+        type="url"
+        id="url-input"
+        class="url-input"
+        placeholder="https://example.com/article"
+        autocomplete="off"
+        autocorrect="off"
+        autocapitalize="off"
+        spellcheck="false"
+      >
+      <button id="fetch-btn" class="fetch-btn">取得する</button>
+    </section>
+
+    <!-- ステータス表示 -->
+    <div id="status-bar" class="status-bar" hidden>
+      <span id="status-icon"></span>
+      <span id="status-text"></span>
+    </div>
+
+    <!-- 取得結果エリア -->
+    <section id="result-card" class="card result-card" hidden>
+      <div class="result-header">
+        <h2 class="result-title">取得結果（HTML ソース）</h2>
+        <span id="char-count" class="char-count"></span>
+      </div>
+      <textarea
+        id="result-area"
+        class="result-area"
+        readonly
+        placeholder="ここに取得した HTML が表示されます"
+      ></textarea>
+      <p class="result-note">
+        ※ Phase 2 では HTML ソースをそのまま表示しています。<br>
+        本文抽出・Markdown 変換は Phase 3 で追加します。
+      </p>
+    </section>
+
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,261 @@
+/* -----------------------------------------------
+   NotebookLM 資料化ツール — Phase 2 スタイル
+   スマホファースト・シンプル
+   ----------------------------------------------- */
+
+/* --- リセット & ベース --- */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --bg:          #0f1117;
+  --surface:     #1a1d27;
+  --surface2:    #22263a;
+  --border:      #2e3347;
+  --text:        #e2e4f0;
+  --text-muted:  #7a7f9a;
+  --accent:      #7b8cde;
+  --accent-dark: #5c6bc0;
+  --success:     #4caf7d;
+  --error:       #e05c5c;
+  --loading:     #f0b429;
+  --radius:      10px;
+  --font:        -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono:   'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+}
+
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  line-height: 1.6;
+  min-height: 100dvh;
+  padding-bottom: 48px;
+}
+
+/* --- ヘッダー --- */
+.app-header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 20px 20px 16px;
+}
+
+.app-header h1 {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: 0.01em;
+}
+
+.app-subtitle {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+/* --- メインエリア --- */
+.app-main {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 20px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* --- カード --- */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+
+/* --- URL 入力カード --- */
+.input-label {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 10px;
+}
+
+.url-input {
+  display: block;
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  padding: 12px 14px;
+  outline: none;
+  transition: border-color 0.15s;
+  /* iOS でズームしないように font-size: 16px 以上を維持 */
+}
+
+.url-input::placeholder {
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+
+.url-input:focus {
+  border-color: var(--accent);
+}
+
+.fetch-btn {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  background: var(--accent);
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 1rem;
+  font-weight: 700;
+  padding: 14px;
+  transition: background 0.15s, opacity 0.15s;
+  /* タッチターゲット確保 */
+  min-height: 48px;
+}
+
+.fetch-btn:hover {
+  background: var(--accent-dark);
+}
+
+.fetch-btn:active {
+  opacity: 0.85;
+}
+
+.fetch-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* --- ステータスバー --- */
+.status-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  border: 1px solid transparent;
+}
+
+.status-bar[hidden] {
+  display: none;
+}
+
+.status-loading {
+  background: rgba(240, 180, 41, 0.1);
+  border-color: rgba(240, 180, 41, 0.3);
+  color: var(--loading);
+}
+
+.status-success {
+  background: rgba(76, 175, 125, 0.1);
+  border-color: rgba(76, 175, 125, 0.3);
+  color: var(--success);
+}
+
+.status-error {
+  background: rgba(224, 92, 92, 0.1);
+  border-color: rgba(224, 92, 92, 0.3);
+  color: var(--error);
+}
+
+#status-icon {
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+/* --- 取得結果カード --- */
+.result-card[hidden] {
+  display: none;
+}
+
+.result-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.result-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.char-count {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.result-area {
+  display: block;
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  line-height: 1.55;
+  padding: 14px;
+  resize: vertical;
+  outline: none;
+  /* スマホで縦に十分な高さ確保 */
+  height: 52vh;
+  min-height: 200px;
+}
+
+.result-note {
+  margin-top: 12px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+/* --- スマホ最適化 --- */
+@media (max-width: 480px) {
+  .app-header {
+    padding: 16px 16px 12px;
+  }
+
+  .app-header h1 {
+    font-size: 1.05rem;
+  }
+
+  .app-main {
+    padding: 14px 12px;
+    gap: 12px;
+  }
+
+  .card {
+    padding: 16px;
+  }
+
+  .result-area {
+    height: 45vh;
+    font-size: 0.72rem;
+  }
+}
