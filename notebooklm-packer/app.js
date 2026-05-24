@@ -33,12 +33,19 @@ const resultText     = document.getElementById('result-text');
 const resultMarkdown = document.getElementById('result-markdown');
 const extractMeta    = document.getElementById('extract-meta');
 
+// アクションバー（Phase 5）
+const copyMarkdownBtn = document.getElementById('copy-markdown-btn');
+const downloadTxtBtn  = document.getElementById('download-txt-btn');
+const downloadMdBtn   = document.getElementById('download-md-btn');
+const copyFeedback    = document.getElementById('copy-feedback');
+
 // -----------------------------------------------
 // 状態管理
 // -----------------------------------------------
 let lastHtml     = '';   // 取得した HTML ソース
 let lastText     = '';   // 抽出した本文テキスト
 let lastMarkdown = '';   // Markdown 変換結果
+let lastTitle    = '';   // ページタイトル（ファイル名生成用）
 let currentTab   = 'html';
 
 // -----------------------------------------------
@@ -53,6 +60,11 @@ urlInput.addEventListener('keydown', (e) => {
 tabHtmlBtn    .addEventListener('click', () => switchTab('html'));
 tabTextBtn    .addEventListener('click', () => switchTab('text'));
 tabMarkdownBtn.addEventListener('click', () => switchTab('markdown'));
+
+// アクションバー（Phase 5）
+copyMarkdownBtn.addEventListener('click', copyMarkdown);
+downloadTxtBtn .addEventListener('click', () => downloadMarkdown('txt'));
+downloadMdBtn  .addEventListener('click', () => downloadMarkdown('md'));
 
 // -----------------------------------------------
 // タブ切り替え
@@ -125,6 +137,10 @@ async function handleFetch() {
     lastHtml = html;
     resultHtml.value = html;
 
+    // ページタイトルを抽出してファイル名生成に使う（Phase 5）
+    const tmpDoc = new DOMParser().parseFromString(html, 'text/html');
+    lastTitle = (tmpDoc.title || '').trim();
+
     // 本文抽出
     setStatus('loading', '⏳', '本文を抽出中...');
     const { text, usedSelector } = extractBodyText(html);
@@ -139,7 +155,7 @@ async function handleFetch() {
 
     // 注記更新
     resultNote.textContent =
-      '※ Markdown タブの内容を NotebookLM に貼り付けて活用できます。';
+      '※ Markdown タブの「コピー」または「ダウンロード」ボタンで NotebookLM に追加できます。';
 
     // 現在のタブに合わせて表示
     resultCard.hidden = false;
@@ -152,6 +168,92 @@ async function handleFetch() {
   } finally {
     fetchBtn.disabled = false;
   }
+}
+
+// -----------------------------------------------
+// Phase 5：コピー・ダウンロード機能
+// -----------------------------------------------
+
+/**
+ * ページタイトルと現在日付から安全なファイル名を生成する
+ * @param {string} title   ページタイトル
+ * @param {string} ext     拡張子（"txt" or "md"）
+ * @returns {string}        例：Claude_AIアシスタント_20260524.md
+ */
+function generateFilename(title, ext) {
+  const now  = new Date();
+  const yyyy = now.getFullYear();
+  const mm   = String(now.getMonth() + 1).padStart(2, '0');
+  const dd   = String(now.getDate()).padStart(2, '0');
+  const dateStr = `${yyyy}${mm}${dd}`;
+
+  // ファイル名として安全な文字だけ残す（日本語・英数字・ハイフン・アンダースコア）
+  let safeName = title
+    .replace(/[\r\n\t]/g, ' ')        // 改行・タブ → 空白
+    .replace(/[\\/:*?"<>|]/g, '')     // Windowsで禁止の文字を除去
+    .replace(/\s+/g, '_')             // 連続する空白 → アンダースコア
+    .replace(/^[._]+|[._]+$/g, '')    // 先頭・末尾のドット・アンダースコアを除去
+    .slice(0, 50);                     // 最大 50 文字
+
+  if (!safeName) safeName = 'notebooklm-resource';
+
+  return `${safeName}_${dateStr}.${ext}`;
+}
+
+/**
+ * Markdown の内容をクリップボードにコピーする
+ */
+async function copyMarkdown() {
+  if (!lastMarkdown) {
+    showCopyFeedback('❌ コピーする内容がありません', false);
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(lastMarkdown);
+    showCopyFeedback('✅ コピー完了', true);
+  } catch {
+    // clipboard API が使えない場合（非セキュアコンテキストなど）はフォールバック
+    try {
+      resultMarkdown.select();
+      document.execCommand('copy');
+      showCopyFeedback('✅ コピー完了', true);
+    } catch {
+      showCopyFeedback('❌ コピーに失敗しました', false);
+    }
+  }
+}
+
+/**
+ * コピー結果のフィードバックを 3 秒間表示する
+ * @param {string}  message  表示するメッセージ
+ * @param {boolean} success  成功 / 失敗
+ */
+function showCopyFeedback(message, success) {
+  copyFeedback.hidden = false;
+  copyFeedback.textContent = message;
+  copyFeedback.className = `copy-feedback ${success ? 'copy-success' : 'copy-error'}`;
+  clearTimeout(copyFeedback._timer);
+  copyFeedback._timer = setTimeout(() => {
+    copyFeedback.hidden = true;
+  }, 3000);
+}
+
+/**
+ * Markdown の内容をファイルとしてダウンロードする
+ * @param {string} ext  "txt" or "md"
+ */
+function downloadMarkdown(ext) {
+  if (!lastMarkdown) return;
+  const filename = generateFilename(lastTitle, ext);
+  const blob = new Blob([lastMarkdown], { type: 'text/plain; charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 // -----------------------------------------------
