@@ -130,6 +130,9 @@ body {
   transition: background 0.15s, opacity 0.15s;
   /* タッチターゲット確保 */
   min-height: 48px;
+  /* スマホ 1タップ対応：300ms 遅延除去・ダブルタップズーム無効化 */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .fetch-btn:hover {
@@ -210,6 +213,8 @@ body {
   padding: 8px 16px;
   min-height: 40px;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .tab-btn:hover {
@@ -306,6 +311,8 @@ body {
   min-height: 48px;
   transition: background 0.15s, border-color 0.15s, color 0.15s;
   white-space: nowrap;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .action-btn:hover {
@@ -550,6 +557,8 @@ body {
   padding: 7px 16px;
   min-height: 40px;
   transition: background 0.15s, color 0.15s;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .select-ctrl-btn:hover {
@@ -758,51 +767,17 @@ body {
 }
 
 /* -----------------------------------------------
-   Phase 8.5 改：資料パック名確認モーダル
+   Phase 8.5：資料パック名入力（常設）
    ----------------------------------------------- */
 
-/* オーバーレイ（画面全体を覆う半透明背景） */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.65);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 500;
-  padding: 20px 16px;
-  /* Safari 用慣性スクロール */
-  -webkit-overflow-scrolling: touch;
+.pack-name-row {
+  margin-bottom: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
 }
 
-.modal-overlay[hidden] {
-  display: none;
-}
-
-/* モーダルカード本体 */
-.modal-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 24px 20px;
-  width: 100%;
-  max-width: 440px;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
-}
-
-/* ラベル（input-label と同スタイル） */
-.modal-label {
-  display: block;
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  margin-bottom: 8px;
-}
-
-/* 資料パック名入力欄 */
-.modal-pack-name-input {
+/* テキスト入力（url-input と同仕様） */
+.pack-name-input {
   display: block;
   width: 100%;
   background: var(--surface2);
@@ -810,94 +785,66 @@ body {
   border-radius: 8px;
   color: var(--text);
   font-family: var(--font);
-  font-size: 1rem;
-  padding: 12px 14px;
+  font-size: 0.92rem;
+  padding: 11px 14px;
+  margin-top: 6px;
   outline: none;
-  transition: border-color 0.15s, box-shadow 0.15s;
-  box-sizing: border-box;
+  transition: border-color 0.15s;
 }
 
-.modal-pack-name-input::placeholder {
+.pack-name-input::placeholder {
   color: var(--text-muted);
   opacity: 0.55;
 }
 
-.modal-pack-name-input:focus {
+.pack-name-input:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(123, 140, 222, 0.18);
 }
 
-/* ヒントテキスト */
-.modal-hint {
+.pack-name-hint {
   font-size: 0.72rem;
   color: var(--text-muted);
   margin-top: 5px;
-  margin-bottom: 18px;
   line-height: 1.5;
 }
 
-/* ボタン行 */
-.modal-btn-row {
-  display: flex;
-  gap: 10px;
-  justify-content: flex-end;
-}
-
-/* ボタン共通 */
-.modal-btn {
-  border-radius: 8px;
-  cursor: pointer;
-  font-family: var(--font);
-  font-size: 0.95rem;
-  font-weight: 600;
-  padding: 12px 22px;
-  min-height: 48px;
-  border: none;
-  transition: background 0.15s, opacity 0.15s;
-}
-
-/* キャンセルボタン */
-.modal-btn-cancel {
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  color: var(--text-muted);
-}
-
-.modal-btn-cancel:hover {
-  background: var(--border);
-  color: var(--text);
-}
-
-/* 確定ボタン（保存 / PDF用表示を開く） */
-.modal-btn-confirm {
-  background: var(--accent);
-  color: #fff;
-  /* "PDF用表示を開く" のような長いテキストに対応 */
-  min-width: 130px;
-  white-space: nowrap;
-}
-
-.modal-btn-confirm:hover {
-  background: var(--accent-dark);
-}
-
-.modal-btn-confirm:active {
-  opacity: 0.85;
-}
-
-/* スマホ最適化：ボタンを縦並びに */
+/* スマホ最適化 */
 @media (max-width: 480px) {
-  .modal-card {
-    padding: 20px 16px;
+  .pack-name-input {
+    font-size: 0.88rem;
   }
+}
 
-  .modal-btn-row {
-    flex-direction: column-reverse;
-    gap: 8px;
+/* -----------------------------------------------
+   スマホ 1タップ対応（全ボタン共通）
+   touch-action: manipulation は .fetch-btn / .action-btn /
+   .tab-btn / .select-ctrl-btn に個別に設定済み。
+   ここでは hover: none メディアで「sticky hover」を無効化する。
+   iOS Safari では最初のタップで :hover が適用され、
+   色枠・フォーカス枠のみ表示されて実際の click が2回目になる問題を防ぐ。
+   ----------------------------------------------- */
+
+/* ポインターが存在しないデバイス（タッチスクリーン）では
+   :hover スタイルをデフォルト値に戻してフリッカーを除去 */
+@media (hover: none) {
+  .fetch-btn:hover {
+    background: var(--accent);
   }
-
-  .modal-btn {
-    width: 100%;
-    text-align: center;
+  .fetch-btn.print-preview-btn:hover {
+    background: transparent;
+    color: var(--accent);
+  }
+  .action-btn:hover {
+    background: var(--surface2);
+    border-color: var(--border);
+    color: var(--text);
+  }
+  .tab-btn:hover:not(.tab-active) {
+    background: var(--surface2);
+    color: var(--text-muted);
+  }
+  .select-ctrl-btn:hover {
+    background: var(--surface2);
+    color: var(--text-muted);
   }
 }

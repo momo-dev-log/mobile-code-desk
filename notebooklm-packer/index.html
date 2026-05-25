@@ -10,7 +10,7 @@
 
   <header class="app-header">
     <h1>📄 NotebookLM 資料化ツール</h1>
-    <p class="app-subtitle">Phase 8.5 — 保存前に資料パック名を確認（モーダル）</p>
+    <p class="app-subtitle">Phase 8.5 — 資料パック名の確認・編集</p>
   </header>
 
   <main class="app-main">
@@ -32,7 +32,7 @@
         autocapitalize="off"
         spellcheck="false"
       >
-      <button id="fetch-btn" class="fetch-btn">取得する</button>
+      <button type="button" id="fetch-btn" class="fetch-btn">取得する</button>
     </section>
 
     <!-- ステータス表示 -->
@@ -46,9 +46,9 @@
 
       <!-- タブ切り替えバー -->
       <div class="tab-bar">
-        <button class="tab-btn tab-active" id="tab-html">HTML ソース</button>
-        <button class="tab-btn" id="tab-text">抽出本文</button>
-        <button class="tab-btn" id="tab-markdown">Markdown</button>
+        <button type="button" class="tab-btn tab-active" id="tab-html">HTML ソース</button>
+        <button type="button" class="tab-btn" id="tab-text">抽出本文</button>
+        <button type="button" class="tab-btn" id="tab-markdown">Markdown</button>
         <span id="char-count" class="char-count"></span>
       </div>
 
@@ -76,9 +76,9 @@
       <!-- Markdown パネル -->
       <div id="panel-markdown" hidden>
         <div class="action-bar">
-          <button id="copy-markdown-btn" class="action-btn">📋 コピー</button>
-          <button id="download-txt-btn"  class="action-btn">💾 .txt</button>
-          <button id="download-md-btn"   class="action-btn">📥 .md</button>
+          <button type="button" id="copy-markdown-btn" class="action-btn">📋 コピー</button>
+          <button type="button" id="download-txt-btn"  class="action-btn">💾 .txt</button>
+          <button type="button" id="download-md-btn"   class="action-btn">📥 .md</button>
           <span id="copy-feedback" class="copy-feedback" hidden></span>
         </div>
         <textarea
@@ -115,7 +115,7 @@
         rows="6"
       ></textarea>
       <p class="multi-url-hint">空行・重複・無効な URL は自動でスキップされます</p>
-      <button id="pack-btn" class="fetch-btn">パックを作成</button>
+      <button type="button" id="pack-btn" class="fetch-btn">パックを作成</button>
     </section>
 
     <!-- パックステータス表示 -->
@@ -133,10 +133,24 @@
     <!-- 結合Markdown 結果カード -->
     <section id="pack-result-card" class="card result-card" hidden>
 
+      <!-- Phase 8.5：資料パック名入力（常設） -->
+      <div class="pack-name-row">
+        <label class="input-label" for="pack-name-input">資料パック名</label>
+        <input
+          type="text"
+          id="pack-name-input"
+          class="pack-name-input"
+          placeholder="NotebookLM資料パック_YYYY-MM-DD"
+          autocomplete="off"
+          spellcheck="false"
+        >
+        <p class="pack-name-hint">.txt / .md 保存・PDF 用表示の名前に使います　空欄の場合はデフォルト名に戻ります</p>
+      </div>
+
       <div class="action-bar">
-        <button id="copy-pack-btn"         class="action-btn">📋 コピー</button>
-        <button id="download-pack-txt-btn" class="action-btn">💾 .txt</button>
-        <button id="download-pack-md-btn"  class="action-btn">📥 .md</button>
+        <button type="button" id="copy-pack-btn"         class="action-btn">📋 コピー</button>
+        <button type="button" id="download-pack-txt-btn" class="action-btn">💾 .txt</button>
+        <button type="button" id="download-pack-md-btn"  class="action-btn">📥 .md</button>
         <span id="pack-copy-feedback" class="copy-feedback" hidden></span>
         <span id="pack-char-count" class="char-count"></span>
       </div>
@@ -148,7 +162,7 @@
       ></textarea>
 
       <!-- Phase 8：PDF用表示ボタン -->
-      <button id="print-preview-btn" class="fetch-btn print-preview-btn">
+      <button type="button" id="print-preview-btn" class="fetch-btn print-preview-btn">
         🖨️ PDF用表示（印刷 / PDF保存）
       </button>
 
@@ -178,7 +192,7 @@
         spellcheck="false"
       >
       <p class="multi-url-hint">サイトURLを入れると /sitemap.xml など候補を自動で試みます　※ sitemap.xml を直接入れても OK</p>
-      <button id="sitemap-fetch-btn" class="fetch-btn">URL 候補を取得</button>
+      <button type="button" id="sitemap-fetch-btn" class="fetch-btn">URL 候補を取得</button>
     </section>
 
     <!-- Sitemap ステータス -->
@@ -192,15 +206,15 @@
 
       <!-- 上段：URL一覧コピー + 取得件数 -->
       <div class="action-bar">
-        <button id="copy-sitemap-btn" class="action-btn">📋 URL一覧をコピー</button>
+        <button type="button" id="copy-sitemap-btn" class="action-btn">📋 URL一覧をコピー</button>
         <span id="sitemap-copy-feedback" class="copy-feedback" hidden></span>
         <span id="sitemap-url-count" class="char-count"></span>
       </div>
 
       <!-- 選択コントロールバー -->
       <div class="sitemap-select-bar">
-        <button id="sitemap-select-all-btn"   class="select-ctrl-btn">全選択</button>
-        <button id="sitemap-deselect-all-btn" class="select-ctrl-btn">全解除</button>
+        <button type="button" id="sitemap-select-all-btn"   class="select-ctrl-btn">全選択</button>
+        <button type="button" id="sitemap-deselect-all-btn" class="select-ctrl-btn">全解除</button>
         <span id="sitemap-select-count" class="select-count-text"></span>
       </div>
 
@@ -208,7 +222,7 @@
       <div id="sitemap-url-checkboxes" class="sitemap-checkbox-list"></div>
 
       <!-- 反映ボタン（全幅） -->
-      <button id="to-pack-btn" class="fetch-btn sitemap-to-pack-btn">
+      <button type="button" id="to-pack-btn" class="fetch-btn sitemap-to-pack-btn">
         📤 選択したURLを資料パック欄へ反映
       </button>
 
@@ -217,30 +231,6 @@
 
   </main>
 
-  <!-- ======================================================
-       資料パック名確認モーダル（Phase 8.5 改）
-       .txt / .md / PDF用表示ボタンを押したときに表示
-       ====================================================== -->
-  <div id="pack-name-modal" class="modal-overlay" hidden>
-    <div class="modal-card">
-      <p class="modal-label">資料パック名</p>
-      <input
-        type="text"
-        id="modal-pack-name-input"
-        class="modal-pack-name-input"
-        autocomplete="off"
-        autocorrect="off"
-        autocapitalize="off"
-        spellcheck="false"
-      >
-      <p class="modal-hint">空欄の場合はデフォルト名に戻ります</p>
-      <div class="modal-btn-row">
-        <button id="modal-cancel-btn"  class="modal-btn modal-btn-cancel">キャンセル</button>
-        <button id="modal-confirm-btn" class="modal-btn modal-btn-confirm">保存</button>
-      </div>
-    </div>
-  </div>
-
-  <script src="app.js?v=phase8.5.1"></script>
+  <script src="app.js?v=phase8.5.2"></script>
 </body>
 </html>

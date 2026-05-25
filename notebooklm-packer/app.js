@@ -54,14 +54,7 @@ const downloadPackTxtBtn = document.getElementById('download-pack-txt-btn');
 const downloadPackMdBtn  = document.getElementById('download-pack-md-btn');
 const packCopyFeedback   = document.getElementById('pack-copy-feedback');
 const printPreviewBtn    = document.getElementById('print-preview-btn');
-
-// -----------------------------------------------
-// DOM 要素の取得 — 資料パック名確認モーダル（Phase 8.5 改）
-// -----------------------------------------------
-const packNameModal      = document.getElementById('pack-name-modal');
-const modalPackNameInput = document.getElementById('modal-pack-name-input');
-const modalCancelBtn     = document.getElementById('modal-cancel-btn');
-const modalConfirmBtn    = document.getElementById('modal-confirm-btn');
+const packNameInput      = document.getElementById('pack-name-input');   // Phase 8.5：常設入力欄
 
 // -----------------------------------------------
 // DOM 要素の取得 — Sitemap セクション（Phase 7 / 7.5）
@@ -94,7 +87,7 @@ let currentTab       = 'html';
 let lastPackMarkdown = '';   // 結合 Markdown（Phase 6）
 let lastSitemapUrls  = [];   // URL 候補（Phase 7）
 let lastPackResults  = [];   // 資料パック結果（Phase 8 印刷プレビュー用）
-let modalCurrentAction = null; // 'txt' | 'md' | 'pdf'（Phase 8.5 改：モーダル用）
+let isDownloading    = false; // 二重ダウンロード防止フラグ（Phase 8.5）
 
 // -----------------------------------------------
 // イベントリスナー — 単一URL
@@ -115,28 +108,9 @@ downloadMdBtn  .addEventListener('click', () => downloadMarkdown('md'));
 // -----------------------------------------------
 packBtn            .addEventListener('click', handleBatchFetch);
 copyPackBtn        .addEventListener('click', copyPackMarkdown);
-// .txt / .md / PDF — 保存前に名前確認モーダルを出す（Phase 8.5 改）
-downloadPackTxtBtn .addEventListener('click', () => showPackNameModal('txt'));
-downloadPackMdBtn  .addEventListener('click', () => showPackNameModal('md'));
-printPreviewBtn    .addEventListener('click', () => showPackNameModal('pdf'));
-
-// -----------------------------------------------
-// イベントリスナー — 資料パック名確認モーダル（Phase 8.5 改）
-// -----------------------------------------------
-modalCancelBtn    .addEventListener('click', closePackNameModal);
-modalConfirmBtn   .addEventListener('click', confirmPackNameModal);
-// オーバーレイ背景クリックで閉じる
-packNameModal     .addEventListener('click', e => {
-  if (e.target === packNameModal) closePackNameModal();
-});
-// Escape キーで閉じる
-document.addEventListener('keydown', e => {
-  if (e.key === 'Escape' && !packNameModal.hidden) closePackNameModal();
-});
-// Enter キーで確定
-modalPackNameInput.addEventListener('keydown', e => {
-  if (e.key === 'Enter') confirmPackNameModal();
-});
+downloadPackTxtBtn .addEventListener('click', () => downloadPackMarkdown('txt'));
+downloadPackMdBtn  .addEventListener('click', () => downloadPackMarkdown('md'));
+printPreviewBtn    .addEventListener('click', openPrintPreview);
 
 // -----------------------------------------------
 // イベントリスナー — Sitemap（Phase 7）
@@ -449,6 +423,7 @@ async function handleBatchFetch() {
 
   // 結合 Markdown を生成して表示（Phase 8 用に results も保存）
   lastPackResults  = results;
+  packNameInput.value = generatePackName(results); // Phase 8.5：初期パック名を自動生成
   lastPackMarkdown = buildPackMarkdown(results);
   packResultMarkdown.value = lastPackMarkdown;
   packCharCount.textContent =
@@ -499,13 +474,16 @@ function showPackCopyFeedback(message, success) {
   }, 3000);
 }
 
-/**
- * @param {string} ext      'txt' または 'md'
- * @param {string} packName sanitizePackName 済みのファイル名（モーダルで確定した値）
- */
-function downloadPackMarkdown(ext, packName) {
-  if (!lastPackMarkdown) return;
-  const filename = `${packName}.${ext}`;
+function downloadPackMarkdown(ext) {
+  if (!lastPackMarkdown || isDownloading) return;
+  // 二重タップ・二重ダウンロード防止（300ms でリセット）
+  isDownloading = true;
+  setTimeout(() => { isDownloading = false; }, 300);
+
+  // pack-name-input を必ずブラーしてから処理（iOS でフォーカス中の場合を考慮）
+  packNameInput.blur();
+
+  const filename = `${sanitizePackName(packNameInput.value)}.${ext}`;
   const blob    = new Blob([lastPackMarkdown], { type: 'text/plain; charset=utf-8' });
   const url     = URL.createObjectURL(blob);
   const a       = document.createElement('a');
@@ -1288,9 +1266,11 @@ function isAuxiliaryUrl(url) {
 /**
  * 資料パックを印刷用 HTML に変換して新しいタブで開く。
  * ブラウザの「印刷 → PDF として保存」で PDF 化できる。
- * @param {string} packName sanitizePackName 済みのパック名（モーダルで確定した値）
  */
-function openPrintPreview(packName) {
+function openPrintPreview() {
+  // pack-name-input のフォーカスを先に外す（iOS 対策）
+  packNameInput.blur();
+  const packName = sanitizePackName(packNameInput.value);
   const successItems = lastPackResults.filter(r => r.success);
 
   if (!successItems.length) {
@@ -1311,7 +1291,7 @@ function openPrintPreview(packName) {
       </section>`;
   }).join('\n<hr class="section-divider">\n');
 
-  const html = buildPrintPageHtml(dateStr, successItems.length, sectionsHtml, packName);
+  const html = buildPrintPageHtml(dateStr, successItems.length, sectionsHtml, packName); // packName は上で取得済み
 
   const win = window.open('', '_blank');
   if (!win) {
@@ -1634,59 +1614,6 @@ function buildPrintPageHtml(dateStr, pageCount, sectionsHtml, packName = 'Notebo
   ${sectionsHtml}
 </body>
 </html>`;
-}
-
-// ===============================================
-// Phase 8.5 改：資料パック名確認モーダル
-// ===============================================
-
-/**
- * 資料パック名確認モーダルを開く。
- * @param {'txt'|'md'|'pdf'} actionType  確定後に実行するアクション
- */
-function showPackNameModal(actionType) {
-  // 資料パックがまだ作られていない場合はガード
-  if (!lastPackMarkdown) {
-    showPackCopyFeedback('❌ 先に資料パックを作成してください', false);
-    return;
-  }
-
-  modalCurrentAction = actionType;
-
-  // 初期値を自動生成して入力欄にセット
-  modalPackNameInput.value = generatePackName(lastPackResults);
-
-  // アクションに応じて確定ボタンのテキストを変える
-  modalConfirmBtn.textContent = actionType === 'pdf' ? 'PDF用表示を開く' : '保存';
-
-  packNameModal.hidden = false;
-
-  // 少し遅延させてフォーカス → 全選択（すぐ名前を変更しやすく）
-  setTimeout(() => {
-    modalPackNameInput.focus();
-    modalPackNameInput.select();
-  }, 60);
-}
-
-/**
- * モーダルを閉じる（キャンセル・背景クリック・Escape）
- */
-function closePackNameModal() {
-  packNameModal.hidden = true;
-  modalCurrentAction = null;
-}
-
-/**
- * モーダルで確定 → 対応するアクション（保存 or PDF表示）を実行
- */
-function confirmPackNameModal() {
-  const packName = sanitizePackName(modalPackNameInput.value);
-  const action   = modalCurrentAction;  // closeする前に退避
-  closePackNameModal();
-
-  if (action === 'txt')      downloadPackMarkdown('txt', packName);
-  else if (action === 'md')  downloadPackMarkdown('md',  packName);
-  else if (action === 'pdf') openPrintPreview(packName);
 }
 
 // ===============================================
