@@ -228,6 +228,10 @@ body {
   color: #fff;
 }
 
+.tab-btn:active {
+  opacity: 0.7;
+}
+
 .char-count {
   font-size: 0.75rem;
   color: var(--text-muted);
@@ -564,6 +568,11 @@ body {
 .select-ctrl-btn:hover {
   background: var(--border);
   color: var(--text);
+}
+
+/* iOS では tap-highlight が transparent なので :active で押した感を出す */
+.select-ctrl-btn:active {
+  opacity: 0.7;
 }
 
 .select-count-text {
@@ -944,6 +953,11 @@ body {
 
 .search-mode-btn + .search-mode-btn {
   border-left: 1px solid var(--border);
+}
+
+/* iOS tap フィードバック */
+.search-mode-btn:active {
+  opacity: 0.7;
 }
 
 /* アクティブ状態 */
