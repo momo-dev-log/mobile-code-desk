@@ -54,6 +54,7 @@ const downloadPackTxtBtn = document.getElementById('download-pack-txt-btn');
 const downloadPackMdBtn  = document.getElementById('download-pack-md-btn');
 const packCopyFeedback   = document.getElementById('pack-copy-feedback');
 const printPreviewBtn    = document.getElementById('print-preview-btn');
+const packNameInput      = document.getElementById('pack-name-input');
 
 // -----------------------------------------------
 // DOM 要素の取得 — Sitemap セクション（Phase 7 / 7.5）
@@ -421,6 +422,7 @@ async function handleBatchFetch() {
 
   // 結合 Markdown を生成して表示（Phase 8 用に results も保存）
   lastPackResults  = results;
+  packNameInput.value = generatePackName(results); // Phase 8.5：初期パック名を自動生成
   lastPackMarkdown = buildPackMarkdown(results);
   packResultMarkdown.value = lastPackMarkdown;
   packCharCount.textContent =
@@ -473,11 +475,7 @@ function showPackCopyFeedback(message, success) {
 
 function downloadPackMarkdown(ext) {
   if (!lastPackMarkdown) return;
-  const now     = new Date();
-  const yyyy    = now.getFullYear();
-  const mm      = String(now.getMonth() + 1).padStart(2, '0');
-  const dd      = String(now.getDate()).padStart(2, '0');
-  const filename = `NotebookLM資料パック_${yyyy}${mm}${dd}.${ext}`;
+  const filename = `${sanitizePackName(packNameInput.value)}.${ext}`;
   const blob    = new Blob([lastPackMarkdown], { type: 'text/plain; charset=utf-8' });
   const url     = URL.createObjectURL(blob);
   const a       = document.createElement('a');
@@ -1282,7 +1280,8 @@ function openPrintPreview() {
       </section>`;
   }).join('\n<hr class="section-divider">\n');
 
-  const html = buildPrintPageHtml(dateStr, successItems.length, sectionsHtml);
+  const packName = sanitizePackName(packNameInput.value);
+  const html = buildPrintPageHtml(dateStr, successItems.length, sectionsHtml, packName);
 
   const win = window.open('', '_blank');
   if (!win) {
@@ -1410,13 +1409,17 @@ function mdInlineToHtml(text) {
  * @param {string} sectionsHtml  各セクションの HTML 文字列
  * @returns {string}
  */
-function buildPrintPageHtml(dateStr, pageCount, sectionsHtml) {
+/**
+ * @param {string} [packName]  資料パック名（省略時はデフォルト）
+ */
+function buildPrintPageHtml(dateStr, pageCount, sectionsHtml, packName = 'NotebookLM 資料パック') {
+  const titleText = packName || 'NotebookLM 資料パック';
   return `<!DOCTYPE html>
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NotebookLM 資料パック — ${escapeHtml(dateStr)}</title>
+  <title>${escapeHtml(titleText)} — ${escapeHtml(dateStr)}</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -1592,7 +1595,7 @@ function buildPrintPageHtml(dateStr, pageCount, sectionsHtml) {
   </div>
 
   <header class="doc-header">
-    <h1 class="doc-title">📄 NotebookLM 資料パック</h1>
+    <h1 class="doc-title">📄 ${escapeHtml(titleText)}</h1>
     <div class="doc-meta">
       作成日：${escapeHtml(dateStr)}　|　取得ページ数：${pageCount}
     </div>
@@ -1601,4 +1604,64 @@ function buildPrintPageHtml(dateStr, pageCount, sectionsHtml) {
   ${sectionsHtml}
 </body>
 </html>`;
+}
+
+// ===============================================
+// Phase 8.5：資料パック名ユーティリティ
+// ===============================================
+
+/**
+ * 取得結果から資料パック名の初期値を生成する。
+ * 最初の成功 URL のドメイン名を使い、取得できない場合はデフォルト名。
+ * 例: kisei-log.com → "kisei-log_資料パック_2026-05-25"
+ * @param {Array<{url: string, success: boolean}>} results
+ * @returns {string}
+ */
+function generatePackName(results) {
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm   = String(now.getMonth() + 1).padStart(2, '0');
+  const dd   = String(now.getDate()).padStart(2, '0');
+  const dateStr = `${yyyy}-${mm}-${dd}`;
+
+  const firstSuccess = results.find(r => r.success);
+  if (firstSuccess) {
+    try {
+      // "www.kisei-log.com" → "kisei-log"（www 除去・TLD 除去）
+      const hostname = new URL(firstSuccess.url).hostname.replace(/^www\./, '');
+      // TLD を除いた部分（最後の . より前まで）
+      const parts = hostname.split('.');
+      const domain = parts.length >= 2
+        ? parts.slice(0, -1).join('-')   // kisei-log.com → kisei-log
+        : parts[0];
+      if (domain) return `${domain}_資料パック_${dateStr}`;
+    } catch { /* フォールバック */ }
+  }
+  return `NotebookLM資料パック_${dateStr}`;
+}
+
+/**
+ * 入力された資料パック名をファイル名として安全な形に変換する。
+ * 空欄・全除去の場合はデフォルト名を返す。
+ * @param {string} raw
+ * @returns {string}
+ */
+function sanitizePackName(raw) {
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm   = String(now.getMonth() + 1).padStart(2, '0');
+  const dd   = String(now.getDate()).padStart(2, '0');
+  const fallback = `NotebookLM資料パック_${yyyy}-${mm}-${dd}`;
+
+  if (!raw || !raw.trim()) return fallback;
+
+  const safe = raw
+    .trim()
+    .replace(/[/\\:*?"<>|]/g, '_')   // ファイル名使用不可文字 → _
+    .replace(/\s+/g, '_')             // 空白 → _
+    .replace(/_{2,}/g, '_')           // 連続 _ → 単一 _
+    .replace(/^[._]+|[._]+$/g, '')    // 先頭・末尾の . や _
+    .slice(0, 80);                     // 最大 80 文字
+
+  return safe || fallback;
 }

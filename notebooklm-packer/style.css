@@ -756,3 +756,52 @@ body {
   opacity: 0.4;
   cursor: not-allowed;
 }
+
+/* -----------------------------------------------
+   Phase 8.5：資料パック名入力
+   ----------------------------------------------- */
+
+.pack-name-row {
+  margin-bottom: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* テキスト入力（url-input と同仕様） */
+.pack-name-input {
+  display: block;
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 0.92rem;
+  padding: 11px 14px;
+  margin-top: 6px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.pack-name-input::placeholder {
+  color: var(--text-muted);
+  opacity: 0.55;
+}
+
+.pack-name-input:focus {
+  border-color: var(--accent);
+}
+
+.pack-name-hint {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-top: 5px;
+  line-height: 1.5;
+}
+
+/* スマホ最適化 */
+@media (max-width: 480px) {
+  .pack-name-input {
+    font-size: 0.88rem;
+  }
+}

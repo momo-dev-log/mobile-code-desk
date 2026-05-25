@@ -132,6 +132,21 @@
 
     <!-- 結合Markdown 結果カード -->
     <section id="pack-result-card" class="card result-card" hidden>
+
+      <!-- Phase 8.5：資料パック名入力 -->
+      <div class="pack-name-row">
+        <label class="input-label" for="pack-name-input">資料パック名</label>
+        <input
+          type="text"
+          id="pack-name-input"
+          class="pack-name-input"
+          placeholder="NotebookLM資料パック_YYYY-MM-DD"
+          autocomplete="off"
+          spellcheck="false"
+        >
+        <p class="pack-name-hint">.txt / .md 保存・PDF 用表示の名前に使います　空欄の場合はデフォルト名に戻ります</p>
+      </div>
+
       <div class="action-bar">
         <button id="copy-pack-btn"         class="action-btn">📋 コピー</button>
         <button id="download-pack-txt-btn" class="action-btn">💾 .txt</button>
@@ -216,6 +231,6 @@
 
   </main>
 
-  <script src="app.js?v=phase8"></script>
+  <script src="app.js?v=phase8.5"></script>
 </body>
 </html>
