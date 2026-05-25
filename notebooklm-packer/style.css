@@ -228,6 +228,11 @@ body {
   color: #fff;
 }
 
+/* iOS tap フィードバック（tap-highlight が transparent のため :active が必要） */
+.tab-btn:active {
+  opacity: 0.7;
+}
+
 .char-count {
   font-size: 0.75rem;
   color: var(--text-muted);
@@ -566,6 +571,11 @@ body {
   color: var(--text);
 }
 
+/* iOS tap フィードバック */
+.select-ctrl-btn:active {
+  opacity: 0.7;
+}
+
 .select-count-text {
   font-size: 0.82rem;
   color: var(--accent);
@@ -594,6 +604,14 @@ body {
   border-bottom: 1px solid var(--border);
   transition: background 0.1s;
   min-height: 44px; /* タッチターゲット確保 */
+}
+
+/* ── バグ修正（Phase 9.1）──
+   .sitemap-url-item { display: flex } が hidden 属性の
+   display: none（user-agent stylesheet）を上書きしてしまう。
+   !important で確実に非表示にする。 */
+.sitemap-url-item[hidden] {
+  display: none !important;
 }
 
 .sitemap-url-item:last-child {
@@ -944,6 +962,11 @@ body {
   color: #fff;
 }
 
+/* iOS tap フィードバック */
+.search-mode-btn:active {
+  opacity: 0.7;
+}
+
 /* マウスホバー（hover: hover デバイスのみ） */
 @media (hover: hover) {
   .search-mode-btn:not(.search-mode-active):hover {
@@ -988,5 +1011,90 @@ body {
   .search-mode-btn {
     padding: 8px 10px;
     font-size: 0.75rem;
+  }
+}
+
+/* -----------------------------------------------
+   Phase 9.1：URL候補へのページタイトル表示
+   ----------------------------------------------- */
+
+/* タイトル行（タイトル取得後に visible になる） */
+.sitemap-url-title {
+  display: block;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.4;
+  word-break: break-word;
+  margin-bottom: 3px;
+}
+
+.sitemap-url-title[hidden] {
+  display: none;
+}
+
+/* 取得中 */
+.sitemap-url-title--loading {
+  color: var(--text-muted);
+  font-style: italic;
+  font-weight: 400;
+  font-size: 0.8rem;
+}
+
+/* 取得不可 */
+.sitemap-url-title--error {
+  color: var(--text-muted);
+  font-style: italic;
+  font-weight: 400;
+  font-size: 0.8rem;
+}
+
+/* タイトル取得バー（ボタン + 進捗テキスト） */
+.sitemap-title-fetch-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+/* 進捗テキスト */
+.fetch-titles-status {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+/* 取得ボタン：accent 縁取りで目立たせる */
+.fetch-titles-btn {
+  color: var(--accent);
+  border-color: var(--accent);
+  flex-shrink: 0;
+}
+
+@media (hover: hover) {
+  .fetch-titles-btn:hover {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+}
+
+@media (hover: none) {
+  .fetch-titles-btn:hover {
+    background: var(--surface2);
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+}
+
+@media (max-width: 480px) {
+  .sitemap-title-fetch-bar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+  .fetch-titles-btn {
+    width: 100%;
+    text-align: center;
   }
 }
