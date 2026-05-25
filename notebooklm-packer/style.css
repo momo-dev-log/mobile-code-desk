@@ -758,17 +758,51 @@ body {
 }
 
 /* -----------------------------------------------
-   Phase 8.5：資料パック名入力
+   Phase 8.5 改：資料パック名確認モーダル
    ----------------------------------------------- */
 
-.pack-name-row {
-  margin-bottom: 14px;
-  padding-bottom: 14px;
-  border-bottom: 1px solid var(--border);
+/* オーバーレイ（画面全体を覆う半透明背景） */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 500;
+  padding: 20px 16px;
+  /* Safari 用慣性スクロール */
+  -webkit-overflow-scrolling: touch;
 }
 
-/* テキスト入力（url-input と同仕様） */
-.pack-name-input {
+.modal-overlay[hidden] {
+  display: none;
+}
+
+/* モーダルカード本体 */
+.modal-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 24px 20px;
+  width: 100%;
+  max-width: 440px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+
+/* ラベル（input-label と同スタイル） */
+.modal-label {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 8px;
+}
+
+/* 資料パック名入力欄 */
+.modal-pack-name-input {
   display: block;
   width: 100%;
   background: var(--surface2);
@@ -776,32 +810,94 @@ body {
   border-radius: 8px;
   color: var(--text);
   font-family: var(--font);
-  font-size: 0.92rem;
-  padding: 11px 14px;
-  margin-top: 6px;
+  font-size: 1rem;
+  padding: 12px 14px;
   outline: none;
-  transition: border-color 0.15s;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  box-sizing: border-box;
 }
 
-.pack-name-input::placeholder {
+.modal-pack-name-input::placeholder {
   color: var(--text-muted);
   opacity: 0.55;
 }
 
-.pack-name-input:focus {
+.modal-pack-name-input:focus {
   border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(123, 140, 222, 0.18);
 }
 
-.pack-name-hint {
+/* ヒントテキスト */
+.modal-hint {
   font-size: 0.72rem;
   color: var(--text-muted);
   margin-top: 5px;
+  margin-bottom: 18px;
   line-height: 1.5;
 }
 
-/* スマホ最適化 */
+/* ボタン行 */
+.modal-btn-row {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+/* ボタン共通 */
+.modal-btn {
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 0.95rem;
+  font-weight: 600;
+  padding: 12px 22px;
+  min-height: 48px;
+  border: none;
+  transition: background 0.15s, opacity 0.15s;
+}
+
+/* キャンセルボタン */
+.modal-btn-cancel {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+
+.modal-btn-cancel:hover {
+  background: var(--border);
+  color: var(--text);
+}
+
+/* 確定ボタン（保存 / PDF用表示を開く） */
+.modal-btn-confirm {
+  background: var(--accent);
+  color: #fff;
+  /* "PDF用表示を開く" のような長いテキストに対応 */
+  min-width: 130px;
+  white-space: nowrap;
+}
+
+.modal-btn-confirm:hover {
+  background: var(--accent-dark);
+}
+
+.modal-btn-confirm:active {
+  opacity: 0.85;
+}
+
+/* スマホ最適化：ボタンを縦並びに */
 @media (max-width: 480px) {
-  .pack-name-input {
-    font-size: 0.88rem;
+  .modal-card {
+    padding: 20px 16px;
+  }
+
+  .modal-btn-row {
+    flex-direction: column-reverse;
+    gap: 8px;
+  }
+
+  .modal-btn {
+    width: 100%;
+    text-align: center;
   }
 }

@@ -10,7 +10,7 @@
 
   <header class="app-header">
     <h1>📄 NotebookLM 資料化ツール</h1>
-    <p class="app-subtitle">Phase 8 — PDF用表示（印刷プレビュー）</p>
+    <p class="app-subtitle">Phase 8.5 — 保存前に資料パック名を確認（モーダル）</p>
   </header>
 
   <main class="app-main">
@@ -133,20 +133,6 @@
     <!-- 結合Markdown 結果カード -->
     <section id="pack-result-card" class="card result-card" hidden>
 
-      <!-- Phase 8.5：資料パック名入力 -->
-      <div class="pack-name-row">
-        <label class="input-label" for="pack-name-input">資料パック名</label>
-        <input
-          type="text"
-          id="pack-name-input"
-          class="pack-name-input"
-          placeholder="NotebookLM資料パック_YYYY-MM-DD"
-          autocomplete="off"
-          spellcheck="false"
-        >
-        <p class="pack-name-hint">.txt / .md 保存・PDF 用表示の名前に使います　空欄の場合はデフォルト名に戻ります</p>
-      </div>
-
       <div class="action-bar">
         <button id="copy-pack-btn"         class="action-btn">📋 コピー</button>
         <button id="download-pack-txt-btn" class="action-btn">💾 .txt</button>
@@ -231,6 +217,30 @@
 
   </main>
 
-  <script src="app.js?v=phase8.5"></script>
+  <!-- ======================================================
+       資料パック名確認モーダル（Phase 8.5 改）
+       .txt / .md / PDF用表示ボタンを押したときに表示
+       ====================================================== -->
+  <div id="pack-name-modal" class="modal-overlay" hidden>
+    <div class="modal-card">
+      <p class="modal-label">資料パック名</p>
+      <input
+        type="text"
+        id="modal-pack-name-input"
+        class="modal-pack-name-input"
+        autocomplete="off"
+        autocorrect="off"
+        autocapitalize="off"
+        spellcheck="false"
+      >
+      <p class="modal-hint">空欄の場合はデフォルト名に戻ります</p>
+      <div class="modal-btn-row">
+        <button id="modal-cancel-btn"  class="modal-btn modal-btn-cancel">キャンセル</button>
+        <button id="modal-confirm-btn" class="modal-btn modal-btn-confirm">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js?v=phase8.5.1"></script>
 </body>
 </html>
