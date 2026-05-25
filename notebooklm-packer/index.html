@@ -10,7 +10,7 @@
 
   <header class="app-header">
     <h1>📄 NotebookLM 資料化ツール</h1>
-    <p class="app-subtitle">Phase 8.5 — 資料パック名の確認・編集</p>
+    <p class="app-subtitle">Phase 9 — URL候補の検索・絞り込み</p>
   </header>
 
   <main class="app-main">
@@ -211,10 +211,33 @@
         <span id="sitemap-url-count" class="char-count"></span>
       </div>
 
-      <!-- 選択コントロールバー -->
+      <!-- Phase 9：検索・絞り込みバー -->
+      <div class="sitemap-search-bar">
+        <div class="sitemap-search-row">
+          <input
+            type="search"
+            id="sitemap-search-input"
+            class="sitemap-search-input"
+            placeholder="キーワードで絞り込み（スペース区切りで複数指定）"
+            autocomplete="off"
+            autocorrect="off"
+            autocapitalize="off"
+            spellcheck="false"
+          >
+          <div class="search-mode-group" role="group" aria-label="検索モード">
+            <button type="button" id="search-mode-or-btn"  class="search-mode-btn search-mode-active" aria-pressed="true">OR</button>
+            <button type="button" id="search-mode-and-btn" class="search-mode-btn" aria-pressed="false">AND</button>
+          </div>
+        </div>
+        <span id="sitemap-display-count" class="sitemap-display-count" hidden></span>
+      </div>
+
+      <!-- 選択コントロールバー（Phase 9：表示中ボタンを追加） -->
       <div class="sitemap-select-bar">
-        <button type="button" id="sitemap-select-all-btn"   class="select-ctrl-btn">全選択</button>
-        <button type="button" id="sitemap-deselect-all-btn" class="select-ctrl-btn">全解除</button>
+        <button type="button" id="sitemap-select-all-btn"       class="select-ctrl-btn">全選択</button>
+        <button type="button" id="sitemap-deselect-all-btn"     class="select-ctrl-btn">全解除</button>
+        <button type="button" id="sitemap-select-visible-btn"   class="select-ctrl-btn select-ctrl-highlight">表示中を選択</button>
+        <button type="button" id="sitemap-deselect-visible-btn" class="select-ctrl-btn select-ctrl-highlight">表示中を解除</button>
         <span id="sitemap-select-count" class="select-count-text"></span>
       </div>
 
@@ -231,6 +254,6 @@
 
   </main>
 
-  <script src="app.js?v=phase8.5.2"></script>
+  <script src="app.js?v=phase9"></script>
 </body>
 </html>

@@ -75,6 +75,13 @@ const sitemapUrlCheckboxes  = document.getElementById('sitemap-url-checkboxes');
 const sitemapSelectAllBtn   = document.getElementById('sitemap-select-all-btn');
 const sitemapDeselectAllBtn = document.getElementById('sitemap-deselect-all-btn');
 const sitemapSelectCount    = document.getElementById('sitemap-select-count');
+// Phase 9 追加（検索・絞り込み）
+const sitemapSearchInput        = document.getElementById('sitemap-search-input');
+const searchModeOrBtn           = document.getElementById('search-mode-or-btn');
+const searchModeAndBtn          = document.getElementById('search-mode-and-btn');
+const sitemapDisplayCount       = document.getElementById('sitemap-display-count');
+const sitemapSelectVisibleBtn   = document.getElementById('sitemap-select-visible-btn');
+const sitemapDeselectVisibleBtn = document.getElementById('sitemap-deselect-visible-btn');
 
 // -----------------------------------------------
 // 状態管理
@@ -88,6 +95,7 @@ let lastPackMarkdown = '';   // 結合 Markdown（Phase 6）
 let lastSitemapUrls  = [];   // URL 候補（Phase 7）
 let lastPackResults  = [];   // 資料パック結果（Phase 8 印刷プレビュー用）
 let isDownloading    = false; // 二重ダウンロード防止フラグ（Phase 8.5）
+let sitemapSearchMode = 'OR'; // 検索モード 'OR' | 'AND'（Phase 9）
 
 // -----------------------------------------------
 // イベントリスナー — 単一URL
@@ -121,6 +129,18 @@ copySitemapBtn     .addEventListener('click', copySitemapUrls);
 toPackBtn          .addEventListener('click', sendToPackInput);
 sitemapSelectAllBtn  .addEventListener('click', () => setSitemapCheckAll(true));
 sitemapDeselectAllBtn.addEventListener('click', () => setSitemapCheckAll(false));
+
+// -----------------------------------------------
+// イベントリスナー — Sitemap 検索・絞り込み（Phase 9）
+// -----------------------------------------------
+// input イベント：リアルタイム絞り込み（DOM操作のみで高速なのでデバウンスなし）
+sitemapSearchInput    .addEventListener('input',  filterSitemapList);
+// search イベント：iOS/Chrome の × クリアボタンで input が発火しない場合の保険
+sitemapSearchInput    .addEventListener('search', filterSitemapList);
+searchModeOrBtn       .addEventListener('click', () => setSitemapSearchMode('OR'));
+searchModeAndBtn      .addEventListener('click', () => setSitemapSearchMode('AND'));
+sitemapSelectVisibleBtn  .addEventListener('click', () => setSitemapVisibleCheck(true));
+sitemapDeselectVisibleBtn.addEventListener('click', () => setSitemapVisibleCheck(false));
 
 // -----------------------------------------------
 // タブ切り替え
@@ -1003,6 +1023,9 @@ async function handleSitemapFetch() {
 
     lastSitemapUrls = limited;
     renderSitemapCheckboxList(limited);
+    // Phase 9：新しい URL 一覧が来たら検索欄をリセット
+    sitemapSearchInput.value = '';
+    sitemapDisplayCount.hidden = true;
     sitemapUrlCount.textContent = truncated
       ? `${limited.length} 件（全 ${total} 件中）`
       : `${limited.length} 件`;
@@ -1257,6 +1280,84 @@ function isAuxiliaryUrl(url) {
   } catch {
     return false;
   }
+}
+
+// ===============================================
+// Phase 9：Sitemap URL 検索・絞り込み
+// ===============================================
+
+/**
+ * 検索モードを切り替える（'OR' | 'AND'）。
+ * @param {'OR'|'AND'} mode
+ */
+function setSitemapSearchMode(mode) {
+  sitemapSearchMode = mode;
+  searchModeOrBtn .classList.toggle('search-mode-active', mode === 'OR');
+  searchModeAndBtn.classList.toggle('search-mode-active', mode === 'AND');
+  searchModeOrBtn .setAttribute('aria-pressed', String(mode === 'OR'));
+  searchModeAndBtn.setAttribute('aria-pressed', String(mode === 'AND'));
+  filterSitemapList();
+}
+
+/**
+ * 検索欄の入力に基づき URL 候補の表示・非表示を切り替える。
+ * DOM を使い回すため選択状態（checked）はそのまま維持される。
+ *
+ * 検索対象:
+ *   URL 文字列 / 表示ラベル（pathname セグメント）/ 種類バッジ（FAQ・Blog など）
+ *
+ * モード:
+ *   OR  — スペース区切りのキーワードをどれか含む候補を表示
+ *   AND — すべてのキーワードを含む候補を表示
+ */
+function filterSitemapList() {
+  const rawQuery = sitemapSearchInput.value.trim();
+  const keywords = rawQuery.split(/\s+/).filter(k => k.length > 0);
+  const isAnd    = sitemapSearchMode === 'AND';
+  const total    = lastSitemapUrls.length;
+
+  let visibleCount = 0;
+
+  sitemapUrlCheckboxes.querySelectorAll('.sitemap-url-item').forEach(item => {
+    const cb       = item.querySelector('.sitemap-url-check');
+    const url      = (cb ? cb.value : '').toLowerCase();
+    const label    = (item.querySelector('.sitemap-url-label')?.textContent ?? '').toLowerCase();
+    const badge    = (item.querySelector('.url-badge')?.textContent ?? '').toLowerCase();
+    const haystack = `${url} ${label} ${badge}`;
+
+    const match = keywords.length === 0 || (
+      isAnd
+        ? keywords.every(k => haystack.includes(k.toLowerCase()))
+        : keywords.some(k  => haystack.includes(k.toLowerCase()))
+    );
+
+    item.hidden = !match;
+    if (match) visibleCount++;
+  });
+
+  // 表示件数の更新（キーワードがあるときのみ表示）
+  if (keywords.length > 0) {
+    sitemapDisplayCount.textContent = visibleCount === 0
+      ? `0 / ${total} 件（一致なし）`
+      : `${visibleCount} / ${total} 件表示中`;
+    sitemapDisplayCount.hidden = false;
+  } else {
+    sitemapDisplayCount.hidden = true;
+  }
+
+  updateSitemapSelectCount();
+}
+
+/**
+ * 現在表示中の URL 候補だけを一括 ON / OFF する。
+ * hidden 状態のアイテムの選択状態は変更しない。
+ * @param {boolean} checked  true: 選択　false: 解除
+ */
+function setSitemapVisibleCheck(checked) {
+  sitemapUrlCheckboxes
+    .querySelectorAll('.sitemap-url-item:not([hidden]) .sitemap-url-check')
+    .forEach(cb => { cb.checked = checked; });
+  updateSitemapSelectCount();
 }
 
 // ===============================================
