@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NotebookLM 資料化ツール</title>
-  <link rel="stylesheet" href="style.css?v=phase6">
+  <link rel="stylesheet" href="style.css?v=phase9-2">
 </head>
 <body>
 
@@ -211,35 +211,52 @@
         <span id="sitemap-url-count" class="char-count"></span>
       </div>
 
-      <!-- Phase 9：検索・絞り込みバー -->
-      <div class="sitemap-search-bar">
-        <div class="sitemap-search-row">
+      <!-- Phase 9.2：絞り込みエリア（検索・除外キーワード） -->
+      <div class="sitemap-filter-area">
+        <p class="sitemap-filter-title">URL候補を絞り込む</p>
+
+        <div class="sitemap-filter-field">
+          <label class="sitemap-filter-fieldlabel" for="sitemap-include-input">検索キーワード</label>
           <input
             type="search"
-            id="sitemap-search-input"
-            class="sitemap-search-input"
-            placeholder="キーワードで絞り込み（スペース区切りで複数指定）"
+            id="sitemap-include-input"
+            class="sitemap-filter-input"
+            placeholder="例：料金 使い方 FAQ"
             autocomplete="off"
             autocorrect="off"
             autocapitalize="off"
             spellcheck="false"
           >
-          <div class="search-mode-group" role="group" aria-label="検索モード">
-            <button type="button" id="search-mode-or-btn"  class="search-mode-btn search-mode-active" aria-pressed="true">OR</button>
-            <button type="button" id="search-mode-and-btn" class="search-mode-btn" aria-pressed="false">AND</button>
-          </div>
+          <p class="sitemap-filter-hint">この言葉を含むURLを表示します</p>
         </div>
+
+        <div class="sitemap-filter-field">
+          <label class="sitemap-filter-fieldlabel" for="sitemap-exclude-input">除外キーワード</label>
+          <input
+            type="search"
+            id="sitemap-exclude-input"
+            class="sitemap-filter-input sitemap-filter-input--exclude"
+            placeholder="例：お問い合わせ 利用規約 プライバシー"
+            autocomplete="off"
+            autocorrect="off"
+            autocapitalize="off"
+            spellcheck="false"
+          >
+          <p class="sitemap-filter-hint">この言葉を含むURLを表示しません</p>
+        </div>
+
+        <p class="sitemap-filter-delim-hint">スペース・カンマ・読点で複数指定できます</p>
         <span id="sitemap-display-count" class="sitemap-display-count" hidden></span>
       </div>
 
-      <!-- 選択コントロールバー（Phase 9.1：全選択/全解除を廃止し表示中のみに統一） -->
+      <!-- 選択コントロールバー（全選択/全解除は表示中URLのみに作用） -->
       <div class="sitemap-select-bar">
-        <button type="button" id="sitemap-select-visible-btn"   class="select-ctrl-btn select-ctrl-highlight">表示中を選択</button>
-        <button type="button" id="sitemap-deselect-visible-btn" class="select-ctrl-btn select-ctrl-highlight">表示中を解除</button>
+        <button type="button" id="sitemap-select-visible-btn"   class="select-ctrl-btn">全選択</button>
+        <button type="button" id="sitemap-deselect-visible-btn" class="select-ctrl-btn">全解除</button>
         <span id="sitemap-select-count" class="select-count-text"></span>
       </div>
 
-      <!-- Phase 9.1：タイトル一括取得バー -->
+      <!-- タイトル一括取得バー -->
       <div class="sitemap-title-fetch-bar">
         <button type="button" id="fetch-titles-btn" class="select-ctrl-btn fetch-titles-btn">
           🔍 表示中のタイトルを取得
@@ -250,7 +267,7 @@
       <!-- URL チェックボックスリスト -->
       <div id="sitemap-url-checkboxes" class="sitemap-checkbox-list"></div>
 
-      <!-- 反映ボタン（全幅） -->
+      <!-- 反映ボタン（表示中かつチェック済みURLを資料パック欄へ） -->
       <button type="button" id="to-pack-btn" class="fetch-btn sitemap-to-pack-btn">
         📤 選択したURLを資料パック欄へ反映
       </button>
@@ -260,6 +277,6 @@
 
   </main>
 
-  <script src="app.js?v=phase9-1-fix"></script>
+  <script src="app.js?v=phase9-2"></script>
 </body>
 </html>

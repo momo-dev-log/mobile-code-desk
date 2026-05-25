@@ -606,10 +606,15 @@ body {
   min-height: 44px; /* タッチターゲット確保 */
 }
 
-/* ── バグ修正（Phase 9.1）──
-   .sitemap-url-item { display: flex } が hidden 属性の
-   display: none（user-agent stylesheet）を上書きしてしまう。
-   !important で確実に非表示にする。 */
+/* ── フィルター非表示制御（Phase 9.1）──
+   .sitemap-url-item { display: flex } は author stylesheet のため
+   user-agent の [hidden] { display:none } を上書きしてしまう。
+   クラスベースで制御し、ダブルクラスで特異度 (0,2,0) を確保して
+   display:flex (0,1,0) に確実に勝つ。
+   [hidden] 属性の !important 版も残して念のため両方カバー。 */
+.sitemap-url-item.is-hidden {
+  display: none !important;
+}
 .sitemap-url-item[hidden] {
   display: none !important;
 }
@@ -865,153 +870,105 @@ body {
     background: var(--surface2);
     color: var(--text-muted);
   }
-  /* Phase 9 追加：タッチ端末では hover を無効化 */
-  .search-mode-btn:not(.search-mode-active):hover {
-    background: var(--surface2);
-    color: var(--text-muted);
-  }
-  .select-ctrl-highlight:hover {
-    background: var(--surface2);
-    color: var(--accent);
-    border-color: var(--accent);
-  }
 }
 
 /* -----------------------------------------------
-   Phase 9：Sitemap URL 検索・絞り込み
+   Phase 9.2：URL候補 絞り込みエリア（検索・除外キーワード）
    ----------------------------------------------- */
 
-/* 検索バー全体 */
-.sitemap-search-bar {
+/* 絞り込みエリア全体 */
+.sitemap-filter-area {
+  margin-bottom: 12px;
+}
+
+/* エリアタイトル */
+.sitemap-filter-title {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
   margin-bottom: 10px;
 }
 
-/* 検索入力と OR / AND トグルを横並び */
-.sitemap-search-row {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  margin-bottom: 4px;
+/* 各フィールド（ラベル + 入力 + ヒント） */
+.sitemap-filter-field {
+  margin-bottom: 10px;
 }
 
-/* 検索入力欄 */
-.sitemap-search-input {
-  flex: 1;
+/* フィールドラベル（検索キーワード / 除外キーワード） */
+.sitemap-filter-fieldlabel {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 5px;
+}
+
+/* フィルター入力欄 */
+.sitemap-filter-input {
+  display: block;
+  width: 100%;
   background: var(--surface2);
   border: 1px solid var(--border);
   border-radius: 8px;
   color: var(--text);
   font-family: var(--font);
-  font-size: 0.88rem;
-  padding: 10px 12px;
+  font-size: 1rem; /* iOS zoom 防止 */
+  padding: 10px 14px;
   outline: none;
   transition: border-color 0.15s;
-  min-width: 0; /* flex overflow 防止 */
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
 }
 
-.sitemap-search-input::placeholder {
+.sitemap-filter-input::placeholder {
   color: var(--text-muted);
   opacity: 0.55;
 }
 
-.sitemap-search-input:focus {
+.sitemap-filter-input:focus {
   border-color: var(--accent);
 }
 
-/* iOS / Chrome の type=search 組み込みクリアボタンを非表示
-   （アクセント色が当たらないため統一感を保つ） */
-.sitemap-search-input::-webkit-search-cancel-button {
+/* 除外キーワード欄：フォーカス時は error 色 */
+.sitemap-filter-input--exclude:focus {
+  border-color: var(--error);
+}
+
+/* type=search の × クリアボタン非表示 */
+.sitemap-filter-input::-webkit-search-cancel-button {
   -webkit-appearance: none;
   appearance: none;
 }
 
-/* OR / AND トグルグループ */
-.search-mode-group {
-  display: flex;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  overflow: hidden;
-  flex-shrink: 0;
-}
-
-.search-mode-btn {
-  background: var(--surface2);
-  border: none;
+/* ヒントテキスト（「この言葉を含むURLを表示します」等） */
+.sitemap-filter-hint {
+  font-size: 0.75rem;
   color: var(--text-muted);
-  cursor: pointer;
-  font-family: var(--font);
-  font-size: 0.8rem;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  padding: 8px 14px;
-  min-height: 40px;
-  transition: background 0.15s, color 0.15s;
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
+  margin-top: 4px;
+  line-height: 1.4;
 }
 
-.search-mode-btn + .search-mode-btn {
-  border-left: 1px solid var(--border);
+/* 区切り文字説明 */
+.sitemap-filter-delim-hint {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+  line-height: 1.4;
 }
 
-/* アクティブ状態 */
-.search-mode-btn.search-mode-active {
-  background: var(--accent);
-  color: #fff;
-}
-
-/* iOS tap フィードバック */
-.search-mode-btn:active {
-  opacity: 0.7;
-}
-
-/* マウスホバー（hover: hover デバイスのみ） */
-@media (hover: hover) {
-  .search-mode-btn:not(.search-mode-active):hover {
-    background: var(--border);
-    color: var(--text);
-  }
-}
-
-/* 表示件数テキスト（検索中のみ表示） */
+/* 表示件数テキスト（フィルター中のみ表示） */
 .sitemap-display-count {
+  display: inline-block;
   font-size: 0.78rem;
   color: var(--accent);
   font-weight: 600;
-  padding: 2px 0;
+  margin-top: 4px;
 }
 
 .sitemap-display-count[hidden] {
   display: none;
-}
-
-/* 「表示中を選択」「表示中を解除」を既存ボタンと色で区別 */
-.select-ctrl-highlight {
-  color: var(--accent);
-  border-color: var(--accent);
-}
-
-@media (hover: hover) {
-  .select-ctrl-highlight:hover {
-    background: var(--accent);
-    color: #fff;
-    border-color: var(--accent);
-  }
-}
-
-/* スマホ最適化 */
-@media (max-width: 480px) {
-  .sitemap-search-input {
-    font-size: 0.84rem;
-    padding: 9px 10px;
-  }
-
-  .search-mode-btn {
-    padding: 8px 10px;
-    font-size: 0.75rem;
-  }
 }
 
 /* -----------------------------------------------
