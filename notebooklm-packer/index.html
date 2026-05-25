@@ -10,7 +10,7 @@
 
   <header class="app-header">
     <h1>📄 NotebookLM 資料化ツール</h1>
-    <p class="app-subtitle">Phase 7 — Sitemap URL 候補取得</p>
+    <p class="app-subtitle">Phase 8 — PDF用表示（印刷プレビュー）</p>
   </header>
 
   <main class="app-main">
@@ -145,6 +145,12 @@
         readonly
         placeholder="結合 Markdown がここに表示されます"
       ></textarea>
+
+      <!-- Phase 8：PDF用表示ボタン -->
+      <button id="print-preview-btn" class="fetch-btn print-preview-btn">
+        🖨️ PDF用表示（印刷 / PDF保存）
+      </button>
+
       <p class="result-note" id="pack-result-note"></p>
     </section>
 
@@ -210,6 +216,6 @@
 
   </main>
 
-  <script src="app.js?v=phase7.6"></script>
+  <script src="app.js?v=phase8"></script>
 </body>
 </html>

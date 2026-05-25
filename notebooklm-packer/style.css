@@ -733,3 +733,26 @@ body {
 .sitemap-url-item--aux:hover {
   opacity: 1;
 }
+
+/* -----------------------------------------------
+   Phase 8：PDF用表示ボタン
+   ----------------------------------------------- */
+
+/* 資料パック textarea の下に置く印刷プレビューボタン */
+.print-preview-btn {
+  margin-top: 10px;
+  /* fetch-btn と区別するためアウトラインスタイルに */
+  background: transparent;
+  border: 2px solid var(--accent);
+  color: var(--accent);
+}
+
+.print-preview-btn:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
+.print-preview-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

@@ -53,6 +53,7 @@ const copyPackBtn        = document.getElementById('copy-pack-btn');
 const downloadPackTxtBtn = document.getElementById('download-pack-txt-btn');
 const downloadPackMdBtn  = document.getElementById('download-pack-md-btn');
 const packCopyFeedback   = document.getElementById('pack-copy-feedback');
+const printPreviewBtn    = document.getElementById('print-preview-btn');
 
 // -----------------------------------------------
 // DOM 要素の取得 — Sitemap セクション（Phase 7 / 7.5）
@@ -84,6 +85,7 @@ let lastTitle        = '';   // ページタイトル（ファイル名生成用
 let currentTab       = 'html';
 let lastPackMarkdown = '';   // 結合 Markdown（Phase 6）
 let lastSitemapUrls  = [];   // URL 候補（Phase 7）
+let lastPackResults  = [];   // 資料パック結果（Phase 8 印刷プレビュー用）
 
 // -----------------------------------------------
 // イベントリスナー — 単一URL
@@ -103,9 +105,10 @@ downloadMdBtn  .addEventListener('click', () => downloadMarkdown('md'));
 // イベントリスナー — 複数URL（Phase 6）
 // -----------------------------------------------
 packBtn         .addEventListener('click', handleBatchFetch);
-copyPackBtn     .addEventListener('click', copyPackMarkdown);
-downloadPackTxtBtn.addEventListener('click', () => downloadPackMarkdown('txt'));
-downloadPackMdBtn .addEventListener('click', () => downloadPackMarkdown('md'));
+copyPackBtn        .addEventListener('click', copyPackMarkdown);
+downloadPackTxtBtn .addEventListener('click', () => downloadPackMarkdown('txt'));
+downloadPackMdBtn  .addEventListener('click', () => downloadPackMarkdown('md'));
+printPreviewBtn    .addEventListener('click', openPrintPreview);
 
 // -----------------------------------------------
 // イベントリスナー — Sitemap（Phase 7）
@@ -416,7 +419,8 @@ async function handleBatchFetch() {
     return;
   }
 
-  // 結合 Markdown を生成して表示
+  // 結合 Markdown を生成して表示（Phase 8 用に results も保存）
+  lastPackResults  = results;
   lastPackMarkdown = buildPackMarkdown(results);
   packResultMarkdown.value = lastPackMarkdown;
   packCharCount.textContent =
@@ -1247,4 +1251,354 @@ function isAuxiliaryUrl(url) {
   } catch {
     return false;
   }
+}
+
+// ===============================================
+// Phase 8：PDF用表示（印刷プレビュー）
+// ===============================================
+
+/**
+ * 資料パックを印刷用 HTML に変換して新しいタブで開く。
+ * ブラウザの「印刷 → PDF として保存」で PDF 化できる。
+ */
+function openPrintPreview() {
+  const successItems = lastPackResults.filter(r => r.success);
+
+  if (!successItems.length) {
+    showPackCopyFeedback('❌ 先に資料パックを作成してください', false);
+    return;
+  }
+
+  const now     = new Date();
+  const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+  const sectionsHtml = successItems.map((item, idx) => {
+    const bodyHtml = mdBlocksToHtml(item.md);
+    return `
+      <section class="page-section">
+        <h2 class="section-title">${escapeHtml(`${idx + 1}. ${item.title}`)}</h2>
+        <p class="source-line">Source: <a href="${escapeHtml(item.url)}" target="_blank">${escapeHtml(item.url)}</a></p>
+        <div class="section-body">${bodyHtml}</div>
+      </section>`;
+  }).join('\n<hr class="section-divider">\n');
+
+  const html = buildPrintPageHtml(dateStr, successItems.length, sectionsHtml);
+
+  const win = window.open('', '_blank');
+  if (!win) {
+    alert('ポップアップがブロックされました。\nブラウザの設定でこのサイトのポップアップを許可してください。');
+    return;
+  }
+  win.document.write(html);
+  win.document.close();
+}
+
+/**
+ * Markdown テキスト全体をブロック単位で HTML に変換する（印刷プレビュー専用）。
+ * @param {string} md
+ * @returns {string}
+ */
+function mdBlocksToHtml(md) {
+  if (!md) return '';
+
+  // ── コードブロックを退避 ──
+  const codeBlocks = [];
+  md = md.replace(/```[\s\S]*?```/g, match => {
+    const idx = codeBlocks.length;
+    codeBlocks.push(match);
+    return `\x01CB${idx}\x01`;
+  });
+
+  // ── 空行 2 個以上でブロック分割 ──
+  const htmlParts = md.split(/\n{2,}/).map(block => {
+    block = block.trim();
+    if (!block) return '';
+
+    // コードブロック復元
+    if (/^\x01CB\d+\x01$/.test(block)) {
+      const idx = parseInt(block.match(/\d+/)[0]);
+      const raw = codeBlocks[idx];
+      const inner = raw.replace(/^```\w*\n?/, '').replace(/\n?```$/, '');
+      return `<pre><code>${escapeHtml(inner)}</code></pre>`;
+    }
+
+    // 水平線
+    if (/^-{3,}$/.test(block) || /^\*{3,}$/.test(block)) return '<hr>';
+
+    // 見出し（単行）
+    const hm = block.match(/^(#{1,6})\s+(.+)$/s);
+    if (hm) {
+      const lv = hm[1].length;
+      return `<h${lv}>${mdInlineToHtml(hm[2].trim())}</h${lv}>`;
+    }
+
+    // 箇条書き（全行が "- " または "* " で始まる）
+    const lines = block.split('\n');
+    if (lines.every(l => /^[\-*] /.test(l.trim()))) {
+      const lis = lines.map(l =>
+        `<li>${mdInlineToHtml(l.trim().replace(/^[\-*] /, ''))}</li>`).join('');
+      return `<ul>${lis}</ul>`;
+    }
+
+    // 番号付きリスト
+    if (lines.every(l => /^\d+\.\s/.test(l.trim()))) {
+      const lis = lines.map(l =>
+        `<li>${mdInlineToHtml(l.trim().replace(/^\d+\.\s+/, ''))}</li>`).join('');
+      return `<ol>${lis}</ol>`;
+    }
+
+    // 引用
+    if (lines.every(l => l.startsWith('> '))) {
+      const inner = mdInlineToHtml(lines.map(l => l.slice(2)).join('\n'));
+      return `<blockquote>${inner}</blockquote>`;
+    }
+
+    // 段落（行内改行は <br> に）
+    const lineHtml = lines.map(l => mdInlineToHtml(l)).join('<br>');
+    return `<p>${lineHtml}</p>`;
+  });
+
+  return htmlParts.filter(Boolean).join('\n');
+}
+
+/**
+ * インライン Markdown（リンク・太字・斜体・コード）を HTML に変換する。
+ * リンクを先に処理してから残りを escapeHtml する方式で & 二重エスケープを防ぐ。
+ * @param {string} text
+ * @returns {string}
+ */
+function mdInlineToHtml(text) {
+  const holders = [];
+  const ph = html => {
+    const i = holders.length;
+    holders.push(html);
+    return `\x02PH${i}\x02`;
+  };
+
+  // 画像 → リンクより先に処理
+  text = text.replace(/!\[([^\]]*)\]\(([^)]+)\)/g,
+    (_, alt, src) => ph(`<img alt="${escapeHtml(alt)}" src="${escapeHtml(src)}">`));
+
+  // リンク [text](url) — url 内の & が二重エスケープされないよう先に退避
+  text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g,
+    (_, t, url) => ph(`<a href="${escapeHtml(url)}">${escapeHtml(t)}</a>`));
+
+  // インラインコード
+  text = text.replace(/`([^`]+)`/g,
+    (_, code) => ph(`<code>${escapeHtml(code)}</code>`));
+
+  // 太字
+  text = text.replace(/\*\*([^*]+)\*\*/g,
+    (_, t) => ph(`<strong>${escapeHtml(t)}</strong>`));
+
+  // 斜体
+  text = text.replace(/\*([^*]+)\*/g,
+    (_, t) => ph(`<em>${escapeHtml(t)}</em>`));
+
+  // 残りのテキストを HTML エスケープ
+  text = escapeHtml(text);
+
+  // プレースホルダーを復元
+  text = text.replace(/\x02PH(\d+)\x02/g, (_, i) => holders[parseInt(i)]);
+  return text;
+}
+
+/**
+ * 印刷用 HTML ページ（完全な HTML 文書）を生成する。
+ * @param {string} dateStr     "YYYY-MM-DD"
+ * @param {number} pageCount   成功ページ数
+ * @param {string} sectionsHtml  各セクションの HTML 文字列
+ * @returns {string}
+ */
+function buildPrintPageHtml(dateStr, pageCount, sectionsHtml) {
+  return `<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NotebookLM 資料パック — ${escapeHtml(dateStr)}</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans',
+                   'Yu Gothic UI', 'Meiryo UI', 'Noto Sans CJK JP', sans-serif;
+      font-size: 11pt;
+      line-height: 1.8;
+      color: #1a1a1a;
+      background: #fff;
+      padding: 0 16px 48px;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    /* ── 印刷コントロール（画面のみ） ── */
+    .print-controls {
+      position: sticky;
+      top: 0;
+      background: #eef1fb;
+      border-bottom: 1px solid #c5cde8;
+      padding: 12px 16px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      z-index: 100;
+      margin: 0 -16px 32px;
+    }
+    .btn-print {
+      background: #3f51b5;
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      cursor: pointer;
+      font-size: 0.95rem;
+      font-weight: 700;
+      padding: 10px 22px;
+      min-height: 44px;
+      transition: background 0.15s;
+    }
+    .btn-print:hover { background: #303f9f; }
+    .btn-close {
+      background: transparent;
+      border: 1px solid #c5cde8;
+      border-radius: 8px;
+      color: #555;
+      cursor: pointer;
+      font-size: 0.88rem;
+      padding: 10px 16px;
+      min-height: 44px;
+    }
+    .print-hint {
+      font-size: 0.78rem;
+      color: #666;
+      margin-left: auto;
+      line-height: 1.4;
+    }
+
+    /* ── ドキュメントヘッダー ── */
+    .doc-header {
+      margin-bottom: 28px;
+      padding-bottom: 16px;
+      border-bottom: 2px solid #3f51b5;
+    }
+    .doc-title {
+      font-size: 18pt;
+      font-weight: 700;
+      color: #1a237e;
+      margin-bottom: 8px;
+    }
+    .doc-meta {
+      font-size: 9.5pt;
+      color: #555;
+      line-height: 1.6;
+    }
+
+    /* ── セクション ── */
+    .section-title {
+      font-size: 13pt;
+      font-weight: 700;
+      color: #1a237e;
+      border-left: 4px solid #3f51b5;
+      padding: 4px 0 4px 12px;
+      margin: 28px 0 8px;
+      line-height: 1.4;
+    }
+    .source-line {
+      font-size: 8.5pt;
+      color: #888;
+      margin: 0 0 14px 16px;
+      word-break: break-all;
+    }
+    .source-line a { color: #3f51b5; text-decoration: none; }
+
+    /* ── 本文 ── */
+    .section-body p   { margin: 0 0 8px; }
+    .section-body h1  { font-size: 12pt;   font-weight: 700; margin: 16px 0 6px; }
+    .section-body h2  { font-size: 11.5pt; font-weight: 700; margin: 14px 0 5px; }
+    .section-body h3  { font-size: 11pt;   font-weight: 600; margin: 12px 0 4px; }
+    .section-body h4,
+    .section-body h5,
+    .section-body h6  { font-size: 10.5pt; font-weight: 600; margin: 10px 0 4px; }
+    .section-body ul,
+    .section-body ol  { padding-left: 20px; margin: 0 0 8px; }
+    .section-body li  { margin-bottom: 3px; }
+    .section-body a   { color: #1565c0; word-break: break-all; }
+    .section-body blockquote {
+      border-left: 3px solid #c5cde8;
+      padding: 4px 0 4px 12px;
+      color: #555;
+      margin: 8px 0;
+    }
+    .section-body pre {
+      background: #f5f5f5;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      padding: 10px 12px;
+      overflow-x: auto;
+      font-size: 9pt;
+      margin: 8px 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .section-body code {
+      background: #f5f5f5;
+      border-radius: 3px;
+      padding: 1px 5px;
+      font-size: 9pt;
+      font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+    }
+    .section-body pre code { background: none; padding: 0; }
+    .section-divider {
+      border: none;
+      border-top: 1px solid #e0e0e0;
+      margin: 28px 0;
+    }
+
+    /* ── 印刷設定 ── */
+    @page { size: A4 portrait; margin: 20mm 15mm 20mm 18mm; }
+
+    @media print {
+      .print-controls { display: none !important; }
+      body { padding: 0; font-size: 10.5pt; }
+      a { color: #1a1a1a !important; }
+      .section-title { break-after: avoid; }
+      .page-section  { break-inside: avoid; }
+      /* 印刷時はリンクの後ろに URL を表示 */
+      .section-body a::after {
+        content: ' (' attr(href) ')';
+        font-size: 7.5pt;
+        color: #777;
+      }
+      .source-line a::after { content: none; }
+    }
+
+    /* ── スマホ調整 ── */
+    @media (max-width: 600px) {
+      body { font-size: 10pt; padding: 0 8px 32px; }
+      .doc-title { font-size: 14pt; }
+      .section-title { font-size: 11.5pt; }
+      .print-hint { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="print-controls">
+    <button class="btn-print" onclick="window.print()">🖨️ 印刷 / PDF保存</button>
+    <button class="btn-close" onclick="window.close()">✕ 閉じる</button>
+    <span class="print-hint">
+      「印刷」→ 送信先を「PDF として保存」に変更して保存できます
+    </span>
+  </div>
+
+  <header class="doc-header">
+    <h1 class="doc-title">📄 NotebookLM 資料パック</h1>
+    <div class="doc-meta">
+      作成日：${escapeHtml(dateStr)}　|　取得ページ数：${pageCount}
+    </div>
+  </header>
+
+  ${sectionsHtml}
+</body>
+</html>`;
 }
