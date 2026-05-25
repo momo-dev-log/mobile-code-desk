@@ -130,6 +130,9 @@ body {
   transition: background 0.15s, opacity 0.15s;
   /* タッチターゲット確保 */
   min-height: 48px;
+  /* スマホ 1タップ対応：300ms 遅延除去・ダブルタップズーム無効化 */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .fetch-btn:hover {
@@ -210,6 +213,8 @@ body {
   padding: 8px 16px;
   min-height: 40px;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .tab-btn:hover {
@@ -306,6 +311,8 @@ body {
   min-height: 48px;
   transition: background 0.15s, border-color 0.15s, color 0.15s;
   white-space: nowrap;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .action-btn:hover {
@@ -550,6 +557,8 @@ body {
   padding: 7px 16px;
   min-height: 40px;
   transition: background 0.15s, color 0.15s;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .select-ctrl-btn:hover {
@@ -758,7 +767,7 @@ body {
 }
 
 /* -----------------------------------------------
-   Phase 8.5：資料パック名入力
+   Phase 8.5：資料パック名入力（常設）
    ----------------------------------------------- */
 
 .pack-name-row {
@@ -803,5 +812,39 @@ body {
 @media (max-width: 480px) {
   .pack-name-input {
     font-size: 0.88rem;
+  }
+}
+
+/* -----------------------------------------------
+   スマホ 1タップ対応（全ボタン共通）
+   touch-action: manipulation は .fetch-btn / .action-btn /
+   .tab-btn / .select-ctrl-btn に個別に設定済み。
+   ここでは hover: none メディアで「sticky hover」を無効化する。
+   iOS Safari では最初のタップで :hover が適用され、
+   色枠・フォーカス枠のみ表示されて実際の click が2回目になる問題を防ぐ。
+   ----------------------------------------------- */
+
+/* ポインターが存在しないデバイス（タッチスクリーン）では
+   :hover スタイルをデフォルト値に戻してフリッカーを除去 */
+@media (hover: none) {
+  .fetch-btn:hover {
+    background: var(--accent);
+  }
+  .fetch-btn.print-preview-btn:hover {
+    background: transparent;
+    color: var(--accent);
+  }
+  .action-btn:hover {
+    background: var(--surface2);
+    border-color: var(--border);
+    color: var(--text);
+  }
+  .tab-btn:hover:not(.tab-active) {
+    background: var(--surface2);
+    color: var(--text-muted);
+  }
+  .select-ctrl-btn:hover {
+    background: var(--surface2);
+    color: var(--text-muted);
   }
 }

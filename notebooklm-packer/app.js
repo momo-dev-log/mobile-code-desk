@@ -54,7 +54,7 @@ const downloadPackTxtBtn = document.getElementById('download-pack-txt-btn');
 const downloadPackMdBtn  = document.getElementById('download-pack-md-btn');
 const packCopyFeedback   = document.getElementById('pack-copy-feedback');
 const printPreviewBtn    = document.getElementById('print-preview-btn');
-const packNameInput      = document.getElementById('pack-name-input');
+const packNameInput      = document.getElementById('pack-name-input');   // Phase 8.5：常設入力欄
 
 // -----------------------------------------------
 // DOM 要素の取得 — Sitemap セクション（Phase 7 / 7.5）
@@ -87,6 +87,7 @@ let currentTab       = 'html';
 let lastPackMarkdown = '';   // 結合 Markdown（Phase 6）
 let lastSitemapUrls  = [];   // URL 候補（Phase 7）
 let lastPackResults  = [];   // 資料パック結果（Phase 8 印刷プレビュー用）
+let isDownloading    = false; // 二重ダウンロード防止フラグ（Phase 8.5）
 
 // -----------------------------------------------
 // イベントリスナー — 単一URL
@@ -105,7 +106,7 @@ downloadMdBtn  .addEventListener('click', () => downloadMarkdown('md'));
 // -----------------------------------------------
 // イベントリスナー — 複数URL（Phase 6）
 // -----------------------------------------------
-packBtn         .addEventListener('click', handleBatchFetch);
+packBtn            .addEventListener('click', handleBatchFetch);
 copyPackBtn        .addEventListener('click', copyPackMarkdown);
 downloadPackTxtBtn .addEventListener('click', () => downloadPackMarkdown('txt'));
 downloadPackMdBtn  .addEventListener('click', () => downloadPackMarkdown('md'));
@@ -474,7 +475,14 @@ function showPackCopyFeedback(message, success) {
 }
 
 function downloadPackMarkdown(ext) {
-  if (!lastPackMarkdown) return;
+  if (!lastPackMarkdown || isDownloading) return;
+  // 二重タップ・二重ダウンロード防止（300ms でリセット）
+  isDownloading = true;
+  setTimeout(() => { isDownloading = false; }, 300);
+
+  // pack-name-input を必ずブラーしてから処理（iOS でフォーカス中の場合を考慮）
+  packNameInput.blur();
+
   const filename = `${sanitizePackName(packNameInput.value)}.${ext}`;
   const blob    = new Blob([lastPackMarkdown], { type: 'text/plain; charset=utf-8' });
   const url     = URL.createObjectURL(blob);
@@ -1260,6 +1268,9 @@ function isAuxiliaryUrl(url) {
  * ブラウザの「印刷 → PDF として保存」で PDF 化できる。
  */
 function openPrintPreview() {
+  // pack-name-input のフォーカスを先に外す（iOS 対策）
+  packNameInput.blur();
+  const packName = sanitizePackName(packNameInput.value);
   const successItems = lastPackResults.filter(r => r.success);
 
   if (!successItems.length) {
@@ -1280,8 +1291,7 @@ function openPrintPreview() {
       </section>`;
   }).join('\n<hr class="section-divider">\n');
 
-  const packName = sanitizePackName(packNameInput.value);
-  const html = buildPrintPageHtml(dateStr, successItems.length, sectionsHtml, packName);
+  const html = buildPrintPageHtml(dateStr, successItems.length, sectionsHtml, packName); // packName は上で取得済み
 
   const win = window.open('', '_blank');
   if (!win) {
