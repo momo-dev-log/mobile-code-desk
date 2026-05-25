@@ -232,13 +232,19 @@
         <span id="sitemap-display-count" class="sitemap-display-count" hidden></span>
       </div>
 
-      <!-- 選択コントロールバー（Phase 9：表示中ボタンを追加） -->
+      <!-- 選択コントロールバー（Phase 9.1：全選択/全解除を廃止し表示中のみに統一） -->
       <div class="sitemap-select-bar">
-        <button type="button" id="sitemap-select-all-btn"       class="select-ctrl-btn">全選択</button>
-        <button type="button" id="sitemap-deselect-all-btn"     class="select-ctrl-btn">全解除</button>
         <button type="button" id="sitemap-select-visible-btn"   class="select-ctrl-btn select-ctrl-highlight">表示中を選択</button>
         <button type="button" id="sitemap-deselect-visible-btn" class="select-ctrl-btn select-ctrl-highlight">表示中を解除</button>
         <span id="sitemap-select-count" class="select-count-text"></span>
+      </div>
+
+      <!-- Phase 9.1：タイトル一括取得バー -->
+      <div class="sitemap-title-fetch-bar">
+        <button type="button" id="fetch-titles-btn" class="select-ctrl-btn fetch-titles-btn">
+          🔍 表示中のタイトルを取得
+        </button>
+        <span id="fetch-titles-status" class="fetch-titles-status"></span>
       </div>
 
       <!-- URL チェックボックスリスト -->
@@ -254,6 +260,6 @@
 
   </main>
 
-  <script src="app.js?v=phase9"></script>
+  <script src="app.js?v=phase9-1-fix"></script>
 </body>
 </html>
