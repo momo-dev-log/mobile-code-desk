@@ -1331,7 +1331,7 @@ function filterSitemapList() {
         : keywords.some(k  => haystack.includes(k.toLowerCase()))
     );
 
-    item.hidden = !match;
+    item.classList.toggle('is-hidden', !match);
     if (match) visibleCount++;
   });
 
@@ -1355,7 +1355,7 @@ function filterSitemapList() {
  */
 function setSitemapVisibleCheck(checked) {
   sitemapUrlCheckboxes
-    .querySelectorAll('.sitemap-url-item:not([hidden]) .sitemap-url-check')
+    .querySelectorAll('.sitemap-url-item:not(.is-hidden) .sitemap-url-check')
     .forEach(cb => { cb.checked = checked; });
   updateSitemapSelectCount();
 }
@@ -1387,7 +1387,7 @@ function extractPageTitle(html) {
  */
 async function fetchVisibleTitles() {
   const visibleItems = [
-    ...sitemapUrlCheckboxes.querySelectorAll('.sitemap-url-item:not([hidden])')
+    ...sitemapUrlCheckboxes.querySelectorAll('.sitemap-url-item:not(.is-hidden)')
   ].slice(0, TITLE_FETCH_LIMIT);
 
   if (!visibleItems.length) {

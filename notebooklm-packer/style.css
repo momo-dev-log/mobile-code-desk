@@ -606,10 +606,15 @@ body {
   min-height: 44px; /* タッチターゲット確保 */
 }
 
-/* ── バグ修正（Phase 9.1）──
-   .sitemap-url-item { display: flex } が hidden 属性の
-   display: none（user-agent stylesheet）を上書きしてしまう。
-   !important で確実に非表示にする。 */
+/* ── フィルター非表示制御（Phase 9.1）──
+   .sitemap-url-item { display: flex } は author stylesheet のため
+   user-agent の [hidden] { display:none } を上書きしてしまう。
+   クラスベースで制御し、ダブルクラスで特異度 (0,2,0) を確保して
+   display:flex (0,1,0) に確実に勝つ。
+   [hidden] 属性の !important 版も残して念のため両方カバー。 */
+.sitemap-url-item.is-hidden {
+  display: none !important;
+}
 .sitemap-url-item[hidden] {
   display: none !important;
 }
