@@ -455,7 +455,9 @@ async function handleBatchFetch() {
 
   // 結合 Markdown を生成して表示（Phase 8 用に results も保存）
   lastPackResults  = results;
-  packNameInput.value = generatePackName(results); // Phase 8.5：初期パック名を自動生成
+  // Phase 9.3：分割反映後に付加された _partN サフィックスを保持する
+  const prevPartSuffix = (packNameInput.value.trim().match(/(_part\d+)$/) ?? [])[1] ?? '';
+  packNameInput.value = generatePackName(results) + prevPartSuffix;
   lastPackMarkdown = buildPackMarkdown(results);
   packResultMarkdown.value = lastPackMarkdown;
   packCharCount.textContent =
