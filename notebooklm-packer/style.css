@@ -1292,3 +1292,147 @@ body {
     padding: 8px 12px;
   }
 }
+
+/* ===============================================
+   Phase 10：本文プレビュー
+   =============================================== */
+
+/* プレビューボタンバー */
+.sitemap-preview-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0 2px;
+}
+
+/* プレビューボタン（select-ctrl-btn をベースに accent 色で区別） */
+.preview-btn {
+  border-color: rgba(123, 140, 222, 0.35);  /* --accent を薄く */
+  color: var(--accent);
+}
+
+.preview-btn:active {
+  opacity: 0.75;
+}
+
+/* プレビュー結果エリア全体 */
+.preview-result-area {
+  margin: 10px 0 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+/* 結果エリアのヘッダー行 */
+.preview-result-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 14px;
+}
+
+.preview-result-title {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+/* 「✕ 閉じる」ボタン */
+.preview-close-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.80rem;
+  padding: 5px 10px;
+  min-height: 32px;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.preview-close-btn:active { opacity: 0.7; }
+
+/* アイテムリスト */
+.preview-result-list {
+  display: flex;
+  flex-direction: column;
+}
+
+/* 個別プレビューアイテム */
+.preview-item {
+  border-bottom: 1px solid var(--border);
+  padding: 14px 16px;
+}
+
+.preview-item:last-child {
+  border-bottom: none;
+}
+
+/* ヘッダー部（タイトル + Source URL） */
+.preview-item-header {
+  margin-bottom: 10px;
+}
+
+.preview-item-title {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 4px;
+  line-height: 1.4;
+}
+
+.preview-item-source {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  word-break: break-all;
+}
+
+/* 本文エリア */
+.preview-item-body {
+  font-size: 0.84rem;
+  color: var(--text);
+  line-height: 1.75;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--surface2);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin: 0;
+}
+
+/* ローディング中 */
+.preview-item-body--loading {
+  color: var(--text-muted);
+  background: var(--surface);
+  font-style: italic;
+}
+
+/* 取得失敗 */
+.preview-item-body--error {
+  color: var(--error);
+  background: var(--surface);
+}
+
+/* 本文抽出不可 */
+.preview-item-body--empty {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* スマホ最適化 */
+@media (max-width: 480px) {
+  .sitemap-preview-bar {
+    gap: 6px;
+  }
+  .preview-item {
+    padding: 12px 14px;
+  }
+  .preview-item-body {
+    font-size: 0.82rem;
+    padding: 8px 10px;
+  }
+}
