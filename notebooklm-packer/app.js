@@ -1095,23 +1095,24 @@ function sendToPackInput() {
     return;
   }
 
-  // 100件超：分割推奨警告
+  // 100件超：分割推奨警告（強め）
   if (checkedUrls.length > PACK_SPLIT_LIMIT) {
     const ok = window.confirm(
       `⚠️ ${checkedUrls.length} 件を選択中です。\n\n` +
-      `100件を超えると取得・処理に時間がかかり、` +
-      `NotebookLM への貼り付けが困難になる可能性があります。\n` +
-      `複数回に分けて資料パックを作成することをお勧めします。\n\n` +
-      `このまま反映しますか？`
+      `このあと「パックを作成」を押すと、${checkedUrls.length} 件分の本文取得が始まります。\n` +
+      `100件を超えると取得に非常に時間がかかり、NotebookLM への貼り付けも困難になる可能性があります。\n` +
+      `複数回に分けて資料パックを作成することを強くおすすめします。\n\n` +
+      `このまま資料パック欄へ反映しますか？`
     );
     if (!ok) return;
 
   // 50件超：任意警告
   } else if (checkedUrls.length > PACK_WARN_LIMIT) {
     const ok = window.confirm(
-      `ℹ️ ${checkedUrls.length} 件を選択中です。\n\n` +
-      `50件を超えると取得に時間がかかる場合があります。\n` +
-      `このまま反映しますか？`
+      `${checkedUrls.length} 件を選択中です。\n\n` +
+      `このあと「パックを作成」を押すと、選択した URL の本文取得を行います。\n` +
+      `件数が多いと時間がかかるため、分割をおすすめします。\n\n` +
+      `このまま資料パック欄へ反映しますか？`
     );
     if (!ok) return;
   }
