@@ -91,6 +91,13 @@ const packWarnCount   = document.getElementById('pack-warn-count');
 const packWarnActions = document.getElementById('pack-warn-actions');
 // Phase 9.4 追加（大量候補時の案内）
 const sitemapBulkHint = document.getElementById('sitemap-bulk-hint');
+// Phase 10 追加（本文プレビュー）
+const previewVisibleBtn  = document.getElementById('preview-visible-btn');
+const previewCheckedBtn  = document.getElementById('preview-checked-btn');
+const previewStatus      = document.getElementById('preview-status');
+const previewResultArea  = document.getElementById('preview-result-area');
+const previewResultList  = document.getElementById('preview-result-list');
+const previewCloseBtn    = document.getElementById('preview-close-btn');
 
 // -----------------------------------------------
 // 状態管理
@@ -109,9 +116,15 @@ let filteredSitemapUrls  = [];           // フィルター後のURL一覧
 let sitemapCurrentPage   = 0;           // 現在のページ（0始まり）
 const titleCache         = new Map();   // url → タイトル文字列
 const checkedSitemapUrls = new Set();   // チェック済みURLの Set
+// Phase 10 追加
+const previewCache = new Map();          // url → { title: string, text: string, error: boolean }
 
 /** Phase 9.1：タイトル取得の上限件数 */
 const TITLE_FETCH_LIMIT = 20;
+/** Phase 10：本文プレビューの1回の上限件数 */
+const PREVIEW_FETCH_LIMIT = 10;
+/** Phase 10：本文プレビューの表示文字数 */
+const PREVIEW_TEXT_LENGTH = 600;
 
 // -----------------------------------------------
 // イベントリスナー — 単一URL
@@ -155,6 +168,10 @@ sitemapExcludeInput .addEventListener('search', filterSitemapList);
 sitemapSelectVisibleBtn  .addEventListener('click', () => setSitemapVisibleCheck(true));
 sitemapDeselectVisibleBtn.addEventListener('click', () => setSitemapVisibleCheck(false));
 fetchTitlesBtn           .addEventListener('click', fetchVisibleTitles);
+// Phase 10：本文プレビュー
+previewVisibleBtn.addEventListener('click', () => startBodyPreview('visible'));
+previewCheckedBtn.addEventListener('click', () => startBodyPreview('checked'));
+previewCloseBtn  .addEventListener('click', closePreviewPanel);
 
 // -----------------------------------------------
 // タブ切り替え
@@ -1053,6 +1070,8 @@ async function handleSitemapFetch() {
       stored.forEach(url => checkedSitemapUrls.add(url));
     }
     titleCache.clear();
+    previewCache.clear();    // Phase 10：新規取得時はプレビューキャッシュもリセット
+    closePreviewPanel();     // Phase 10：古いプレビューパネルを閉じる
 
     // Phase 9.4：大量候補時の案内文
     if (stored.length > PACK_WARN_LIMIT) {
@@ -1729,6 +1748,189 @@ function updateFetchTitlesBtn() {
     fetchTitlesBtn.disabled    = false;
     fetchTitlesBtn.textContent = `🔍 次の${TITLE_FETCH_LIMIT}件のタイトルを取得`;
   }
+}
+
+// ===============================================
+// Phase 10：本文プレビュー
+// ===============================================
+
+/**
+ * 本文プレビューを開始する。
+ *
+ * mode = 'visible' : 現在ページの先頭 PREVIEW_FETCH_LIMIT 件
+ * mode = 'checked' : チェック済みURLの先頭 PREVIEW_FETCH_LIMIT 件
+ *                    （10件を超えている場合は警告メッセージを表示）
+ *
+ * 安全設計:
+ *   - 1件ずつ逐次取得（同時アクセスなし）
+ *   - previewCache に登録済みのURLはスキップ（重複取得なし）
+ *   - 最大 PREVIEW_FETCH_LIMIT (10) 件で止まる
+ *   - Cloudflare Worker 変更なし・資料パック処理に影響しない
+ *
+ * @param {'visible'|'checked'} mode
+ */
+async function startBodyPreview(mode) {
+  // ── 1. ソースURL の決定 ──
+  let sourceUrls;
+
+  if (mode === 'visible') {
+    const start = sitemapCurrentPage * SITEMAP_PAGE_SIZE;
+    sourceUrls  = filteredSitemapUrls.slice(start, start + SITEMAP_PAGE_SIZE);
+    if (!sourceUrls.length) {
+      previewStatus.textContent = '❌ 表示中の URL がありません';
+      setTimeout(() => { previewStatus.textContent = ''; }, 3000);
+      return;
+    }
+  } else {
+    sourceUrls = filteredSitemapUrls.filter(url => checkedSitemapUrls.has(url));
+    if (!sourceUrls.length) {
+      previewStatus.textContent = '❌ チェックされた URL がありません';
+      setTimeout(() => { previewStatus.textContent = ''; }, 3000);
+      return;
+    }
+    // 10件超えは警告して先頭10件だけ処理
+    if (sourceUrls.length > PREVIEW_FETCH_LIMIT) {
+      previewStatus.textContent =
+        `⚠️ 選択中の ${sourceUrls.length} 件のうち先頭 ${PREVIEW_FETCH_LIMIT} 件をプレビューします`;
+      setTimeout(() => { previewStatus.textContent = ''; }, 5000);
+    }
+  }
+
+  // ── 2. 表示対象（最大 PREVIEW_FETCH_LIMIT 件）を決定 ──
+  const displayUrls = sourceUrls.slice(0, PREVIEW_FETCH_LIMIT);
+
+  // ── 3. キャッシュ未登録のURLだけ取得対象にする ──
+  const targetUrls = displayUrls.filter(url => !previewCache.has(url));
+
+  // ── 4. プレビューパネルを開いてスケルトン表示 ──
+  openPreviewPanel(displayUrls);
+
+  if (!targetUrls.length) {
+    // 全件キャッシュ済み → そのまま表示
+    previewStatus.textContent = '✅ プレビュー取得済みです（キャッシュから表示）';
+    setTimeout(() => { previewStatus.textContent = ''; }, 3000);
+    return;
+  }
+
+  // ── 5. 1件ずつ逐次取得 ──
+  setPreviewBtnsDisabled(true);
+  let done = 0;
+
+  for (const url of targetUrls) {
+    previewStatus.textContent = `${done + 1} / ${targetUrls.length} 取得中...`;
+
+    try {
+      const html  = await fetchHtmlFromWorker(url);
+      const title = extractPageTitle(html);
+      const { text } = extractBodyText(html);
+      previewCache.set(url, {
+        title: title || '',
+        text:  text.slice(0, PREVIEW_TEXT_LENGTH),
+        error: false,
+      });
+    } catch {
+      previewCache.set(url, { title: '', text: '', error: true });
+    }
+
+    updatePreviewItemDom(url);
+    done++;
+    previewStatus.textContent = `${done} / ${targetUrls.length} 完了`;
+  }
+
+  setPreviewBtnsDisabled(false);
+  previewStatus.textContent = `✅ ${done} 件のプレビューを取得しました`;
+  setTimeout(() => { previewStatus.textContent = ''; }, 4000);
+}
+
+/**
+ * プレビューパネルを開き、displayUrls を骨格 or キャッシュ済み状態で描画する。
+ * @param {string[]} displayUrls
+ */
+function openPreviewPanel(displayUrls) {
+  previewResultList.innerHTML = '';
+  displayUrls.forEach(url => {
+    previewResultList.appendChild(buildPreviewItemDom(url));
+  });
+  previewResultArea.hidden = false;
+  previewResultArea.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+/** プレビューパネルを閉じてリストをクリアする */
+function closePreviewPanel() {
+  previewResultArea.hidden = true;
+  previewResultList.innerHTML = '';
+}
+
+/**
+ * URL に対応するプレビューアイテムの DOM 要素を生成して返す。
+ * previewCache の状態（未取得 / エラー / 取得済み）で表示を切り替える。
+ * @param {string} url
+ * @returns {HTMLElement}
+ */
+function buildPreviewItemDom(url) {
+  const cached = previewCache.get(url);
+  const item   = document.createElement('div');
+  item.dataset.previewUrl = url;
+
+  if (!cached) {
+    // ── 取得前（ローディング状態） ──
+    item.className = 'preview-item preview-item--loading';
+    item.innerHTML =
+      `<div class="preview-item-header">` +
+        `<p class="preview-item-source">${escapeHtml(url)}</p>` +
+      `</div>` +
+      `<p class="preview-item-body preview-item-body--loading">⏳ 取得中...</p>`;
+
+  } else if (cached.error) {
+    // ── 取得失敗 ──
+    item.className = 'preview-item preview-item--error';
+    item.innerHTML =
+      `<div class="preview-item-header">` +
+        `<p class="preview-item-source">${escapeHtml(url)}</p>` +
+      `</div>` +
+      `<p class="preview-item-body preview-item-body--error">❌ 本文プレビュー取得不可</p>`;
+
+  } else {
+    // ── 取得済み ──
+    item.className = 'preview-item';
+    const titleHtml = cached.title
+      ? `<p class="preview-item-title">${escapeHtml(cached.title)}</p>`
+      : '';
+    const bodyContent = cached.text
+      ? escapeHtml(cached.text)
+      : '<span class="preview-item-body--empty">（本文を抽出できませんでした）</span>';
+    item.innerHTML =
+      `<div class="preview-item-header">` +
+        titleHtml +
+        `<p class="preview-item-source">Source: ${escapeHtml(url)}</p>` +
+      `</div>` +
+      `<p class="preview-item-body">${bodyContent}</p>`;
+  }
+
+  return item;
+}
+
+/**
+ * 取得完了後、対応する DOM アイテムをキャッシュ済み状態に差し替える。
+ * @param {string} url
+ */
+function updatePreviewItemDom(url) {
+  const items = previewResultList.querySelectorAll('.preview-item');
+  for (const item of items) {
+    if (item.dataset.previewUrl === url) {
+      item.replaceWith(buildPreviewItemDom(url));
+      return;
+    }
+  }
+}
+
+/**
+ * 本文プレビューボタン 2 つをまとめて有効 / 無効にする。
+ * @param {boolean} disabled
+ */
+function setPreviewBtnsDisabled(disabled) {
+  previewVisibleBtn.disabled = disabled;
+  previewCheckedBtn.disabled = disabled;
 }
 
 // ===============================================

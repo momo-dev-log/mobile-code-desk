@@ -4,13 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NotebookLM 資料化ツール</title>
-  <link rel="stylesheet" href="style.css?v=phase9-4">
+  <link rel="stylesheet" href="style.css?v=phase10">
 </head>
 <body>
 
   <header class="app-header">
     <h1>📄 NotebookLM 資料化ツール</h1>
-    <p class="app-subtitle">Phase 9.4 — 安全な初期選択・段階的タイトル取得</p>
+    <p class="app-subtitle">Phase 10 — 本文プレビュー</p>
   </header>
 
   <main class="app-main">
@@ -267,6 +267,17 @@
         <span id="fetch-titles-status" class="fetch-titles-status"></span>
       </div>
 
+      <!-- Phase 10：本文プレビュー ボタンバー -->
+      <div class="sitemap-preview-bar">
+        <button type="button" id="preview-visible-btn" class="select-ctrl-btn preview-btn">
+          📖 表示中の本文をプレビュー
+        </button>
+        <button type="button" id="preview-checked-btn" class="select-ctrl-btn preview-btn">
+          📖 選択中の本文をプレビュー
+        </button>
+        <span id="preview-status" class="fetch-titles-status"></span>
+      </div>
+
       <!-- URL チェックボックスリスト -->
       <div id="sitemap-url-checkboxes" class="sitemap-checkbox-list"></div>
 
@@ -274,6 +285,15 @@
       <div class="sitemap-pagination">
         <p id="sitemap-page-info" class="sitemap-page-info"></p>
         <div id="sitemap-page-btns" class="sitemap-page-btns"></div>
+      </div>
+
+      <!-- Phase 10：本文プレビュー 結果エリア -->
+      <div id="preview-result-area" class="preview-result-area" hidden>
+        <div class="preview-result-header">
+          <span class="preview-result-title">📖 本文プレビュー</span>
+          <button type="button" id="preview-close-btn" class="preview-close-btn">✕ 閉じる</button>
+        </div>
+        <div id="preview-result-list" class="preview-result-list"></div>
       </div>
 
       <!-- 反映ボタン（フィルター済みかつチェック済みURLを資料パック欄へ） -->
@@ -298,6 +318,6 @@
 
   </main>
 
-  <script src="app.js?v=phase9-4"></script>
+  <script src="app.js?v=phase10"></script>
 </body>
 </html>
