@@ -89,6 +89,8 @@ const sitemapPageBtns   = document.getElementById('sitemap-page-btns');
 const packWarnCard    = document.getElementById('pack-warn-card');
 const packWarnCount   = document.getElementById('pack-warn-count');
 const packWarnActions = document.getElementById('pack-warn-actions');
+// Phase 9.4 追加（大量候補時の案内）
+const sitemapBulkHint = document.getElementById('sitemap-bulk-hint');
 
 // -----------------------------------------------
 // 状態管理
@@ -1046,8 +1048,21 @@ async function handleSitemapFetch() {
     filteredSitemapUrls  = [...stored];
     sitemapCurrentPage   = 0;
     checkedSitemapUrls.clear();
-    stored.forEach(url => checkedSitemapUrls.add(url)); // 初期状態：全件チェック済み
+    // Phase 9.4：50件以下は全件チェック済み、51件以上は初期状態を未選択にする（安全対策）
+    if (stored.length <= PACK_WARN_LIMIT) {
+      stored.forEach(url => checkedSitemapUrls.add(url));
+    }
     titleCache.clear();
+
+    // Phase 9.4：大量候補時の案内文
+    if (stored.length > PACK_WARN_LIMIT) {
+      sitemapBulkHint.textContent =
+        `URL候補が ${stored.length} 件あります。候補が多いため初期状態は未選択です。` +
+        `キーワードで絞り込んでから「このページを全選択」で必要なページを選んでください。`;
+      sitemapBulkHint.hidden = false;
+    } else {
+      sitemapBulkHint.hidden = true;
+    }
 
     renderCurrentPage();
     // 絞り込みフィールドをリセット
@@ -1500,6 +1515,8 @@ function renderCurrentPage() {
 
   renderSitemapCheckboxList(pageUrls);
   renderPageControls();
+  // Phase 9.4：ページ切り替え時にタイトル取得ボタンの状態を更新する
+  updateFetchTitlesBtn();
 }
 
 /**
@@ -1584,65 +1601,133 @@ function extractPageTitle(html) {
 }
 
 /**
- * 現在ページに表示中の URL 候補（最大 TITLE_FETCH_LIMIT 件）のページタイトルを
+ * 現在ページの URL 候補のうち titleCache に未登録の先頭 TITLE_FETCH_LIMIT 件を
  * Cloudflare Worker 経由で順番に取得し、titleCache に保存して各アイテムに表示する。
- * titleCache に登録済みの URL はスキップする（ページ移動後も再取得不要）。（Phase 9.2）
+ * 取得済みの URL はスキップし、未取得分を 20 件ずつ段階的に取れるようにする。（Phase 9.4）
+ *
+ * 段階的取得の流れ:
+ *   1回目: 未取得 50件 → 先頭 20件を取得 → ボタン「次の20件のタイトルを取得」
+ *   2回目: 未取得 30件 → 先頭 20件を取得 → ボタン「残り10件のタイトルを取得」
+ *   3回目: 未取得 10件 → 残り 10件を取得 → ボタン無効「✅ 表示中のタイトル取得済み」
  */
 async function fetchVisibleTitles() {
-  // 現在ページのアイテム（最大 TITLE_FETCH_LIMIT 件）
-  const visibleItems = [
-    ...sitemapUrlCheckboxes.querySelectorAll('.sitemap-url-item')
-  ].slice(0, TITLE_FETCH_LIMIT);
+  // 現在ページの URL 一覧（filteredSitemapUrls の現ページ分）
+  const start    = sitemapCurrentPage * SITEMAP_PAGE_SIZE;
+  const end      = start + SITEMAP_PAGE_SIZE;
+  const pageUrls = filteredSitemapUrls.slice(start, end);
 
-  if (!visibleItems.length) {
+  if (!pageUrls.length) {
     fetchTitlesStatus.textContent = '❌ 表示中の候補がありません';
     setTimeout(() => { fetchTitlesStatus.textContent = ''; }, 3000);
     return;
   }
 
+  // titleCache 未登録のものだけを対象にし、先頭 TITLE_FETCH_LIMIT 件に絞る
+  const pendingUrls = pageUrls.filter(url => !titleCache.has(url));
+  const targetUrls  = pendingUrls.slice(0, TITLE_FETCH_LIMIT);
+
+  if (!targetUrls.length) {
+    // 全件取得済み（ボタン状態を同期して終了）
+    updateFetchTitlesBtn();
+    return;
+  }
+
+  // DOM アイテムの Map を作成（URL → item 要素）
+  const urlToItem = new Map();
+  sitemapUrlCheckboxes.querySelectorAll('.sitemap-url-item').forEach(item => {
+    const cb = item.querySelector('.sitemap-url-check');
+    if (cb) urlToItem.set(cb.value, item);
+  });
+
   fetchTitlesBtn.disabled = true;
   let done = 0;
 
-  for (const item of visibleItems) {
-    const cb      = item.querySelector('.sitemap-url-check');
-    const url     = cb ? cb.value : '';
-    const titleEl = item.querySelector('.sitemap-url-title');
-    if (!titleEl || !url) continue;
+  for (const url of targetUrls) {
+    const item    = urlToItem.get(url);
+    const titleEl = item ? item.querySelector('.sitemap-url-title') : null;
 
-    // titleCache に登録済みはスキップ（Phase 9.2：ページ移動後も再取得不要）
-    if (titleCache.has(url)) { done++; continue; }
+    fetchTitlesStatus.textContent = `${done + 1} / ${targetUrls.length} 取得中...`;
 
-    titleEl.textContent = '取得中...';
-    titleEl.hidden      = false;
-    titleEl.className   = 'sitemap-url-title sitemap-url-title--loading';
-    item.dataset.titleState = 'loading';
-    fetchTitlesStatus.textContent = `${done + 1} / ${visibleItems.length} 取得中...`;
+    if (titleEl) {
+      titleEl.textContent     = '取得中...';
+      titleEl.hidden          = false;
+      titleEl.className       = 'sitemap-url-title sitemap-url-title--loading';
+      if (item) item.dataset.titleState = 'loading';
+    }
 
     try {
       const html  = await fetchHtmlFromWorker(url);
       const title = extractPageTitle(html);
-      titleCache.set(url, title || '');  // '' = タイトル取得不可（Phase 9.2）
-      titleEl.textContent = title || 'タイトル取得不可';
-      titleEl.className   = title
-        ? 'sitemap-url-title'
-        : 'sitemap-url-title sitemap-url-title--error';
-      item.dataset.titleState = 'done';
+      titleCache.set(url, title || '');  // '' = タイトル取得不可
+      if (titleEl) {
+        titleEl.textContent = title || 'タイトル取得不可';
+        titleEl.className   = title
+          ? 'sitemap-url-title'
+          : 'sitemap-url-title sitemap-url-title--error';
+        if (item) item.dataset.titleState = 'done';
+      }
     } catch {
-      titleCache.set(url, '');           // '' = エラー（Phase 9.2）
-      titleEl.textContent     = 'タイトル取得不可';
-      titleEl.className       = 'sitemap-url-title sitemap-url-title--error';
-      item.dataset.titleState = 'error';
+      titleCache.set(url, '');           // '' = エラー
+      if (titleEl) {
+        titleEl.textContent = 'タイトル取得不可';
+        titleEl.className   = 'sitemap-url-title sitemap-url-title--error';
+        if (item) item.dataset.titleState = 'error';
+      }
     }
+
     done++;
-    fetchTitlesStatus.textContent = `${done} / ${visibleItems.length} 完了`;
+    fetchTitlesStatus.textContent = `${done} / ${targetUrls.length} 完了`;
   }
 
-  fetchTitlesBtn.disabled = false;
+  // ボタン文言を残り件数に応じて更新する
+  updateFetchTitlesBtn();
+
   if (done > 0) {
     fetchTitlesStatus.textContent = `✅ ${done} 件取得しました`;
     setTimeout(() => { fetchTitlesStatus.textContent = ''; }, 3000);
+  }
+}
+
+/**
+ * 現在ページのタイトル取得状況に応じてボタン文言・有効状態を更新する。（Phase 9.4）
+ *
+ * 状態遷移:
+ *   未取得 0件（全件取得済み）  → disabled「✅ 表示中のタイトル取得済み」
+ *   取得済み 0件（初回）        → enabled 「🔍 表示中のタイトルを取得」
+ *   取得済み > 0、未取得 > 20  → enabled 「🔍 次の20件のタイトルを取得」
+ *   取得済み > 0、未取得 ≤ 20  → enabled 「🔍 残りN件のタイトルを取得」
+ */
+function updateFetchTitlesBtn() {
+  const start    = sitemapCurrentPage * SITEMAP_PAGE_SIZE;
+  const end      = start + SITEMAP_PAGE_SIZE;
+  const pageUrls = filteredSitemapUrls.slice(start, end);
+
+  if (!pageUrls.length) {
+    // 候補なし：ボタンはデフォルト文言・有効に戻す
+    fetchTitlesBtn.disabled    = false;
+    fetchTitlesBtn.textContent = '🔍 表示中のタイトルを取得';
+    return;
+  }
+
+  const fetchedCount = pageUrls.filter(url =>  titleCache.has(url)).length;
+  const pendingCount = pageUrls.length - fetchedCount;
+
+  if (pendingCount === 0) {
+    // 全件取得済み
+    fetchTitlesBtn.disabled    = true;
+    fetchTitlesBtn.textContent = '✅ 表示中のタイトル取得済み';
+  } else if (fetchedCount === 0) {
+    // まだ 1 件も取得していない（初回）
+    fetchTitlesBtn.disabled    = false;
+    fetchTitlesBtn.textContent = '🔍 表示中のタイトルを取得';
+  } else if (pendingCount <= TITLE_FETCH_LIMIT) {
+    // 残りが TITLE_FETCH_LIMIT 以下
+    fetchTitlesBtn.disabled    = false;
+    fetchTitlesBtn.textContent = `🔍 残り${pendingCount}件のタイトルを取得`;
   } else {
-    fetchTitlesStatus.textContent = '';
+    // まだ TITLE_FETCH_LIMIT 件以上残っている
+    fetchTitlesBtn.disabled    = false;
+    fetchTitlesBtn.textContent = `🔍 次の${TITLE_FETCH_LIMIT}件のタイトルを取得`;
   }
 }
 
