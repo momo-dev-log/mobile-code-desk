@@ -4,13 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NotebookLM 資料化ツール</title>
-  <link rel="stylesheet" href="style.css?v=phase9-3">
+  <link rel="stylesheet" href="style.css?v=phase9-4">
 </head>
 <body>
 
   <header class="app-header">
     <h1>📄 NotebookLM 資料化ツール</h1>
-    <p class="app-subtitle">Phase 9.3 — 分割反映 警告カード</p>
+    <p class="app-subtitle">Phase 9.4 — 安全な初期選択・段階的タイトル取得</p>
   </header>
 
   <main class="app-main">
@@ -249,10 +249,13 @@
         <span id="sitemap-display-count" class="sitemap-display-count" hidden></span>
       </div>
 
-      <!-- 選択コントロールバー（全選択/全解除は表示中URLのみに作用） -->
+      <!-- Phase 9.4：大量候補時の案内（51件以上のとき表示） -->
+      <p id="sitemap-bulk-hint" class="sitemap-bulk-hint" hidden></p>
+
+      <!-- 選択コントロールバー（全選択/全解除は現在ページのみに作用） -->
       <div class="sitemap-select-bar">
-        <button type="button" id="sitemap-select-visible-btn"   class="select-ctrl-btn">全選択</button>
-        <button type="button" id="sitemap-deselect-visible-btn" class="select-ctrl-btn">全解除</button>
+        <button type="button" id="sitemap-select-visible-btn"   class="select-ctrl-btn">このページを全選択</button>
+        <button type="button" id="sitemap-deselect-visible-btn" class="select-ctrl-btn">このページを全解除</button>
         <span id="sitemap-select-count" class="select-count-text"></span>
       </div>
 
@@ -295,6 +298,6 @@
 
   </main>
 
-  <script src="app.js?v=phase9-3-partsuffix"></script>
+  <script src="app.js?v=phase9-4"></script>
 </body>
 </html>
