@@ -82,6 +82,9 @@ const sitemapDeselectVisibleBtn = document.getElementById('sitemap-deselect-visi
 // Phase 9.1 追加（タイトル取得）
 const fetchTitlesBtn    = document.getElementById('fetch-titles-btn');
 const fetchTitlesStatus = document.getElementById('fetch-titles-status');
+// Phase 9.2 追加（ページネーション）
+const sitemapPageInfo   = document.getElementById('sitemap-page-info');
+const sitemapPageBtns   = document.getElementById('sitemap-page-btns');
 
 // -----------------------------------------------
 // 状態管理
@@ -95,6 +98,11 @@ let lastPackMarkdown = '';   // 結合 Markdown（Phase 6）
 let lastSitemapUrls  = [];   // URL 候補（Phase 7）
 let lastPackResults  = [];   // 資料パック結果（Phase 8 印刷プレビュー用）
 let isDownloading    = false; // 二重ダウンロード防止フラグ（Phase 8.5）
+// Phase 9.2 追加
+let filteredSitemapUrls  = [];           // フィルター後のURL一覧
+let sitemapCurrentPage   = 0;           // 現在のページ（0始まり）
+const titleCache         = new Map();   // url → タイトル文字列
+const checkedSitemapUrls = new Set();   // チェック済みURLの Set
 
 /** Phase 9.1：タイトル取得の上限件数 */
 const TITLE_FETCH_LIMIT = 20;
@@ -817,8 +825,14 @@ function setStatus(type, icon, message) {
 // Phase 7：Sitemap から URL 候補を取得
 // ===============================================
 
-/** 取得する URL 候補の上限件数 */
-const SITEMAP_URL_LIMIT = 50;
+/** Phase 9.2：URL候補の内部保持上限 */
+const SITEMAP_FETCH_LIMIT = 500;
+/** Phase 9.2：1ページの表示件数 */
+const SITEMAP_PAGE_SIZE   = 50;
+/** Phase 9.2：資料パック転記時の警告件数 */
+const PACK_WARN_LIMIT     = 50;
+/** Phase 9.2：資料パック転記時の分割推奨件数 */
+const PACK_SPLIT_LIMIT    = 100;
 
 /**
  * サイト URL のオリジンから試みる sitemap 候補パスを返す
@@ -895,14 +909,14 @@ async function fetchAndParseSitemap(sitemapUrl) {
 
 /**
  * Sitemap index の sub-sitemap を順番に取得して URL を収集する（1 階層のみ）。
- * SITEMAP_URL_LIMIT に達した時点で打ち切る。
+ * SITEMAP_FETCH_LIMIT に達した時点で打ち切る。
  * @param {string[]} sitemapUrls  sub-sitemap の URL 一覧
  * @returns {Promise<string[]>}
  */
 async function collectUrlsFromIndex(sitemapUrls) {
   const collected = [];
   for (const sitemapUrl of sitemapUrls) {
-    if (collected.length >= SITEMAP_URL_LIMIT) break;
+    if (collected.length >= SITEMAP_FETCH_LIMIT) break;
     setSitemapStatus(
       'loading', '⏳',
       `Sub-sitemap を取得中… ${collected.length} 件収集済み`
@@ -911,7 +925,7 @@ async function collectUrlsFromIndex(sitemapUrls) {
       const result = await fetchAndParseSitemap(sitemapUrl);
       if (result.type === 'urlset') {
         for (const url of result.urls) {
-          if (collected.length >= SITEMAP_URL_LIMIT) break;
+          if (collected.length >= SITEMAP_FETCH_LIMIT) break;
           collected.push(url);
         }
       }
@@ -1016,26 +1030,32 @@ async function handleSitemapFetch() {
       }
     }
 
-    // ── URL 上限を適用して表示 ──
-    const total    = collectedUrls.length;
-    const limited  = collectedUrls.slice(0, SITEMAP_URL_LIMIT);
-    const truncated = total > SITEMAP_URL_LIMIT;
+    // ── URL 上限を適用して内部保持・表示 ──（Phase 9.2）
+    const total     = collectedUrls.length;
+    const stored    = collectedUrls.slice(0, SITEMAP_FETCH_LIMIT);
+    const truncated = total > SITEMAP_FETCH_LIMIT;
 
-    lastSitemapUrls = limited;
-    renderSitemapCheckboxList(limited);
-    // Phase 9.2：新しい URL 一覧が来たら絞り込みフィールドをリセット
+    lastSitemapUrls      = stored;
+    filteredSitemapUrls  = [...stored];
+    sitemapCurrentPage   = 0;
+    checkedSitemapUrls.clear();
+    stored.forEach(url => checkedSitemapUrls.add(url)); // 初期状態：全件チェック済み
+    titleCache.clear();
+
+    renderCurrentPage();
+    // 絞り込みフィールドをリセット
     sitemapIncludeInput.value = '';
     sitemapExcludeInput.value = '';
     sitemapDisplayCount.hidden = true;
     sitemapUrlCount.textContent = truncated
-      ? `${limited.length} 件（全 ${total} 件中）`
-      : `${limited.length} 件`;
+      ? `${stored.length} 件（全 ${total} 件中、上位 ${SITEMAP_FETCH_LIMIT} 件を保持）`
+      : `${stored.length} 件`;
     sitemapResultNote.textContent = truncated
-      ? `${noteText}　上限 ${SITEMAP_URL_LIMIT} 件を表示しています（全 ${total} 件）。`
+      ? `${noteText}　上限 ${SITEMAP_FETCH_LIMIT} 件を内部保持しています（全 ${total} 件）。`
       : noteText;
 
     sitemapResultCard.hidden = false;
-    setSitemapStatus('success', '✅', `URL 候補 ${limited.length} 件を取得しました`);
+    setSitemapStatus('success', '✅', `URL 候補 ${stored.length} 件を取得しました`);
     sitemapResultCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   } catch (e) {
@@ -1063,20 +1083,39 @@ async function copySitemapUrls() {
 }
 
 /**
- * チェックされた URL だけを複数URL 資料パック入力欄に転記する
+ * フィルター済みかつチェック済みの URL を複数URL 資料パック入力欄に転記する。
+ * 50件超で警告、100件超で分割推奨警告を表示する。（Phase 9.2）
  */
 function sendToPackInput() {
-  // 表示中かつチェック済みの URL のみ反映（非表示のアイテムは除外）
-  const checkedUrls = [
-    ...sitemapUrlCheckboxes.querySelectorAll(
-      '.sitemap-url-item:not(.is-hidden) .sitemap-url-check:checked'
-    ),
-  ].map(cb => cb.value);
+  // filteredSitemapUrls ∩ checkedSitemapUrls（全ページ対象）
+  const checkedUrls = filteredSitemapUrls.filter(url => checkedSitemapUrls.has(url));
 
   if (!checkedUrls.length) {
-    showSitemapCopyFeedback('❌ 表示中にチェックされた URL がありません', false);
+    showSitemapCopyFeedback('❌ チェックされた URL がありません', false);
     return;
   }
+
+  // 100件超：分割推奨警告
+  if (checkedUrls.length > PACK_SPLIT_LIMIT) {
+    const ok = window.confirm(
+      `⚠️ ${checkedUrls.length} 件を選択中です。\n\n` +
+      `100件を超えると取得・処理に時間がかかり、` +
+      `NotebookLM への貼り付けが困難になる可能性があります。\n` +
+      `複数回に分けて資料パックを作成することをお勧めします。\n\n` +
+      `このまま反映しますか？`
+    );
+    if (!ok) return;
+
+  // 50件超：任意警告
+  } else if (checkedUrls.length > PACK_WARN_LIMIT) {
+    const ok = window.confirm(
+      `ℹ️ ${checkedUrls.length} 件を選択中です。\n\n` +
+      `50件を超えると取得に時間がかかる場合があります。\n` +
+      `このまま反映しますか？`
+    );
+    if (!ok) return;
+  }
+
   multiUrlInput.value = checkedUrls.join('\n');
   multiUrlInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
   showSitemapCopyFeedback(`✅ ${checkedUrls.length} 件を資料パック欄に反映しました`, true);
@@ -1098,9 +1137,9 @@ function showSitemapCopyFeedback(message, success) {
 // ===============================================
 
 /**
- * URL 候補をチェックボックスリストとしてレンダリングする（Phase 7.6：ラベル表示版）。
- * 初期状態は全件チェック済み。
- * @param {string[]} urls
+ * URL 候補をチェックボックスリストとしてレンダリングする（Phase 9.2：ページネーション対応）。
+ * チェック状態は checkedSitemapUrls Set から復元し、タイトルは titleCache から復元する。
+ * @param {string[]} urls  現在ページに表示する URL 一覧
  */
 function renderSitemapCheckboxList(urls) {
   sitemapUrlCheckboxes.innerHTML = '';
@@ -1114,24 +1153,41 @@ function renderSitemapCheckboxList(urls) {
     const item = document.createElement('label');
     item.className = `sitemap-url-item${isAux ? ' sitemap-url-item--aux' : ''}`;
     item.title = url;   // ロングプレス / ホバーで full URL
-    item.dataset.titleState = 'pending'; // Phase 9.1：タイトル取得状態管理
 
-    // チェックボックス
+    // チェックボックス（Phase 9.2：checkedSitemapUrls で状態を復元）
     const cb = document.createElement('input');
     cb.type      = 'checkbox';
     cb.className = 'sitemap-url-check';
     cb.value     = url;
-    cb.checked   = true;
-    cb.addEventListener('change', updateSitemapSelectCount);
+    cb.checked   = checkedSitemapUrls.has(url);
+    cb.addEventListener('change', () => {
+      if (cb.checked) {
+        checkedSitemapUrls.add(url);
+      } else {
+        checkedSitemapUrls.delete(url);
+      }
+      updateSitemapSelectCount();
+    });
 
     // ── info ブロック（右側）──
     const info = document.createElement('div');
     info.className = 'sitemap-url-info';
 
-    // Phase 9.1：タイトル行（取得前は hidden）
+    // タイトル行（Phase 9.2：titleCache から復元、未取得は hidden）
     const titleSpan = document.createElement('span');
-    titleSpan.className = 'sitemap-url-title';
-    titleSpan.hidden    = true;
+    if (titleCache.has(url)) {
+      const cachedTitle       = titleCache.get(url);
+      titleSpan.textContent   = cachedTitle || 'タイトル取得不可';
+      titleSpan.hidden        = false;
+      titleSpan.className     = cachedTitle
+        ? 'sitemap-url-title'
+        : 'sitemap-url-title sitemap-url-title--error';
+      item.dataset.titleState = 'done';
+    } else {
+      titleSpan.className     = 'sitemap-url-title';
+      titleSpan.hidden        = true;
+      item.dataset.titleState = 'pending';
+    }
 
     // 1 行目：ラベル + タイプバッジ [+ 補助ページヒント]
     const labelRow = document.createElement('div');
@@ -1172,17 +1228,11 @@ function renderSitemapCheckboxList(urls) {
 }
 
 /**
- * 選択件数表示を更新する
+ * 選択件数表示を更新する（Phase 9.2：filteredSitemapUrls 全体を集計してページ跨ぎに対応）
  */
 function updateSitemapSelectCount() {
-  // 表示中アイテムだけをカウント（全選択/全解除・反映の対象と一致させる）
-  const visibleItems = [
-    ...sitemapUrlCheckboxes.querySelectorAll('.sitemap-url-item:not(.is-hidden)')
-  ];
-  const total   = visibleItems.length;
-  const checked = visibleItems.filter(
-    item => item.querySelector('.sitemap-url-check')?.checked
-  ).length;
+  const total   = filteredSitemapUrls.length;
+  const checked = filteredSitemapUrls.filter(url => checkedSitemapUrls.has(url)).length;
   sitemapSelectCount.textContent = total > 0 ? `${checked} / ${total} 件選択中` : '';
 }
 
@@ -1293,18 +1343,18 @@ function isAuxiliaryUrl(url) {
 // ===============================================
 
 /**
- * 検索キーワード / 除外キーワードに基づき URL 候補の表示・非表示を更新する。
- * DOM を使い回すため選択状態（checked）はそのまま維持される。
+ * 検索キーワード / 除外キーワードに基づき URL 候補をデータレベルで絞り込み、
+ * filteredSitemapUrls を更新してページ 0 に移動する。（Phase 9.2 改訂）
  *
  * 区切り文字: 半角スペース・全角スペース・カンマ・読点
  *
  * ロジック:
- *   検索キーワード — どれか1つでも含む → 表示（OR）。空 = 全件対象。
- *   除外キーワード — どれか1つでも含む → 非表示（OR）。空 = 除外なし。
- *   最終表示 = 検索にHIT かつ 除外にHITしない
+ *   検索キーワード — どれか1つでも含む → 対象（OR）。空 = 全件対象。
+ *   除外キーワード — どれか1つでも含む → 除外（OR）。空 = 除外なし。
+ *   最終 = 検索にHIT かつ 除外にHITしない
  *
  * 検索対象:
- *   URL 文字列 / pathname ラベル / 種類バッジ / 取得済みページタイトル
+ *   URL 文字列 / pathname ラベル / 種類バッジ / 取得済みページタイトル（titleCache）
  */
 function filterSitemapList() {
   const DELIM = /[\s　,、]+/;  // 半角SP / 全角SP / カンマ / 読点
@@ -1314,49 +1364,117 @@ function filterSitemapList() {
   const excludeKws = sitemapExcludeInput.value.trim()
     .split(DELIM).filter(k => k.length > 0).map(k => k.toLowerCase());
 
-  const total = lastSitemapUrls.length;
-  let visibleCount = 0;
-
-  sitemapUrlCheckboxes.querySelectorAll('.sitemap-url-item').forEach(item => {
-    const cb        = item.querySelector('.sitemap-url-check');
-    const url       = (cb ? cb.value : '').toLowerCase();
-    const label     = (item.querySelector('.sitemap-url-label')?.textContent ?? '').toLowerCase();
-    const badge     = (item.querySelector('.url-badge')?.textContent ?? '').toLowerCase();
-    const pageTitle = (item.querySelector('.sitemap-url-title')?.textContent ?? '').toLowerCase();
-    const haystack  = `${url} ${label} ${badge} ${pageTitle}`;
+  filteredSitemapUrls = lastSitemapUrls.filter(url => {
+    const urlLower  = url.toLowerCase();
+    const label     = getUrlLabel(url).toLowerCase();
+    const { type }  = classifyUrl(url);
+    const badge     = type.toLowerCase();
+    const pageTitle = (titleCache.get(url) ?? '').toLowerCase();
+    const haystack  = `${urlLower} ${label} ${badge} ${pageTitle}`;
 
     const included = includeKws.length === 0 || includeKws.some(k => haystack.includes(k));
     const excluded = excludeKws.length > 0   && excludeKws.some(k => haystack.includes(k));
-    const visible  = included && !excluded;
-
-    item.classList.toggle('is-hidden', !visible);
-    if (visible) visibleCount++;
+    return included && !excluded;
   });
 
+  sitemapCurrentPage = 0;
+
   // 表示件数（フィルターが入っているときのみ表示）
+  const total     = lastSitemapUrls.length;
+  const filtered  = filteredSitemapUrls.length;
   const hasFilter = includeKws.length > 0 || excludeKws.length > 0;
   if (hasFilter) {
-    sitemapDisplayCount.textContent = visibleCount === 0
+    sitemapDisplayCount.textContent = filtered === 0
       ? `0 / ${total} 件（一致なし）`
-      : `${visibleCount} / ${total} 件表示中`;
+      : `${filtered} / ${total} 件表示中`;
     sitemapDisplayCount.hidden = false;
   } else {
     sitemapDisplayCount.hidden = true;
   }
 
-  updateSitemapSelectCount();
+  renderCurrentPage();
+}
+
+// ===============================================
+// Phase 9.2：ページネーション
+// ===============================================
+
+/**
+ * filteredSitemapUrls の現在ページ分を renderSitemapCheckboxList に渡して描画し、
+ * ページコントロールも更新する。
+ */
+function renderCurrentPage() {
+  const pageCount = Math.ceil(filteredSitemapUrls.length / SITEMAP_PAGE_SIZE) || 1;
+  // 境界チェック
+  if (sitemapCurrentPage >= pageCount) sitemapCurrentPage = pageCount - 1;
+  if (sitemapCurrentPage < 0)          sitemapCurrentPage = 0;
+
+  const start    = sitemapCurrentPage * SITEMAP_PAGE_SIZE;
+  const end      = start + SITEMAP_PAGE_SIZE;
+  const pageUrls = filteredSitemapUrls.slice(start, end);
+
+  renderSitemapCheckboxList(pageUrls);
+  renderPageControls();
 }
 
 /**
- * 現在表示中の URL 候補だけを一括 ON / OFF する。
- * 非表示（.is-hidden）のアイテムは対象外。
- * 検索欄が空なら全件表示中のため実質全件操作となる。
+ * ページ情報テキストとページボタンを生成する。
+ * ページが 1 つだけのときはボタン・テキスト両方を非表示にする。
+ */
+function renderPageControls() {
+  const total     = filteredSitemapUrls.length;
+  const pageCount = Math.ceil(total / SITEMAP_PAGE_SIZE) || 1;
+
+  sitemapPageBtns.innerHTML = '';
+
+  if (pageCount <= 1) {
+    sitemapPageInfo.textContent = '';
+    return;
+  }
+
+  const start = sitemapCurrentPage * SITEMAP_PAGE_SIZE + 1;
+  const end   = Math.min((sitemapCurrentPage + 1) * SITEMAP_PAGE_SIZE, total);
+  sitemapPageInfo.textContent = `${start}–${end} 件目 / 全 ${total} 件`;
+
+  for (let i = 0; i < pageCount; i++) {
+    const btn = document.createElement('button');
+    btn.type      = 'button';
+    btn.className = `page-btn${i === sitemapCurrentPage ? ' page-btn--active' : ''}`;
+    btn.textContent = String(i + 1);
+    const pageIdx = i;
+    btn.addEventListener('click', () => {
+      sitemapCurrentPage = pageIdx;
+      renderCurrentPage();
+      sitemapUrlCheckboxes.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+    sitemapPageBtns.appendChild(btn);
+  }
+}
+
+/**
+ * 現在のページの URL 候補だけを一括 ON / OFF する。
+ * 他のページのチェック状態（checkedSitemapUrls）は維持される。
  * @param {boolean} checked  true: 全選択　false: 全解除
  */
 function setSitemapVisibleCheck(checked) {
+  // 現在ページの URL だけ checkedSitemapUrls を更新する
+  const start    = sitemapCurrentPage * SITEMAP_PAGE_SIZE;
+  const end      = start + SITEMAP_PAGE_SIZE;
+  const pageUrls = filteredSitemapUrls.slice(start, end);
+
+  pageUrls.forEach(url => {
+    if (checked) {
+      checkedSitemapUrls.add(url);
+    } else {
+      checkedSitemapUrls.delete(url);
+    }
+  });
+
+  // DOM のチェックボックスも同期
   sitemapUrlCheckboxes
-    .querySelectorAll('.sitemap-url-item:not(.is-hidden) .sitemap-url-check')
+    .querySelectorAll('.sitemap-url-check')
     .forEach(cb => { cb.checked = checked; });
+
   updateSitemapSelectCount();
 }
 
@@ -1381,13 +1499,14 @@ function extractPageTitle(html) {
 }
 
 /**
- * 現在表示中の URL 候補（最大 TITLE_FETCH_LIMIT 件）のページタイトルを
- * Cloudflare Worker 経由で順番に取得し、各アイテム上部に表示する。
- * すでに取得済み（titleState === 'done'）のものはスキップする。
+ * 現在ページに表示中の URL 候補（最大 TITLE_FETCH_LIMIT 件）のページタイトルを
+ * Cloudflare Worker 経由で順番に取得し、titleCache に保存して各アイテムに表示する。
+ * titleCache に登録済みの URL はスキップする（ページ移動後も再取得不要）。（Phase 9.2）
  */
 async function fetchVisibleTitles() {
+  // 現在ページのアイテム（最大 TITLE_FETCH_LIMIT 件）
   const visibleItems = [
-    ...sitemapUrlCheckboxes.querySelectorAll('.sitemap-url-item:not(.is-hidden)')
+    ...sitemapUrlCheckboxes.querySelectorAll('.sitemap-url-item')
   ].slice(0, TITLE_FETCH_LIMIT);
 
   if (!visibleItems.length) {
@@ -1405,8 +1524,8 @@ async function fetchVisibleTitles() {
     const titleEl = item.querySelector('.sitemap-url-title');
     if (!titleEl || !url) continue;
 
-    // 取得済みはカウントだけしてスキップ
-    if (item.dataset.titleState === 'done') { done++; continue; }
+    // titleCache に登録済みはスキップ（Phase 9.2：ページ移動後も再取得不要）
+    if (titleCache.has(url)) { done++; continue; }
 
     titleEl.textContent = '取得中...';
     titleEl.hidden      = false;
@@ -1417,12 +1536,14 @@ async function fetchVisibleTitles() {
     try {
       const html  = await fetchHtmlFromWorker(url);
       const title = extractPageTitle(html);
+      titleCache.set(url, title || '');  // '' = タイトル取得不可（Phase 9.2）
       titleEl.textContent = title || 'タイトル取得不可';
       titleEl.className   = title
         ? 'sitemap-url-title'
         : 'sitemap-url-title sitemap-url-title--error';
       item.dataset.titleState = 'done';
     } catch {
+      titleCache.set(url, '');           // '' = エラー（Phase 9.2）
       titleEl.textContent     = 'タイトル取得不可';
       titleEl.className       = 'sitemap-url-title sitemap-url-title--error';
       item.dataset.titleState = 'error';
