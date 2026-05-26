@@ -1139,3 +1139,132 @@ body {
     min-height: 34px;
   }
 }
+
+/* -----------------------------------------------
+   Phase 9.3：分割反映 警告カード
+   ----------------------------------------------- */
+
+/* 警告カード全体（アンバー系ボーダー） */
+.pack-warn-card {
+  margin-top: 12px;
+  background: rgba(240, 180, 41, 0.07);
+  border: 2px solid rgba(240, 180, 41, 0.45);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+}
+
+.pack-warn-card[hidden] {
+  display: none;
+}
+
+/* ⚠️ N件を選択中 ヘッダー */
+.pack-warn-header {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--loading);   /* #f0b429 */
+  margin-bottom: 10px;
+  line-height: 1.4;
+}
+
+/* 説明テキスト */
+.pack-warn-body {
+  font-size: 0.85rem;
+  color: var(--text);
+  line-height: 1.7;
+  margin-bottom: 16px;
+}
+
+/* ボタン縦積みコンテナ */
+.pack-warn-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* 共通：警告カード内ボタン */
+.pack-warn-btn {
+  display: block;
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 0.92rem;
+  font-weight: 600;
+  padding: 13px 16px;
+  min-height: 48px;
+  text-align: left;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, opacity 0.15s;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.pack-warn-btn:active {
+  opacity: 0.8;
+}
+
+/* 「このまま全部を反映」— accent 色で目立たせる */
+.pack-warn-btn--all {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* 「N〜M件だけ反映」— デフォルト（surface2）のまま */
+.pack-warn-btn--chunk {
+  /* inherit base style */
+}
+
+/* 「選択を見直す」— muted でさり気なく */
+.pack-warn-btn--cancel {
+  color: var(--text-muted);
+  border-style: dashed;
+  text-align: center;
+}
+
+/* hover（マウス環境） */
+@media (hover: hover) {
+  .pack-warn-btn--all:hover {
+    background: var(--accent-dark);
+    border-color: var(--accent-dark);
+  }
+  .pack-warn-btn--chunk:hover {
+    background: var(--border);
+  }
+  .pack-warn-btn--cancel:hover {
+    background: var(--surface2);
+    color: var(--text);
+  }
+}
+
+/* タッチデバイスで sticky hover を無効化 */
+@media (hover: none) {
+  .pack-warn-btn--all:hover {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+  .pack-warn-btn--chunk:hover,
+  .pack-warn-btn--cancel:hover {
+    background: var(--surface2);
+  }
+}
+
+/* スマホ最適化 */
+@media (max-width: 480px) {
+  .pack-warn-card {
+    padding: 14px 16px;
+  }
+  .pack-warn-header {
+    font-size: 0.95rem;
+  }
+  .pack-warn-body {
+    font-size: 0.82rem;
+  }
+  .pack-warn-btn {
+    font-size: 0.88rem;
+    padding: 12px 14px;
+  }
+}

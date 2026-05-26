@@ -85,6 +85,10 @@ const fetchTitlesStatus = document.getElementById('fetch-titles-status');
 // Phase 9.2 追加（ページネーション）
 const sitemapPageInfo   = document.getElementById('sitemap-page-info');
 const sitemapPageBtns   = document.getElementById('sitemap-page-btns');
+// Phase 9.3 追加（分割反映 警告カード）
+const packWarnCard    = document.getElementById('pack-warn-card');
+const packWarnCount   = document.getElementById('pack-warn-count');
+const packWarnActions = document.getElementById('pack-warn-actions');
 
 // -----------------------------------------------
 // 状態管理
@@ -963,6 +967,7 @@ async function handleSitemapFetch() {
   sitemapFetchBtn.disabled = true;
   sitemapResultCard.hidden = true;
   lastSitemapUrls = [];
+  hidePackWarnCard(); // Phase 9.3：新規取得時は警告カードを閉じる
 
   try {
     let collectedUrls = [];
@@ -1084,7 +1089,7 @@ async function copySitemapUrls() {
 
 /**
  * フィルター済みかつチェック済みの URL を複数URL 資料パック入力欄に転記する。
- * 50件超で警告、100件超で分割推奨警告を表示する。（Phase 9.2）
+ * 50件以下はそのまま反映。51件以上は分割反映 警告カードを表示する。（Phase 9.3）
  */
 function sendToPackInput() {
   // filteredSitemapUrls ∩ checkedSitemapUrls（全ページ対象）
@@ -1095,31 +1100,108 @@ function sendToPackInput() {
     return;
   }
 
-  // 100件超：分割推奨警告（強め）
-  if (checkedUrls.length > PACK_SPLIT_LIMIT) {
-    const ok = window.confirm(
-      `⚠️ ${checkedUrls.length} 件を選択中です。\n\n` +
-      `このあと「パックを作成」を押すと、${checkedUrls.length} 件分の本文取得が始まります。\n` +
-      `100件を超えると取得に非常に時間がかかり、NotebookLM への貼り付けも困難になる可能性があります。\n` +
-      `複数回に分けて資料パックを作成することを強くおすすめします。\n\n` +
-      `このまま資料パック欄へ反映しますか？`
-    );
-    if (!ok) return;
-
-  // 50件超：任意警告
-  } else if (checkedUrls.length > PACK_WARN_LIMIT) {
-    const ok = window.confirm(
-      `${checkedUrls.length} 件を選択中です。\n\n` +
-      `このあと「パックを作成」を押すと、選択した URL の本文取得を行います。\n` +
-      `件数が多いと時間がかかるため、分割をおすすめします。\n\n` +
-      `このまま資料パック欄へ反映しますか？`
-    );
-    if (!ok) return;
+  if (checkedUrls.length <= PACK_WARN_LIMIT) {
+    // 50件以下：そのまま反映
+    doReflectUrls(checkedUrls);
+    return;
   }
 
-  multiUrlInput.value = checkedUrls.join('\n');
+  // 51件以上：分割反映 警告カードを表示（window.confirm は使わない）
+  showPackWarnCard(checkedUrls);
+}
+
+// ===============================================
+// Phase 9.3：分割反映 警告カード
+// ===============================================
+
+/**
+ * 分割反映 警告カードを表示する。
+ * ヘッダーに件数、「このまま全部を反映」「N〜M件だけ反映」「選択を見直す」ボタンを生成。
+ * @param {string[]} urls  チェック済み URL の全リスト
+ */
+function showPackWarnCard(urls) {
+  packWarnCount.textContent = urls.length;
+  packWarnActions.innerHTML = '';
+
+  // ── このまま全部を反映 ──
+  const allBtn = document.createElement('button');
+  allBtn.type        = 'button';
+  allBtn.className   = 'pack-warn-btn pack-warn-btn--all';
+  allBtn.textContent = `このまま全部を反映（${urls.length}件）`;
+  allBtn.addEventListener('click', () => {
+    hidePackWarnCard();
+    doReflectUrls(urls);  // partNum なし = パック名変更なし
+  });
+  packWarnActions.appendChild(allBtn);
+
+  // ── 50件単位の分割ボタン ──
+  const chunkSize  = PACK_WARN_LIMIT; // 50
+  const chunkCount = Math.ceil(urls.length / chunkSize);
+  for (let i = 0; i < chunkCount; i++) {
+    const start  = i * chunkSize;
+    const end    = Math.min(start + chunkSize, urls.length);
+    const chunk  = urls.slice(start, end);
+    const partNo = i + 1;
+
+    const chunkBtn = document.createElement('button');
+    chunkBtn.type        = 'button';
+    chunkBtn.className   = 'pack-warn-btn pack-warn-btn--chunk';
+    chunkBtn.textContent = `${start + 1}〜${end}件だけ反映`;
+    chunkBtn.addEventListener('click', () => {
+      hidePackWarnCard();
+      doReflectUrls(chunk, partNo);
+    });
+    packWarnActions.appendChild(chunkBtn);
+  }
+
+  // ── 選択を見直す ──
+  const cancelBtn = document.createElement('button');
+  cancelBtn.type        = 'button';
+  cancelBtn.className   = 'pack-warn-btn pack-warn-btn--cancel';
+  cancelBtn.textContent = '選択を見直す';
+  cancelBtn.addEventListener('click', hidePackWarnCard);
+  packWarnActions.appendChild(cancelBtn);
+
+  packWarnCard.hidden = false;
+  packWarnCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+/** 分割反映 警告カードを閉じてボタンをクリア */
+function hidePackWarnCard() {
+  packWarnCard.hidden = true;
+  packWarnActions.innerHTML = '';
+}
+
+/**
+ * URL リストを複数URL 資料パック入力欄に転記する。（Phase 9.3）
+ * @param {string[]} urls    転記する URL リスト
+ * @param {number|null} partNum  分割番号（null = 全件反映, 1以上 = 分割）
+ */
+function doReflectUrls(urls, partNum = null) {
+  multiUrlInput.value = urls.join('\n');
+
+  // 分割時：資料パック名に _partN を付加
+  if (partNum !== null) {
+    // 既存の入力欄から _partN を除いたベース名を取得
+    const rawBase = packNameInput.value.trim().replace(/_part\d+$/, '');
+    let baseName = rawBase;
+
+    // 入力欄が空の場合はサイトmap URL のドメインから推定
+    if (!baseName) {
+      try {
+        const hostname = new URL(sitemapInput.value.trim()).hostname.replace(/^www\./, '');
+        const domain   = hostname.split('.').slice(0, -1).join('-') || hostname;
+        const now      = new Date();
+        const d = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        baseName = `${domain}_資料パック_${d}`;
+      } catch { /* 推定失敗時は設定しない */ }
+    }
+
+    if (baseName) packNameInput.value = `${baseName}_part${partNum}`;
+  }
+
   multiUrlInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  showSitemapCopyFeedback(`✅ ${checkedUrls.length} 件を資料パック欄に反映しました`, true);
+  showSitemapCopyFeedback(`✅ ${urls.length} 件を資料パック欄に反映しました`, true);
 }
 
 function showSitemapCopyFeedback(message, success) {

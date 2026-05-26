@@ -4,13 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NotebookLM 資料化ツール</title>
-  <link rel="stylesheet" href="style.css?v=phase9-2-pagination">
+  <link rel="stylesheet" href="style.css?v=phase9-3">
 </head>
 <body>
 
   <header class="app-header">
     <h1>📄 NotebookLM 資料化ツール</h1>
-    <p class="app-subtitle">Phase 9.2 — URL候補 検索・ページネーション</p>
+    <p class="app-subtitle">Phase 9.3 — 分割反映 警告カード</p>
   </header>
 
   <main class="app-main">
@@ -278,11 +278,23 @@
         📤 選択したURLを資料パック欄へ反映
       </button>
 
+      <!-- Phase 9.3：分割反映 警告カード（51件以上のとき表示） -->
+      <div id="pack-warn-card" class="pack-warn-card" hidden>
+        <p class="pack-warn-header">
+          ⚠️ <span id="pack-warn-count"></span>件を選択中です
+        </p>
+        <p class="pack-warn-body">
+          このあと「パックを作成」を押すと、選択した URL の本文取得を行います。<br>
+          件数が多いため、50件ずつ分けることをおすすめします。
+        </p>
+        <div id="pack-warn-actions" class="pack-warn-actions"></div>
+      </div>
+
       <p class="result-note" id="sitemap-result-note"></p>
     </section>
 
   </main>
 
-  <script src="app.js?v=phase9-2-warning-fix"></script>
+  <script src="app.js?v=phase9-3"></script>
 </body>
 </html>
