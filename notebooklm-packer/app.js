@@ -98,6 +98,11 @@ const previewStatus      = document.getElementById('preview-status');
 const previewResultArea  = document.getElementById('preview-result-area');
 const previewResultList  = document.getElementById('preview-result-list');
 const previewCloseBtn    = document.getElementById('preview-close-btn');
+// Phase 10.2 追加（下側操作バー）
+const sitemapSelectVisibleBtnBottom   = document.getElementById('sitemap-select-visible-btn-bottom');
+const sitemapDeselectVisibleBtnBottom = document.getElementById('sitemap-deselect-visible-btn-bottom');
+const fetchTitlesBtnBottom            = document.getElementById('fetch-titles-btn-bottom');
+const previewVisibleBtnBottom         = document.getElementById('preview-visible-btn-bottom');
 
 // -----------------------------------------------
 // 状態管理
@@ -172,6 +177,11 @@ fetchTitlesBtn           .addEventListener('click', fetchVisibleTitles);
 previewVisibleBtn.addEventListener('click', () => startBodyPreview('visible'));
 previewCheckedBtn.addEventListener('click', () => startBodyPreview('checked'));
 previewCloseBtn  .addEventListener('click', closePreviewPanel);
+// Phase 10.2：下側操作バー
+sitemapSelectVisibleBtnBottom  .addEventListener('click', () => setSitemapVisibleCheck(true));
+sitemapDeselectVisibleBtnBottom.addEventListener('click', () => setSitemapVisibleCheck(false));
+fetchTitlesBtnBottom           .addEventListener('click', fetchVisibleTitles);
+previewVisibleBtnBottom        .addEventListener('click', () => startBodyPreview('visible'));
 
 // -----------------------------------------------
 // タブ切り替え
@@ -1540,6 +1550,8 @@ function renderCurrentPage() {
   // Phase 10.1：ページ切り替え時に本文プレビューボタンの状態も更新する
   updatePreviewVisibleBtn();
   updatePreviewCheckedBtn();
+  // Phase 10.2：ページ切り替え時にプレビューパネルを現在ページに同期する
+  refreshPreviewPanel();
 }
 
 /**
@@ -1664,6 +1676,7 @@ async function fetchVisibleTitles() {
   });
 
   fetchTitlesBtn.disabled = true;
+  fetchTitlesBtnBottom.disabled = true;  // Phase 10.2：下側ボタンも同期
   let done = 0;
 
   for (const url of targetUrls) {
@@ -1726,33 +1739,40 @@ function updateFetchTitlesBtn() {
   const end      = start + SITEMAP_PAGE_SIZE;
   const pageUrls = filteredSitemapUrls.slice(start, end);
 
+  let disabled, text;
+
   if (!pageUrls.length) {
     // 候補なし：ボタンはデフォルト文言・有効に戻す
-    fetchTitlesBtn.disabled    = false;
-    fetchTitlesBtn.textContent = '🔍 表示中のタイトルを取得';
-    return;
-  }
-
-  const fetchedCount = pageUrls.filter(url =>  titleCache.has(url)).length;
-  const pendingCount = pageUrls.length - fetchedCount;
-
-  if (pendingCount === 0) {
-    // 全件取得済み
-    fetchTitlesBtn.disabled    = true;
-    fetchTitlesBtn.textContent = '✅ 表示中のタイトル取得済み';
-  } else if (fetchedCount === 0) {
-    // まだ 1 件も取得していない（初回）
-    fetchTitlesBtn.disabled    = false;
-    fetchTitlesBtn.textContent = '🔍 表示中のタイトルを取得';
-  } else if (pendingCount <= TITLE_FETCH_LIMIT) {
-    // 残りが TITLE_FETCH_LIMIT 以下
-    fetchTitlesBtn.disabled    = false;
-    fetchTitlesBtn.textContent = `🔍 残り${pendingCount}件のタイトルを取得`;
+    disabled = false;
+    text     = '🔍 表示中のタイトルを取得';
   } else {
-    // まだ TITLE_FETCH_LIMIT 件以上残っている
-    fetchTitlesBtn.disabled    = false;
-    fetchTitlesBtn.textContent = `🔍 次の${TITLE_FETCH_LIMIT}件のタイトルを取得`;
+    const fetchedCount = pageUrls.filter(url => titleCache.has(url)).length;
+    const pendingCount = pageUrls.length - fetchedCount;
+
+    if (pendingCount === 0) {
+      // 全件取得済み
+      disabled = true;
+      text     = '✅ 表示中のタイトル取得済み';
+    } else if (fetchedCount === 0) {
+      // まだ 1 件も取得していない（初回）
+      disabled = false;
+      text     = '🔍 表示中のタイトルを取得';
+    } else if (pendingCount <= TITLE_FETCH_LIMIT) {
+      // 残りが TITLE_FETCH_LIMIT 以下
+      disabled = false;
+      text     = `🔍 残り${pendingCount}件のタイトルを取得`;
+    } else {
+      // まだ TITLE_FETCH_LIMIT 件以上残っている
+      disabled = false;
+      text     = `🔍 次の${TITLE_FETCH_LIMIT}件のタイトルを取得`;
+    }
   }
+
+  fetchTitlesBtn.disabled       = disabled;
+  fetchTitlesBtn.textContent    = text;
+  // Phase 10.2：下側ボタンも同期
+  fetchTitlesBtnBottom.disabled    = disabled;
+  fetchTitlesBtnBottom.textContent = text;
 }
 
 // ===============================================
@@ -1946,6 +1966,32 @@ function closePreviewPanel() {
 }
 
 /**
+ * ページ移動時にプレビューパネルを現在ページの内容に同期する。（Phase 10.2）
+ * パネルが閉じている場合は何もしない。
+ * 現在ページに取得済みキャッシュがある場合はそれを表示し、
+ * ない場合は「未取得」案内メッセージを表示する。
+ * previewCache 自体は消去しない（他ページのキャッシュを保持）。
+ */
+function refreshPreviewPanel() {
+  if (previewResultArea.hidden) return;
+
+  const start      = sitemapCurrentPage * SITEMAP_PAGE_SIZE;
+  const end        = start + SITEMAP_PAGE_SIZE;
+  const pageUrls   = filteredSitemapUrls.slice(start, end);
+  const cachedUrls = pageUrls.filter(url => previewCache.has(url));
+
+  previewResultList.innerHTML = '';
+  if (cachedUrls.length === 0) {
+    const msg = document.createElement('p');
+    msg.className   = 'preview-empty-msg';
+    msg.textContent = 'このページの本文プレビューはまだ取得していません。';
+    previewResultList.appendChild(msg);
+  } else {
+    cachedUrls.forEach(url => previewResultList.appendChild(buildPreviewItemDom(url)));
+  }
+}
+
+/**
  * URL に対応するプレビューアイテムの DOM 要素を生成して返す。
  * previewCache の状態（未取得 / エラー / 取得済み）で表示を切り替える。
  * @param {string} url
@@ -2013,8 +2059,9 @@ function updatePreviewItemDom(url) {
  * @param {boolean} disabled
  */
 function setPreviewBtnsDisabled(disabled) {
-  previewVisibleBtn.disabled = disabled;
-  previewCheckedBtn.disabled = disabled;
+  previewVisibleBtn.disabled       = disabled;
+  previewCheckedBtn.disabled       = disabled;
+  previewVisibleBtnBottom.disabled = disabled;  // Phase 10.2：下側ボタンも同期
 }
 
 /**
@@ -2031,31 +2078,38 @@ function updatePreviewVisibleBtn() {
   const end      = start + SITEMAP_PAGE_SIZE;
   const pageUrls = filteredSitemapUrls.slice(start, end);
 
+  let disabled, text;
+
   if (!pageUrls.length) {
-    previewVisibleBtn.disabled    = false;
-    previewVisibleBtn.textContent = '📖 表示中の本文をプレビュー';
-    return;
-  }
-
-  const fetchedCount = pageUrls.filter(url =>  previewCache.has(url)).length;
-  const pendingCount = pageUrls.length - fetchedCount;
-
-  if (pendingCount === 0) {
-    previewVisibleBtn.disabled    = true;
-    previewVisibleBtn.textContent = '✅ 表示中の本文プレビュー取得済み';
-  } else if (fetchedCount === 0) {
-    // まだ 1 件も取得していない（初回）
-    previewVisibleBtn.disabled    = false;
-    previewVisibleBtn.textContent = '📖 表示中の本文をプレビュー';
-  } else if (pendingCount <= PREVIEW_FETCH_LIMIT) {
-    // 残りが PREVIEW_FETCH_LIMIT 以下
-    previewVisibleBtn.disabled    = false;
-    previewVisibleBtn.textContent = `📖 残り${pendingCount}件の本文をプレビュー`;
+    disabled = false;
+    text     = '📖 表示中の本文をプレビュー';
   } else {
-    // まだ PREVIEW_FETCH_LIMIT 件以上残っている
-    previewVisibleBtn.disabled    = false;
-    previewVisibleBtn.textContent = `📖 次の${PREVIEW_FETCH_LIMIT}件の本文をプレビュー`;
+    const fetchedCount = pageUrls.filter(url => previewCache.has(url)).length;
+    const pendingCount = pageUrls.length - fetchedCount;
+
+    if (pendingCount === 0) {
+      disabled = true;
+      text     = '✅ 表示中の本文プレビュー取得済み';
+    } else if (fetchedCount === 0) {
+      // まだ 1 件も取得していない（初回）
+      disabled = false;
+      text     = '📖 表示中の本文をプレビュー';
+    } else if (pendingCount <= PREVIEW_FETCH_LIMIT) {
+      // 残りが PREVIEW_FETCH_LIMIT 以下
+      disabled = false;
+      text     = `📖 残り${pendingCount}件の本文をプレビュー`;
+    } else {
+      // まだ PREVIEW_FETCH_LIMIT 件以上残っている
+      disabled = false;
+      text     = `📖 次の${PREVIEW_FETCH_LIMIT}件の本文をプレビュー`;
+    }
   }
+
+  previewVisibleBtn.disabled          = disabled;
+  previewVisibleBtn.textContent       = text;
+  // Phase 10.2：下側ボタンも同期
+  previewVisibleBtnBottom.disabled    = disabled;
+  previewVisibleBtnBottom.textContent = text;
 }
 
 /**
