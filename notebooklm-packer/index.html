@@ -4,13 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NotebookLM 資料化ツール</title>
-  <link rel="stylesheet" href="style.css?v=phase9-2">
+  <link rel="stylesheet" href="style.css?v=phase9-2-pagination">
 </head>
 <body>
 
   <header class="app-header">
     <h1>📄 NotebookLM 資料化ツール</h1>
-    <p class="app-subtitle">Phase 9 — URL候補の検索・絞り込み</p>
+    <p class="app-subtitle">Phase 9.2 — URL候補 検索・ページネーション</p>
   </header>
 
   <main class="app-main">
@@ -267,7 +267,13 @@
       <!-- URL チェックボックスリスト -->
       <div id="sitemap-url-checkboxes" class="sitemap-checkbox-list"></div>
 
-      <!-- 反映ボタン（表示中かつチェック済みURLを資料パック欄へ） -->
+      <!-- ページ情報 + ページボタン（Phase 9.2） -->
+      <div class="sitemap-pagination">
+        <p id="sitemap-page-info" class="sitemap-page-info"></p>
+        <div id="sitemap-page-btns" class="sitemap-page-btns"></div>
+      </div>
+
+      <!-- 反映ボタン（フィルター済みかつチェック済みURLを資料パック欄へ） -->
       <button type="button" id="to-pack-btn" class="fetch-btn sitemap-to-pack-btn">
         📤 選択したURLを資料パック欄へ反映
       </button>
@@ -277,6 +283,6 @@
 
   </main>
 
-  <script src="app.js?v=phase9-2"></script>
+  <script src="app.js?v=phase9-2-pagination"></script>
 </body>
 </html>

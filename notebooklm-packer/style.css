@@ -1055,3 +1055,87 @@ body {
     text-align: center;
   }
 }
+
+/* -----------------------------------------------
+   Phase 9.2：URL候補 ページネーション
+   ----------------------------------------------- */
+
+/* ページネーションラッパー */
+.sitemap-pagination {
+  padding: 6px 0 2px;
+}
+
+/* ページ情報テキスト（1–50 件目 / 全 N 件） */
+.sitemap-page-info {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  text-align: center;
+  margin-bottom: 6px;
+  line-height: 1.4;
+}
+
+/* ページボタンコンテナ */
+.sitemap-page-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+
+/* 個別ページボタン */
+.page-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 6px 12px;
+  min-height: 36px;
+  min-width: 36px;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.page-btn:hover {
+  background: var(--border);
+  color: var(--text);
+}
+
+/* iOS tap フィードバック */
+.page-btn:active {
+  opacity: 0.7;
+}
+
+/* 現在のページ */
+.page-btn--active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* タッチデバイスで sticky hover を無効化 */
+@media (hover: none) {
+  .page-btn:hover {
+    background: var(--surface2);
+    color: var(--text-muted);
+  }
+  .page-btn--active:hover {
+    background: var(--accent);
+    color: #fff;
+  }
+}
+
+/* スマホ最適化 */
+@media (max-width: 480px) {
+  .page-btn {
+    font-size: 0.78rem;
+    padding: 6px 10px;
+    min-width: 32px;
+    min-height: 34px;
+  }
+}
