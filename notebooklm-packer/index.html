@@ -4,13 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NotebookLM 資料化ツール</title>
-  <link rel="stylesheet" href="style.css?v=phase10-2">
+  <link rel="stylesheet" href="style.css?v=phase10-2b">
 </head>
 <body>
 
   <header class="app-header">
     <h1>📄 NotebookLM 資料化ツール</h1>
-    <p class="app-subtitle">Phase 10.2 — ページプレビュー同期・下側操作バー</p>
+    <p class="app-subtitle">Phase 10.2b — 下側操作バー位置修正・null ガード</p>
   </header>
 
   <main class="app-main">
@@ -281,7 +281,13 @@
       <!-- URL チェックボックスリスト -->
       <div id="sitemap-url-checkboxes" class="sitemap-checkbox-list"></div>
 
-      <!-- Phase 10.2：下側操作バー（50件確認後にその場で操作できる） -->
+      <!-- ページ情報 + ページボタン（Phase 9.2） -->
+      <div class="sitemap-pagination">
+        <p id="sitemap-page-info" class="sitemap-page-info"></p>
+        <div id="sitemap-page-btns" class="sitemap-page-btns"></div>
+      </div>
+
+      <!-- Phase 10.2：下側操作バー（ページ番号の下 — 50件確認後にその場で操作できる） -->
       <div class="sitemap-bottom-bar">
         <div class="sitemap-select-bar">
           <button type="button" id="sitemap-select-visible-btn-bottom"   class="select-ctrl-btn">このページを全選択</button>
@@ -297,12 +303,6 @@
             📖 表示中の本文をプレビュー
           </button>
         </div>
-      </div>
-
-      <!-- ページ情報 + ページボタン（Phase 9.2） -->
-      <div class="sitemap-pagination">
-        <p id="sitemap-page-info" class="sitemap-page-info"></p>
-        <div id="sitemap-page-btns" class="sitemap-page-btns"></div>
       </div>
 
       <!-- Phase 10：本文プレビュー 結果エリア -->
@@ -336,6 +336,6 @@
 
   </main>
 
-  <script src="app.js?v=phase10-2"></script>
+  <script src="app.js?v=phase10-2b"></script>
 </body>
 </html>

@@ -177,11 +177,11 @@ fetchTitlesBtn           .addEventListener('click', fetchVisibleTitles);
 previewVisibleBtn.addEventListener('click', () => startBodyPreview('visible'));
 previewCheckedBtn.addEventListener('click', () => startBodyPreview('checked'));
 previewCloseBtn  .addEventListener('click', closePreviewPanel);
-// Phase 10.2：下側操作バー
-sitemapSelectVisibleBtnBottom  .addEventListener('click', () => setSitemapVisibleCheck(true));
-sitemapDeselectVisibleBtnBottom.addEventListener('click', () => setSitemapVisibleCheck(false));
-fetchTitlesBtnBottom           .addEventListener('click', fetchVisibleTitles);
-previewVisibleBtnBottom        .addEventListener('click', () => startBodyPreview('visible'));
+// Phase 10.2：下側操作バー（null ガード付き — HTML がキャッシュ古い環境でも TypeError を防ぐ）
+if (sitemapSelectVisibleBtnBottom)   sitemapSelectVisibleBtnBottom  .addEventListener('click', () => setSitemapVisibleCheck(true));
+if (sitemapDeselectVisibleBtnBottom) sitemapDeselectVisibleBtnBottom.addEventListener('click', () => setSitemapVisibleCheck(false));
+if (fetchTitlesBtnBottom)            fetchTitlesBtnBottom           .addEventListener('click', fetchVisibleTitles);
+if (previewVisibleBtnBottom)         previewVisibleBtnBottom        .addEventListener('click', () => startBodyPreview('visible'));
 
 // -----------------------------------------------
 // タブ切り替え
