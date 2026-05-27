@@ -103,6 +103,9 @@ const sitemapSelectVisibleBtnBottom   = document.getElementById('sitemap-select-
 const sitemapDeselectVisibleBtnBottom = document.getElementById('sitemap-deselect-visible-btn-bottom');
 const fetchTitlesBtnBottom            = document.getElementById('fetch-titles-btn-bottom');
 const previewVisibleBtnBottom         = document.getElementById('preview-visible-btn-bottom');
+// Phase 10.3 追加（プレビュー結果フッター）
+const previewNextBtn        = document.getElementById('preview-next-btn');
+const previewCloseBottomBtn = document.getElementById('preview-close-bottom-btn');
 
 // -----------------------------------------------
 // 状態管理
@@ -182,6 +185,9 @@ if (sitemapSelectVisibleBtnBottom)   sitemapSelectVisibleBtnBottom  .addEventLis
 if (sitemapDeselectVisibleBtnBottom) sitemapDeselectVisibleBtnBottom.addEventListener('click', () => setSitemapVisibleCheck(false));
 if (fetchTitlesBtnBottom)            fetchTitlesBtnBottom           .addEventListener('click', fetchVisibleTitles);
 if (previewVisibleBtnBottom)         previewVisibleBtnBottom        .addEventListener('click', () => startBodyPreview('visible'));
+// Phase 10.3：プレビュー結果フッター（null ガード付き）
+if (previewNextBtn)        previewNextBtn       .addEventListener('click', () => startBodyPreview('visible'));
+if (previewCloseBottomBtn) previewCloseBottomBtn.addEventListener('click', closePreviewPanel);
 
 // -----------------------------------------------
 // タブ切り替え
@@ -2061,7 +2067,8 @@ function updatePreviewItemDom(url) {
 function setPreviewBtnsDisabled(disabled) {
   previewVisibleBtn.disabled       = disabled;
   previewCheckedBtn.disabled       = disabled;
-  previewVisibleBtnBottom.disabled = disabled;  // Phase 10.2：下側ボタンも同期
+  previewVisibleBtnBottom.disabled = disabled;          // Phase 10.2：URL一覧下ボタンも同期
+  if (previewNextBtn) previewNextBtn.disabled = disabled;  // Phase 10.3：フッターボタンも同期
 }
 
 /**
@@ -2107,9 +2114,14 @@ function updatePreviewVisibleBtn() {
 
   previewVisibleBtn.disabled          = disabled;
   previewVisibleBtn.textContent       = text;
-  // Phase 10.2：下側ボタンも同期
+  // Phase 10.2：URL一覧下ボタンも同期
   previewVisibleBtnBottom.disabled    = disabled;
   previewVisibleBtnBottom.textContent = text;
+  // Phase 10.3：プレビュー結果フッターのボタンも同期
+  if (previewNextBtn) {
+    previewNextBtn.disabled    = disabled;
+    previewNextBtn.textContent = text;
+  }
 }
 
 /**
