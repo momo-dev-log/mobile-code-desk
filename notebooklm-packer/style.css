@@ -576,6 +576,18 @@ body {
   opacity: 0.7;
 }
 
+/* Phase 10.5：disabled 状態（取得済み・0件案内など） */
+.select-ctrl-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+  pointer-events: none;
+}
+/* preview-btn が disabled のときは accent 色を抑える */
+.select-ctrl-btn.preview-btn:disabled {
+  border-color: var(--border);
+  color: var(--text-muted);
+}
+
 .select-count-text {
   font-size: 0.82rem;
   color: var(--accent);
