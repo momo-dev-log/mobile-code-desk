@@ -1489,3 +1489,80 @@ body {
     text-align: center;
   }
 }
+
+/* ===============================================
+   Phase 10.4：プレビューカード内 選択トグルUI
+   =============================================== */
+
+/* 選択状態ラベル + トグルボタンの行 */
+.preview-item-selection {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+/* ✅ 選択済み ラベル */
+.preview-check-label {
+  font-size: 0.80rem;
+  color: var(--success);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.preview-check-label[hidden] {
+  display: none;
+}
+
+/* 選択 / 解除トグルボタン */
+.preview-item-toggle-btn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 4px 12px;
+  min-height: 30px;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.preview-item-toggle-btn:active {
+  opacity: 0.75;
+}
+
+/* 選択済み状態：accent 色の縁取り */
+.preview-item-toggle-btn--checked {
+  border-color: rgba(123, 140, 222, 0.55);
+  color: var(--accent);
+}
+
+/* 選択済みカードに accent 左縦線 */
+.preview-item--checked {
+  border-left: 3px solid var(--accent);
+}
+
+/* hover（マウス環境のみ） */
+@media (hover: hover) {
+  .preview-item-toggle-btn:hover {
+    background: var(--border);
+    color: var(--text);
+  }
+  .preview-item-toggle-btn--checked:hover {
+    background: rgba(123, 140, 222, 0.12);
+    color: var(--accent);
+  }
+}
+
+/* スマホ最適化 */
+@media (max-width: 480px) {
+  .preview-item-toggle-btn {
+    font-size: 0.75rem;
+    padding: 4px 10px;
+  }
+}

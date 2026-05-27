@@ -1302,7 +1302,8 @@ function renderSitemapCheckboxList(urls) {
         checkedSitemapUrls.delete(url);
       }
       updateSitemapSelectCount();
-      updatePreviewCheckedBtn(); // Phase 10.1：チェック変更時に選択中プレビューボタンも更新
+      updatePreviewCheckedBtn();    // Phase 10.1：チェック変更時に選択中プレビューボタンも更新
+      updatePreviewCardSelection(url); // Phase 10.4：プレビューカードの選択UIも同期
     });
 
     // ── info ブロック（右側）──
@@ -1619,7 +1620,8 @@ function setSitemapVisibleCheck(checked) {
     .forEach(cb => { cb.checked = checked; });
 
   updateSitemapSelectCount();
-  updatePreviewCheckedBtn(); // Phase 10.1：全選択/全解除後に選択中プレビューボタンも更新
+  updatePreviewCheckedBtn();        // Phase 10.1：全選択/全解除後に選択中プレビューボタンも更新
+  updateAllPreviewCardSelections(); // Phase 10.4：プレビューカードの選択UIも一括同期
 }
 
 // ===============================================
@@ -1997,19 +1999,97 @@ function refreshPreviewPanel() {
   }
 }
 
+// ===============================================
+// Phase 10.4：プレビューカードから選択・解除
+// ===============================================
+
+/**
+ * 本文プレビューカード内の選択UIを checkedSitemapUrls に合わせて更新する。
+ * buildPreviewItemDom を再生成せずに DOM だけ差分更新するため、本文内容は消えない。
+ * @param {string} url
+ */
+function updatePreviewCardSelection(url) {
+  const isChecked = checkedSitemapUrls.has(url);
+  previewResultList.querySelectorAll('.preview-item').forEach(item => {
+    if (item.dataset.previewUrl !== url) return;
+    const label = item.querySelector('.preview-check-label');
+    const btn   = item.querySelector('.preview-item-toggle-btn');
+    if (!label || !btn) return;
+    label.hidden     = !isChecked;
+    btn.textContent  = isChecked ? '選択を外す' : 'このURLを選択';
+    btn.classList.toggle('preview-item-toggle-btn--checked', isChecked);
+    item.classList.toggle('preview-item--checked', isChecked);
+  });
+}
+
+/**
+ * 現在表示中の全プレビューカードの選択UIを一括更新する。
+ * 「このページを全選択 / 全解除」ボタン押下後に呼ぶ。
+ */
+function updateAllPreviewCardSelections() {
+  previewResultList.querySelectorAll('.preview-item').forEach(item => {
+    const url = item.dataset.previewUrl;
+    if (url) updatePreviewCardSelection(url);
+  });
+}
+
+/**
+ * プレビューカード内の選択トグルボタンを押した時の処理。
+ * checkedSitemapUrls を更新し、URL一覧のチェックボックスとも同期する。
+ * 本文プレビューキャッシュや本文内容は消去しない。
+ * @param {string} url
+ */
+function togglePreviewUrlSelection(url) {
+  const wasChecked = checkedSitemapUrls.has(url);
+  if (wasChecked) {
+    checkedSitemapUrls.delete(url);
+  } else {
+    checkedSitemapUrls.add(url);
+  }
+
+  // プレビューカードUIを更新（本文内容はそのまま）
+  updatePreviewCardSelection(url);
+
+  // URL一覧側のチェックボックスを同期（現在ページに表示されている URL のみ）
+  sitemapUrlCheckboxes.querySelectorAll('.sitemap-url-check').forEach(cb => {
+    if (cb.value === url) cb.checked = !wasChecked;
+  });
+
+  // 選択件数・選択中プレビューボタン状態を更新
+  updateSitemapSelectCount();
+  updatePreviewCheckedBtn();
+}
+
 /**
  * URL に対応するプレビューアイテムの DOM 要素を生成して返す。
  * previewCache の状態（未取得 / エラー / 取得済み）で表示を切り替える。
  * @param {string} url
  * @returns {HTMLElement}
  */
+/**
+ * 選択トグルUI（✅ ラベル + ボタン）の HTML 文字列を返す。（Phase 10.4）
+ * @param {boolean} isChecked
+ * @returns {string}
+ */
+function buildSelectionRowHtml(isChecked) {
+  return (
+    `<div class="preview-item-selection">` +
+      `<span class="preview-check-label"${isChecked ? '' : ' hidden'}>✅ 選択済み</span>` +
+      `<button type="button" class="preview-item-toggle-btn${isChecked ? ' preview-item-toggle-btn--checked' : ''}">` +
+        (isChecked ? '選択を外す' : 'このURLを選択') +
+      `</button>` +
+    `</div>`
+  );
+}
+
 function buildPreviewItemDom(url) {
-  const cached = previewCache.get(url);
-  const item   = document.createElement('div');
+  const cached    = previewCache.get(url);
+  const isChecked = checkedSitemapUrls.has(url); // Phase 10.4：選択状態を取得
+  const item      = document.createElement('div');
   item.dataset.previewUrl = url;
 
   if (!cached) {
-    // ── 取得前（ローディング状態） ──
+    // ── 取得前（ローディング状態）— 選択UIは付けない（すぐ置き換えられる） ──
     item.className = 'preview-item preview-item--loading';
     item.innerHTML =
       `<div class="preview-item-header">` +
@@ -2019,16 +2099,17 @@ function buildPreviewItemDom(url) {
 
   } else if (cached.error) {
     // ── 取得失敗 ──
-    item.className = 'preview-item preview-item--error';
+    item.className = `preview-item preview-item--error${isChecked ? ' preview-item--checked' : ''}`;
     item.innerHTML =
       `<div class="preview-item-header">` +
+        buildSelectionRowHtml(isChecked) +
         `<p class="preview-item-source">${escapeHtml(url)}</p>` +
       `</div>` +
       `<p class="preview-item-body preview-item-body--error">❌ 本文プレビュー取得不可</p>`;
 
   } else {
     // ── 取得済み ──
-    item.className = 'preview-item';
+    item.className = `preview-item${isChecked ? ' preview-item--checked' : ''}`;
     const titleHtml = cached.title
       ? `<p class="preview-item-title">${escapeHtml(cached.title)}</p>`
       : '';
@@ -2037,10 +2118,20 @@ function buildPreviewItemDom(url) {
       : '<span class="preview-item-body--empty">（本文を抽出できませんでした）</span>';
     item.innerHTML =
       `<div class="preview-item-header">` +
+        buildSelectionRowHtml(isChecked) +
         titleHtml +
         `<p class="preview-item-source">Source: ${escapeHtml(url)}</p>` +
       `</div>` +
       `<p class="preview-item-body">${bodyContent}</p>`;
+  }
+
+  // Phase 10.4：選択トグルボタンのイベントリスナー
+  const toggleBtn = item.querySelector('.preview-item-toggle-btn');
+  if (toggleBtn) {
+    toggleBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      togglePreviewUrlSelection(url);
+    });
   }
 
   return item;
