@@ -4,13 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NotebookLM 資料化ツール</title>
-  <link rel="stylesheet" href="style.css?v=phase10-2b">
+  <link rel="stylesheet" href="style.css?v=phase10-3">
 </head>
 <body>
 
   <header class="app-header">
     <h1>📄 NotebookLM 資料化ツール</h1>
-    <p class="app-subtitle">Phase 10.2b — 下側操作バー位置修正・null ガード</p>
+    <p class="app-subtitle">Phase 10.3 — プレビュー結果フッター（末尾から次へ）</p>
   </header>
 
   <main class="app-main">
@@ -312,6 +312,15 @@
           <button type="button" id="preview-close-btn" class="preview-close-btn">✕ 閉じる</button>
         </div>
         <div id="preview-result-list" class="preview-result-list"></div>
+        <!-- Phase 10.3：プレビュー結果フッター（末尾から次の取得・閉じるへ進める導線） -->
+        <div class="preview-result-footer">
+          <button type="button" id="preview-next-btn" class="select-ctrl-btn preview-btn">
+            📖 次の10件の本文をプレビュー
+          </button>
+          <button type="button" id="preview-close-bottom-btn" class="preview-close-btn">
+            ✕ 閉じる
+          </button>
+        </div>
       </div>
 
       <!-- 反映ボタン（フィルター済みかつチェック済みURLを資料パック欄へ） -->
@@ -336,6 +345,6 @@
 
   </main>
 
-  <script src="app.js?v=phase10-2b"></script>
+  <script src="app.js?v=phase10-3"></script>
 </body>
 </html>
