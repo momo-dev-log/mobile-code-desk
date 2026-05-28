@@ -1578,3 +1578,170 @@ body {
     padding: 4px 10px;
   }
 }
+
+/* ===============================================
+   Phase 11：本文検索スコア
+   =============================================== */
+
+.body-search-section {
+  border-top: 1px dashed var(--border);
+  margin-top: 10px;
+  padding-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.body-search-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.body-search-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.body-search-btn-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+/* 本文検索 結果エリア全体 */
+.body-search-result-area {
+  margin: 8px 0 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.body-search-result-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+}
+
+.body-search-result-title {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.body-search-result-list {
+  display: flex;
+  flex-direction: column;
+}
+
+/* 各検索結果カード */
+.search-result-card {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  border-left: 3px solid transparent;
+  transition: border-color 0.15s;
+}
+
+.search-result-card:last-child {
+  border-bottom: none;
+}
+
+.search-result-card--checked {
+  border-left-color: var(--accent);
+}
+
+.search-result-card--error,
+.search-result-card--loading {
+  background: var(--surface2);
+}
+
+/* カードヘッダー行（選択UI + タイトル + URL） */
+.search-result-header-row {
+  margin-bottom: 8px;
+}
+
+.search-result-title {
+  font-size: 0.87rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 4px 0 2px;
+  line-height: 1.4;
+}
+
+.search-result-source {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  word-break: break-all;
+  margin: 2px 0;
+}
+
+/* スコア表示エリア */
+.search-result-scores {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 0.82rem;
+  color: var(--text);
+  padding-left: 2px;
+}
+
+.search-result-relevance {
+  font-weight: 600;
+}
+
+/* 関連度ラベル */
+.search-relevance-label {
+  font-weight: 700;
+}
+.search-relevance-label.rel-high { color: var(--success); }
+.search-relevance-label.rel-mid  { color: var(--loading); }
+.search-relevance-label.rel-low  { color: var(--text-muted); }
+.search-relevance-label.rel-none { color: var(--text-muted); }
+
+.search-result-warn {
+  color: var(--loading);
+  font-weight: 600;
+  font-size: 0.80rem;
+}
+
+.search-result-score {
+  font-weight: 600;
+}
+
+.search-result-counts {
+  color: var(--text-muted);
+}
+
+.search-result-kwcounts {
+  color: var(--text-muted);
+  font-size: 0.79rem;
+  word-break: break-word;
+  line-height: 1.5;
+}
+
+.search-result-loading {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+@media (max-width: 480px) {
+  .body-search-btn-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+  .search-result-card {
+    padding: 10px 12px;
+  }
+  .search-result-scores {
+    font-size: 0.79rem;
+  }
+}

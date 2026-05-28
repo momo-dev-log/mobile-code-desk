@@ -106,6 +106,15 @@ const previewVisibleBtnBottom         = document.getElementById('preview-visible
 // Phase 10.3 追加（プレビュー結果フッター）
 const previewNextBtn        = document.getElementById('preview-next-btn');
 const previewCloseBottomBtn = document.getElementById('preview-close-bottom-btn');
+// Phase 11 追加（本文検索スコア）
+const bodySearchIncludeInput = document.getElementById('body-search-include');
+const bodySearchExcludeInput = document.getElementById('body-search-exclude');
+const bodySearchPageBtn      = document.getElementById('body-search-page-btn');
+const bodySearchCheckedBtn   = document.getElementById('body-search-checked-btn');
+const bodySearchStatus       = document.getElementById('body-search-status');
+const bodySearchResultArea   = document.getElementById('body-search-result-area');
+const bodySearchResultList   = document.getElementById('body-search-result-list');
+const bodySearchCloseBtn     = document.getElementById('body-search-close-btn');
 
 // -----------------------------------------------
 // 状態管理
@@ -126,6 +135,8 @@ const titleCache         = new Map();   // url → タイトル文字列
 const checkedSitemapUrls = new Set();   // チェック済みURLの Set
 // Phase 10 追加
 const previewCache = new Map();          // url → { title: string, text: string, error: boolean }
+// Phase 11 追加
+const bodySearchCache = new Map();       // url → { title: string, text: string, error: boolean }（フル本文）
 
 /** Phase 9.1：タイトル取得の上限件数 */
 const TITLE_FETCH_LIMIT = 20;
@@ -133,6 +144,8 @@ const TITLE_FETCH_LIMIT = 20;
 const PREVIEW_FETCH_LIMIT = 10;
 /** Phase 10：本文プレビューの表示文字数 */
 const PREVIEW_TEXT_LENGTH = 600;
+/** Phase 11：本文検索の1回の上限件数 */
+const BODY_SEARCH_LIMIT = 10;
 
 // -----------------------------------------------
 // イベントリスナー — 単一URL
@@ -188,6 +201,10 @@ if (previewVisibleBtnBottom)         previewVisibleBtnBottom        .addEventLis
 // Phase 10.3：プレビュー結果フッター（null ガード付き）
 if (previewNextBtn)        previewNextBtn       .addEventListener('click', () => startBodyPreview('visible'));
 if (previewCloseBottomBtn) previewCloseBottomBtn.addEventListener('click', closePreviewPanel);
+// Phase 11：本文検索スコア
+if (bodySearchPageBtn)    bodySearchPageBtn   .addEventListener('click', () => handleBodySearch('page'));
+if (bodySearchCheckedBtn) bodySearchCheckedBtn.addEventListener('click', () => handleBodySearch('checked'));
+if (bodySearchCloseBtn)   bodySearchCloseBtn  .addEventListener('click', closeBodySearchPanel);
 
 // -----------------------------------------------
 // タブ切り替え
@@ -1086,8 +1103,10 @@ async function handleSitemapFetch() {
       stored.forEach(url => checkedSitemapUrls.add(url));
     }
     titleCache.clear();
-    previewCache.clear();    // Phase 10：新規取得時はプレビューキャッシュもリセット
-    closePreviewPanel();     // Phase 10：古いプレビューパネルを閉じる
+    previewCache.clear();     // Phase 10：新規取得時はプレビューキャッシュもリセット
+    bodySearchCache.clear();  // Phase 11：新規取得時は本文検索キャッシュもリセット
+    closePreviewPanel();      // Phase 10：古いプレビューパネルを閉じる
+    closeBodySearchPanel();   // Phase 11：古い検索結果パネルも閉じる
 
     // Phase 9.4：大量候補時の案内文
     if (stored.length > PACK_WARN_LIMIT) {
@@ -1622,6 +1641,7 @@ function setSitemapVisibleCheck(checked) {
   updateSitemapSelectCount();
   updatePreviewCheckedBtn();        // Phase 10.1：全選択/全解除後に選択中プレビューボタンも更新
   updateAllPreviewCardSelections(); // Phase 10.4：プレビューカードの選択UIも一括同期
+  updateAllSearchCardSelections();  // Phase 11：本文検索結果カードの選択UIも一括同期
 }
 
 // ===============================================
@@ -2061,6 +2081,8 @@ function togglePreviewUrlSelection(url) {
   // 選択件数・選択中プレビューボタン状態を更新
   updateSitemapSelectCount();
   updatePreviewCheckedBtn();
+  // Phase 11：本文検索結果カードの選択UIも同期
+  updateAllSearchCardSelections();
 }
 
 /**
@@ -2681,4 +2703,321 @@ function sanitizePackName(raw) {
     .slice(0, 80);                     // 最大 80 文字
 
   return safe || fallback;
+}
+
+// ===============================================
+// Phase 11：本文検索スコア
+// ===============================================
+
+/**
+ * キーワード入力文字列をスペース・全角スペース・カンマ・読点・全角カンマで分割して配列にする。
+ * 空文字・重複は除去しない（ユーザーが意図して同じ語を複数回入れる場合もある）。
+ * @param {string} raw
+ * @returns {string[]}
+ */
+function parseKeywords(raw) {
+  return raw
+    .split(/[\s　,、，]+/)
+    .map(s => s.trim())
+    .filter(s => s.length > 0);
+}
+
+/**
+ * テキスト内でキーワードが出現する回数を数える。英字は大文字小文字を区別しない。
+ * @param {string} text
+ * @param {string} keyword
+ * @returns {number}
+ */
+function countKeywordOccurrences(text, keyword) {
+  if (!keyword || !text) return 0;
+  const t = text.toLowerCase();
+  const k = keyword.toLowerCase();
+  let count = 0, pos = 0;
+  while ((pos = t.indexOf(k, pos)) !== -1) {
+    count++;
+    pos += k.length;
+  }
+  return count;
+}
+
+/**
+ * 本文テキストに対して検索語・除外語の出現回数を数え、スコアを計算する。
+ * スコア = 検索ヒット合計 - 除外ヒット合計 × 2
+ * @param {string} text
+ * @param {string[]} includeKws
+ * @param {string[]} excludeKws
+ * @returns {{ inc: Array<{kw,n}>, exc: Array<{kw,n}>, incTotal: number, excTotal: number, score: number }}
+ */
+function computeSearchScore(text, includeKws, excludeKws) {
+  const inc      = includeKws.map(kw => ({ kw, n: countKeywordOccurrences(text, kw) }));
+  const exc      = excludeKws.map(kw => ({ kw, n: countKeywordOccurrences(text, kw) }));
+  const incTotal = inc.reduce((s, x) => s + x.n, 0);
+  const excTotal = exc.reduce((s, x) => s + x.n, 0);
+  const score    = incTotal - excTotal * 2;
+  return { inc, exc, incTotal, excTotal, score };
+}
+
+/**
+ * 検索ヒット数・スコアから関連度ラベルを返す。
+ * @param {number} incTotal
+ * @param {number} score
+ * @returns {'高'|'中'|'低'|'該当なし'}
+ */
+function getRelevanceLabel(incTotal, score) {
+  if (incTotal === 0) return '該当なし';
+  if (score >= 10)    return '高';
+  if (score >= 3)     return '中';
+  return '低';
+}
+
+/**
+ * 除外ヒット数が多い場合に ⚠️ 注意 を出すか判定する。
+ * 除外ヒット ≥ 3 件 OR 除外ヒット ≥ 検索ヒットの半数 のどちらかで true。
+ * @param {number} incTotal
+ * @param {number} excTotal
+ * @returns {boolean}
+ */
+function needsSearchWarning(incTotal, excTotal) {
+  return excTotal >= 3 || (incTotal > 0 && excTotal * 2 >= incTotal);
+}
+
+/**
+ * 本文検索結果カードの DOM 要素を生成して返す。
+ * @param {{ url, title, error, inc, exc, incTotal, excTotal, score }} result
+ * @returns {HTMLElement}
+ */
+function buildSearchResultCard(result) {
+  const card = document.createElement('div');
+  card.dataset.searchUrl = result.url;
+
+  if (result.error) {
+    card.className = 'search-result-card search-result-card--error';
+    card.innerHTML =
+      `<p class="search-result-source">${escapeHtml(result.url)}</p>` +
+      `<p class="search-result-loading">❌ 本文の取得に失敗しました</p>`;
+    return card;
+  }
+
+  const relevance = getRelevanceLabel(result.incTotal, result.score);
+  const warn      = needsSearchWarning(result.incTotal, result.excTotal);
+  const isChecked = checkedSitemapUrls.has(result.url);
+
+  const relClass =
+    relevance === '高' ? 'rel-high' :
+    relevance === '中' ? 'rel-mid'  :
+    relevance === '低' ? 'rel-low'  : 'rel-none';
+
+  // 検索語ごとの出現数文字列
+  const incStr = result.inc.length === 0
+    ? 'なし'
+    : result.inc.map(x => `${x.kw} ${x.n}`).join('・');
+
+  // 除外語ごとの出現数文字列（キーワードがなければ「なし」）
+  const excStr = result.exc.length === 0
+    ? 'なし'
+    : result.exc.map(x => `${x.kw} ${x.n}`).join('・');
+
+  const titleHtml = result.title
+    ? `<p class="search-result-title">${escapeHtml(result.title)}</p>`
+    : '';
+  const warnHtml = warn
+    ? ' <span class="search-result-warn">⚠️ 注意</span>'
+    : '';
+
+  // 選択トグルUI（Phase 10.4 の buildSelectionRowHtml と同じ構造を再利用）
+  const toggleHtml = buildSelectionRowHtml(isChecked);
+
+  card.className = `search-result-card${isChecked ? ' search-result-card--checked' : ''}`;
+  card.innerHTML =
+    `<div class="search-result-header-row">` +
+      toggleHtml +
+      titleHtml +
+      `<p class="search-result-source">Source: ${escapeHtml(result.url)}</p>` +
+    `</div>` +
+    `<div class="search-result-scores">` +
+      `<p class="search-result-relevance">関連度：<span class="search-relevance-label ${relClass}">${relevance}</span>${warnHtml}</p>` +
+      `<p class="search-result-score">スコア：${result.score}</p>` +
+      `<p class="search-result-counts">検索 ${result.incTotal} / 除外 ${result.excTotal}</p>` +
+      `<p class="search-result-kwcounts">検索語：${escapeHtml(incStr)}</p>` +
+      `<p class="search-result-kwcounts">除外語：${escapeHtml(excStr)}</p>` +
+    `</div>`;
+
+  const toggleBtn = card.querySelector('.preview-item-toggle-btn');
+  if (toggleBtn) {
+    toggleBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      togglePreviewUrlSelection(result.url);
+    });
+  }
+
+  return card;
+}
+
+/**
+ * 本文検索結果カードの選択UIを checkedSitemapUrls に合わせてDOM差分更新する。
+ * @param {string} url
+ */
+function updateSearchCardSelection(url) {
+  if (!bodySearchResultList) return;
+  const isChecked = checkedSitemapUrls.has(url);
+  bodySearchResultList.querySelectorAll('.search-result-card').forEach(card => {
+    if (card.dataset.searchUrl !== url) return;
+    const label = card.querySelector('.preview-check-label');
+    const btn   = card.querySelector('.preview-item-toggle-btn');
+    if (!label || !btn) return;
+    label.hidden    = !isChecked;
+    btn.textContent = isChecked ? '選択を外す' : 'このURLを選択';
+    btn.classList.toggle('preview-item-toggle-btn--checked', isChecked);
+    card.classList.toggle('search-result-card--checked', isChecked);
+  });
+}
+
+/**
+ * 全本文検索結果カードの選択UIをまとめて更新する。
+ */
+function updateAllSearchCardSelections() {
+  if (!bodySearchResultList) return;
+  bodySearchResultList.querySelectorAll('.search-result-card').forEach(card => {
+    const url = card.dataset.searchUrl;
+    if (url) updateSearchCardSelection(url);
+  });
+}
+
+/**
+ * 本文検索パネルを閉じてリストをクリアする。
+ */
+function closeBodySearchPanel() {
+  if (bodySearchResultArea) bodySearchResultArea.hidden = true;
+  if (bodySearchResultList) bodySearchResultList.innerHTML = '';
+}
+
+/**
+ * 本文検索を実行する。
+ * mode='page'    → 現在ページのURLのうち、選択済みがあればそれを、なければ先頭10件
+ * mode='checked' → フィルター済みURLのうちチェック済みの先頭10件
+ * bodySearchCache を使って同一URLの二重取得を避ける。
+ * @param {'page'|'checked'} mode
+ */
+async function handleBodySearch(mode) {
+  const includeKws = parseKeywords(bodySearchIncludeInput.value);
+
+  if (!includeKws.length) {
+    bodySearchStatus.textContent = '⚠️ 本文検索キーワードを入力してください';
+    setTimeout(() => { bodySearchStatus.textContent = ''; }, 3000);
+    return;
+  }
+
+  const excludeKws = parseKeywords(bodySearchExcludeInput.value);
+
+  // 対象URLを決定する
+  let targetUrls;
+  if (mode === 'page') {
+    const start         = sitemapCurrentPage * SITEMAP_PAGE_SIZE;
+    const end           = start + SITEMAP_PAGE_SIZE;
+    const pageUrls      = filteredSitemapUrls.slice(start, end);
+    const checkedOnPage = pageUrls.filter(url => checkedSitemapUrls.has(url));
+    // 選択済みがあればそれを優先、なければページ先頭から
+    targetUrls = (checkedOnPage.length > 0 ? checkedOnPage : pageUrls)
+      .slice(0, BODY_SEARCH_LIMIT);
+    if (!targetUrls.length) {
+      bodySearchStatus.textContent = '❌ このページに URL がありません';
+      setTimeout(() => { bodySearchStatus.textContent = ''; }, 3000);
+      return;
+    }
+  } else {
+    targetUrls = filteredSitemapUrls
+      .filter(url => checkedSitemapUrls.has(url))
+      .slice(0, BODY_SEARCH_LIMIT);
+    if (!targetUrls.length) {
+      bodySearchStatus.textContent = '⚠️ URLを選択してください';
+      setTimeout(() => { bodySearchStatus.textContent = ''; }, 3000);
+      return;
+    }
+  }
+
+  // 結果パネルを開いてローディング表示
+  bodySearchResultArea.hidden = false;
+  bodySearchResultList.innerHTML = '';
+  targetUrls.forEach(url => {
+    const el = document.createElement('div');
+    el.className = 'search-result-card search-result-card--loading';
+    el.dataset.searchUrl = url;
+    el.innerHTML =
+      `<p class="search-result-source">${escapeHtml(url)}</p>` +
+      `<p class="search-result-loading">⏳ 取得中...</p>`;
+    bodySearchResultList.appendChild(el);
+  });
+  bodySearchResultArea.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+  // 取得中はボタンを無効化
+  bodySearchPageBtn.disabled    = true;
+  bodySearchCheckedBtn.disabled = true;
+
+  let done = 0;
+  const rawResults = [];
+
+  for (const url of targetUrls) {
+    bodySearchStatus.textContent = `${done + 1} / ${targetUrls.length} 取得中...`;
+
+    // キャッシュ未登録の場合のみ取得（フル本文を bodySearchCache に保存）
+    if (!bodySearchCache.has(url)) {
+      try {
+        const html  = await fetchHtmlFromWorker(url);
+        const title = extractPageTitle(html);
+        const { text } = extractBodyText(html);
+        bodySearchCache.set(url, { title: title || '', text, error: false });
+        // previewCache にも登録してプレビュー取得の二重アクセスを防ぐ
+        if (!previewCache.has(url)) {
+          previewCache.set(url, { title: title || '', text: text.slice(0, PREVIEW_TEXT_LENGTH), error: false });
+        }
+      } catch {
+        bodySearchCache.set(url, { title: '', text: '', error: true });
+        if (!previewCache.has(url)) {
+          previewCache.set(url, { title: '', text: '', error: true });
+        }
+      }
+    }
+
+    const cached = bodySearchCache.get(url);
+
+    if (cached.error || !cached.text) {
+      rawResults.push({
+        url, title: cached.title, error: true,
+        inc: [], exc: [], incTotal: 0, excTotal: 0, score: -Infinity, _origIdx: done,
+      });
+    } else {
+      const scores = computeSearchScore(cached.text, includeKws, excludeKws);
+      rawResults.push({ url, title: cached.title, error: false, ...scores, _origIdx: done });
+    }
+
+    done++;
+    bodySearchStatus.textContent = `${done} / ${targetUrls.length} 完了`;
+  }
+
+  // スコア降順 → 検索ヒット降順 → 元の並び順
+  const sortedResults = [...rawResults].sort((a, b) => {
+    if (a.error !== b.error) return a.error ? 1 : -1;
+    if (b.score !== a.score) return b.score - a.score;
+    if (b.incTotal !== a.incTotal) return b.incTotal - a.incTotal;
+    return a._origIdx - b._origIdx;
+  });
+
+  // 結果を描画
+  bodySearchResultList.innerHTML = '';
+  if (!sortedResults.length) {
+    const msg = document.createElement('p');
+    msg.className   = 'preview-empty-msg';
+    msg.textContent = '検索結果がありません';
+    bodySearchResultList.appendChild(msg);
+  } else {
+    sortedResults.forEach(r => bodySearchResultList.appendChild(buildSearchResultCard(r)));
+  }
+
+  // ボタンを再有効化
+  bodySearchPageBtn.disabled    = false;
+  bodySearchCheckedBtn.disabled = false;
+
+  const matchCount = sortedResults.filter(r => !r.error && r.incTotal > 0).length;
+  bodySearchStatus.textContent = `✅ ${done} 件を検索 — マッチ ${matchCount} 件`;
+  setTimeout(() => { bodySearchStatus.textContent = ''; }, 5000);
 }
