@@ -4,13 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NotebookLM 資料化ツール</title>
-  <link rel="stylesheet" href="style.css?v=phase11">
+  <link rel="stylesheet" href="style.css?v=phase11-1">
 </head>
 <body>
 
   <header class="app-header">
     <h1>📄 NotebookLM 資料化ツール</h1>
-    <p class="app-subtitle">Phase 11 — 本文検索スコア</p>
+    <p class="app-subtitle">Phase 11.1 — 本文検索スコアを主導線に整理</p>
   </header>
 
   <main class="app-main">
@@ -211,8 +211,8 @@
         <span id="sitemap-url-count" class="char-count"></span>
       </div>
 
-      <!-- Phase 9.2：絞り込みエリア（検索・除外キーワード） -->
-      <div class="sitemap-filter-area">
+      <!-- Phase 9.2：絞り込みエリア（URL検索・除外キーワード）— Phase 11.1 で非表示化 -->
+      <div class="sitemap-filter-area" hidden>
         <p class="sitemap-filter-title">URL候補を絞り込む</p>
 
         <div class="sitemap-filter-field">
@@ -247,6 +247,61 @@
 
         <p class="sitemap-filter-delim-hint">スペース・カンマ・読点で複数指定できます</p>
         <span id="sitemap-display-count" class="sitemap-display-count" hidden></span>
+      </div>
+
+      <!-- Phase 11：本文検索スコア（主導線 — Phase 11.1 で冒頭へ移動） -->
+      <div class="body-search-section">
+        <p class="input-label">本文検索スコア</p>
+
+        <div class="body-search-fields">
+          <div class="body-search-field">
+            <label class="sitemap-filter-fieldlabel" for="body-search-include">本文検索キーワード</label>
+            <input
+              type="search"
+              id="body-search-include"
+              class="sitemap-filter-input"
+              placeholder="例：カルダモン シナモン クローブ"
+              autocomplete="off"
+              autocorrect="off"
+              autocapitalize="off"
+              spellcheck="false"
+            >
+          </div>
+          <div class="body-search-field">
+            <label class="sitemap-filter-fieldlabel" for="body-search-exclude">本文除外キーワード</label>
+            <input
+              type="search"
+              id="body-search-exclude"
+              class="sitemap-filter-input sitemap-filter-input--exclude"
+              placeholder="例：通販 商品一覧 カート"
+              autocomplete="off"
+              autocorrect="off"
+              autocapitalize="off"
+              spellcheck="false"
+            >
+          </div>
+          <p class="sitemap-filter-delim-hint body-search-or-hint">表記ゆれも複数入力できます（OR検索）：しょうゆ 醤油 しょう油</p>
+          <p class="sitemap-filter-delim-hint">スペース・カンマ・読点で区切り　最大10件まで取得します</p>
+        </div>
+
+        <div class="body-search-btn-bar">
+          <button type="button" id="body-search-page-btn" class="select-ctrl-btn">
+            🔍 このページの本文を検索
+          </button>
+          <button type="button" id="body-search-checked-btn" class="select-ctrl-btn">
+            🔍 選択中の本文を検索
+          </button>
+          <span id="body-search-status" class="fetch-titles-status"></span>
+        </div>
+
+        <!-- 本文検索 結果エリア -->
+        <div id="body-search-result-area" class="body-search-result-area" hidden>
+          <div class="body-search-result-header">
+            <span class="body-search-result-title">🔍 本文検索結果</span>
+            <button type="button" id="body-search-close-btn" class="preview-close-btn">✕ 閉じる</button>
+          </div>
+          <div id="body-search-result-list" class="body-search-result-list"></div>
+        </div>
       </div>
 
       <!-- Phase 9.4：大量候補時の案内（51件以上のとき表示） -->
@@ -323,60 +378,6 @@
         </div>
       </div>
 
-      <!-- Phase 11：本文検索スコア -->
-      <div class="body-search-section">
-        <p class="input-label">本文検索スコア</p>
-
-        <div class="body-search-fields">
-          <div class="body-search-field">
-            <label class="sitemap-filter-fieldlabel" for="body-search-include">本文検索キーワード</label>
-            <input
-              type="search"
-              id="body-search-include"
-              class="sitemap-filter-input"
-              placeholder="例：カルダモン シナモン クローブ"
-              autocomplete="off"
-              autocorrect="off"
-              autocapitalize="off"
-              spellcheck="false"
-            >
-          </div>
-          <div class="body-search-field">
-            <label class="sitemap-filter-fieldlabel" for="body-search-exclude">本文除外キーワード</label>
-            <input
-              type="search"
-              id="body-search-exclude"
-              class="sitemap-filter-input sitemap-filter-input--exclude"
-              placeholder="例：通販 商品一覧 カート"
-              autocomplete="off"
-              autocorrect="off"
-              autocapitalize="off"
-              spellcheck="false"
-            >
-          </div>
-          <p class="sitemap-filter-delim-hint">スペース・カンマ・読点で複数指定できます　最大10件まで取得します</p>
-        </div>
-
-        <div class="body-search-btn-bar">
-          <button type="button" id="body-search-page-btn" class="select-ctrl-btn">
-            🔍 このページの本文を検索
-          </button>
-          <button type="button" id="body-search-checked-btn" class="select-ctrl-btn">
-            🔍 選択中の本文を検索
-          </button>
-          <span id="body-search-status" class="fetch-titles-status"></span>
-        </div>
-
-        <!-- 本文検索 結果エリア -->
-        <div id="body-search-result-area" class="body-search-result-area" hidden>
-          <div class="body-search-result-header">
-            <span class="body-search-result-title">🔍 本文検索結果</span>
-            <button type="button" id="body-search-close-btn" class="preview-close-btn">✕ 閉じる</button>
-          </div>
-          <div id="body-search-result-list" class="body-search-result-list"></div>
-        </div>
-      </div>
-
       <!-- 反映ボタン（フィルター済みかつチェック済みURLを資料パック欄へ） -->
       <button type="button" id="to-pack-btn" class="fetch-btn sitemap-to-pack-btn">
         📤 選択したURLを資料パック欄へ反映
@@ -399,6 +400,6 @@
 
   </main>
 
-  <script src="app.js?v=phase11"></script>
+  <script src="app.js?v=phase11-1"></script>
 </body>
 </html>

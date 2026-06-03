@@ -3002,22 +3002,34 @@ async function handleBodySearch(mode) {
     return a._origIdx - b._origIdx;
   });
 
+  // Phase 11.1：本文検索キーワードがある場合は検索ヒット0件のカードを非表示にする（OR検索）
+  // 除外キーワードのみの場合は全件表示（除外ヒット確認目的）
+  const displayResults = sortedResults.filter(r => {
+    if (r.error) return true;
+    if (includeKws.length > 0 && r.incTotal === 0) return false;
+    return true;
+  });
+
   // 結果を描画
   bodySearchResultList.innerHTML = '';
-  if (!sortedResults.length) {
+  if (!displayResults.length) {
     const msg = document.createElement('p');
     msg.className   = 'preview-empty-msg';
-    msg.textContent = '検索結果がありません';
+    msg.textContent = includeKws.length > 0
+      ? '本文検索に一致するページはありません'
+      : '結果がありません';
     bodySearchResultList.appendChild(msg);
   } else {
-    sortedResults.forEach(r => bodySearchResultList.appendChild(buildSearchResultCard(r)));
+    displayResults.forEach(r => bodySearchResultList.appendChild(buildSearchResultCard(r)));
   }
 
   // ボタンを再有効化
   bodySearchPageBtn.disabled    = false;
   bodySearchCheckedBtn.disabled = false;
 
-  const matchCount = sortedResults.filter(r => !r.error && r.incTotal > 0).length;
-  bodySearchStatus.textContent = `✅ ${done} 件を検索 — マッチ ${matchCount} 件`;
+  const matchCount = displayResults.filter(r => !r.error && r.incTotal > 0).length;
+  const hiddenCount = sortedResults.length - displayResults.length;
+  const hiddenNote  = hiddenCount > 0 ? `（${hiddenCount}件は非表示）` : '';
+  bodySearchStatus.textContent = `✅ ${done} 件を検索 — マッチ ${matchCount} 件${hiddenNote}`;
   setTimeout(() => { bodySearchStatus.textContent = ''; }, 5000);
 }
