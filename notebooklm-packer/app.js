@@ -98,13 +98,10 @@ const previewStatus      = document.getElementById('preview-status');
 const previewResultArea  = document.getElementById('preview-result-area');
 const previewResultList  = document.getElementById('preview-result-list');
 const previewCloseBtn    = document.getElementById('preview-close-btn');
-// Phase 10.2 追加（下側操作バー）
+// Phase 10.2 追加（下側操作バー — Phase 11.3 で全選択/全解除のみに整理）
 const sitemapSelectVisibleBtnBottom   = document.getElementById('sitemap-select-visible-btn-bottom');
 const sitemapDeselectVisibleBtnBottom = document.getElementById('sitemap-deselect-visible-btn-bottom');
-const fetchTitlesBtnBottom            = document.getElementById('fetch-titles-btn-bottom');
-const previewVisibleBtnBottom         = document.getElementById('preview-visible-btn-bottom');
-// Phase 10.3 追加（プレビュー結果フッター）
-const previewNextBtn        = document.getElementById('preview-next-btn');
+// Phase 10.3 追加（プレビュー結果フッター — Phase 11.3 で閉じるのみに整理）
 const previewCloseBottomBtn = document.getElementById('preview-close-bottom-btn');
 // Phase 11 追加（本文検索スコア）
 const bodySearchIncludeInput = document.getElementById('body-search-include');
@@ -138,14 +135,10 @@ const previewCache = new Map();          // url → { title: string, text: strin
 // Phase 11 追加
 const bodySearchCache = new Map();       // url → { title: string, text: string, error: boolean }（フル本文）
 
-/** Phase 9.1：タイトル取得の上限件数 */
-const TITLE_FETCH_LIMIT = 20;
-/** Phase 10：本文プレビューの1回の上限件数 */
-const PREVIEW_FETCH_LIMIT = 10;
 /** Phase 10：本文プレビューの表示文字数 */
 const PREVIEW_TEXT_LENGTH = 600;
-/** Phase 11：本文検索の1回の上限件数 */
-const BODY_SEARCH_LIMIT = 10;
+/** Phase 11.3：チェック済みURL操作の上限件数（超過時は警告を出して処理しない） */
+const CHECKED_OP_LIMIT = 50;
 
 // -----------------------------------------------
 // イベントリスナー — 単一URL
@@ -193,13 +186,10 @@ fetchTitlesBtn           .addEventListener('click', fetchVisibleTitles);
 previewVisibleBtn.addEventListener('click', () => startBodyPreview('visible'));
 previewCheckedBtn.addEventListener('click', () => startBodyPreview('checked'));
 previewCloseBtn  .addEventListener('click', closePreviewPanel);
-// Phase 10.2：下側操作バー（null ガード付き — HTML がキャッシュ古い環境でも TypeError を防ぐ）
+// Phase 10.2：下側操作バー（Phase 11.3 で全選択/全解除のみ）
 if (sitemapSelectVisibleBtnBottom)   sitemapSelectVisibleBtnBottom  .addEventListener('click', () => setSitemapVisibleCheck(true));
 if (sitemapDeselectVisibleBtnBottom) sitemapDeselectVisibleBtnBottom.addEventListener('click', () => setSitemapVisibleCheck(false));
-if (fetchTitlesBtnBottom)            fetchTitlesBtnBottom           .addEventListener('click', fetchVisibleTitles);
-if (previewVisibleBtnBottom)         previewVisibleBtnBottom        .addEventListener('click', () => startBodyPreview('visible'));
-// Phase 10.3：プレビュー結果フッター（null ガード付き）
-if (previewNextBtn)        previewNextBtn       .addEventListener('click', () => startBodyPreview('visible'));
+// Phase 10.3：プレビュー結果フッター（閉じるのみ）
 if (previewCloseBottomBtn) previewCloseBottomBtn.addEventListener('click', closePreviewPanel);
 // Phase 11：本文検索スコア
 if (bodySearchPageBtn)    bodySearchPageBtn   .addEventListener('click', () => handleBodySearch('page'));
@@ -1665,17 +1655,10 @@ function extractPageTitle(html) {
 }
 
 /**
- * 現在ページの URL 候補のうち titleCache に未登録の先頭 TITLE_FETCH_LIMIT 件を
- * Cloudflare Worker 経由で順番に取得し、titleCache に保存して各アイテムに表示する。
- * 取得済みの URL はスキップし、未取得分を 20 件ずつ段階的に取れるようにする。（Phase 9.4）
- *
- * 段階的取得の流れ:
- *   1回目: 未取得 50件 → 先頭 20件を取得 → ボタン「次の20件のタイトルを取得」
- *   2回目: 未取得 30件 → 先頭 20件を取得 → ボタン「残り10件のタイトルを取得」
- *   3回目: 未取得 10件 → 残り 10件を取得 → ボタン無効「✅ 表示中のタイトル取得済み」
+ * 現在ページの URL 候補のうち titleCache に未登録のものをすべて取得する。（Phase 11.3）
+ * 取得済みの URL はスキップ（再取得しない）。1件ずつ順番に取得。最大 SITEMAP_PAGE_SIZE 件。
  */
 async function fetchVisibleTitles() {
-  // 現在ページの URL 一覧（filteredSitemapUrls の現ページ分）
   const start    = sitemapCurrentPage * SITEMAP_PAGE_SIZE;
   const end      = start + SITEMAP_PAGE_SIZE;
   const pageUrls = filteredSitemapUrls.slice(start, end);
@@ -1686,17 +1669,13 @@ async function fetchVisibleTitles() {
     return;
   }
 
-  // titleCache 未登録のものだけを対象にし、先頭 TITLE_FETCH_LIMIT 件に絞る
-  const pendingUrls = pageUrls.filter(url => !titleCache.has(url));
-  const targetUrls  = pendingUrls.slice(0, TITLE_FETCH_LIMIT);
+  const targetUrls = pageUrls.filter(url => !titleCache.has(url));
 
   if (!targetUrls.length) {
-    // 全件取得済み（ボタン状態を同期して終了）
     updateFetchTitlesBtn();
     return;
   }
 
-  // DOM アイテムの Map を作成（URL → item 要素）
   const urlToItem = new Map();
   sitemapUrlCheckboxes.querySelectorAll('.sitemap-url-item').forEach(item => {
     const cb = item.querySelector('.sitemap-url-check');
@@ -1704,14 +1683,13 @@ async function fetchVisibleTitles() {
   });
 
   fetchTitlesBtn.disabled = true;
-  fetchTitlesBtnBottom.disabled = true;  // Phase 10.2：下側ボタンも同期
   let done = 0;
 
   for (const url of targetUrls) {
     const item    = urlToItem.get(url);
     const titleEl = item ? item.querySelector('.sitemap-url-title') : null;
 
-    fetchTitlesStatus.textContent = `${done + 1} / ${targetUrls.length} 取得中...`;
+    fetchTitlesStatus.textContent = `タイトル取得中 ${done + 1} / ${targetUrls.length}`;
 
     if (titleEl) {
       titleEl.textContent     = '取得中...';
@@ -1723,7 +1701,7 @@ async function fetchVisibleTitles() {
     try {
       const html  = await fetchHtmlFromWorker(url);
       const title = extractPageTitle(html);
-      titleCache.set(url, title || '');  // '' = タイトル取得不可
+      titleCache.set(url, title || '');
       if (titleEl) {
         titleEl.textContent = title || 'タイトル取得不可';
         titleEl.className   = title
@@ -1732,7 +1710,7 @@ async function fetchVisibleTitles() {
         if (item) item.dataset.titleState = 'done';
       }
     } catch {
-      titleCache.set(url, '');           // '' = エラー
+      titleCache.set(url, '');
       if (titleEl) {
         titleEl.textContent = 'タイトル取得不可';
         titleEl.className   = 'sitemap-url-title sitemap-url-title--error';
@@ -1741,10 +1719,8 @@ async function fetchVisibleTitles() {
     }
 
     done++;
-    fetchTitlesStatus.textContent = `${done} / ${targetUrls.length} 完了`;
   }
 
-  // ボタン文言を残り件数に応じて更新する
   updateFetchTitlesBtn();
 
   if (done > 0) {
@@ -1754,53 +1730,20 @@ async function fetchVisibleTitles() {
 }
 
 /**
- * 現在ページのタイトル取得状況に応じてボタン文言・有効状態を更新する。（Phase 9.4）
- *
- * 状態遷移:
- *   未取得 0件（全件取得済み）  → disabled「✅ 表示中のタイトル取得済み」
- *   取得済み 0件（初回）        → enabled 「🔍 表示中のタイトルを取得」
- *   取得済み > 0、未取得 > 20  → enabled 「🔍 次の20件のタイトルを取得」
- *   取得済み > 0、未取得 ≤ 20  → enabled 「🔍 残りN件のタイトルを取得」
+ * 現在ページのタイトル取得状況に応じてボタン文言・有効状態を更新する。（Phase 11.3）
+ * 全件取得済みなら disabled、それ以外は enabled。
  */
 function updateFetchTitlesBtn() {
   const start    = sitemapCurrentPage * SITEMAP_PAGE_SIZE;
   const end      = start + SITEMAP_PAGE_SIZE;
   const pageUrls = filteredSitemapUrls.slice(start, end);
 
-  let disabled, text;
+  const allFetched = pageUrls.length > 0 && pageUrls.every(url => titleCache.has(url));
 
-  if (!pageUrls.length) {
-    // 候補なし：ボタンはデフォルト文言・有効に戻す
-    disabled = false;
-    text     = '🔍 現在ページのタイトルを取得';
-  } else {
-    const fetchedCount = pageUrls.filter(url => titleCache.has(url)).length;
-    const pendingCount = pageUrls.length - fetchedCount;
-
-    if (pendingCount === 0) {
-      // 全件取得済み
-      disabled = true;
-      text     = '✅ 現在ページのタイトル取得済み';
-    } else if (fetchedCount === 0) {
-      // まだ 1 件も取得していない（初回）
-      disabled = false;
-      text     = '🔍 現在ページのタイトルを取得';
-    } else if (pendingCount <= TITLE_FETCH_LIMIT) {
-      // 残りが TITLE_FETCH_LIMIT 以下
-      disabled = false;
-      text     = `🔍 現在ページの残り${pendingCount}件のタイトルを取得`;
-    } else {
-      // まだ TITLE_FETCH_LIMIT 件以上残っている
-      disabled = false;
-      text     = `🔍 現在ページの次の${TITLE_FETCH_LIMIT}件のタイトルを取得`;
-    }
-  }
-
-  fetchTitlesBtn.disabled       = disabled;
-  fetchTitlesBtn.textContent    = text;
-  // Phase 10.2：下側ボタンも同期
-  fetchTitlesBtnBottom.disabled    = disabled;
-  fetchTitlesBtnBottom.textContent = text;
+  fetchTitlesBtn.disabled    = allFetched;
+  fetchTitlesBtn.textContent = allFetched
+    ? '✅ 現在ページのタイトル取得済み'
+    : '🔍 現在ページのタイトルを取得';
 }
 
 // ===============================================
@@ -1808,17 +1751,10 @@ function updateFetchTitlesBtn() {
 // ===============================================
 
 /**
- * 本文プレビューを開始する。
+ * 本文立ち読みを開始する（モード振り分け）。（Phase 11.3）
  *
- * mode = 'visible' : 現在ページの先頭 PREVIEW_FETCH_LIMIT 件
- * mode = 'checked' : チェック済みURLの先頭 PREVIEW_FETCH_LIMIT 件
- *                    （10件を超えている場合は警告メッセージを表示）
- *
- * 安全設計:
- *   - 1件ずつ逐次取得（同時アクセスなし）
- *   - previewCache に登録済みのURLはスキップ（重複取得なし）
- *   - 最大 PREVIEW_FETCH_LIMIT (10) 件で止まる
- *   - Cloudflare Worker 変更なし・資料パック処理に影響しない
+ * mode = 'visible' : 現在ページのURL全件（最大 SITEMAP_PAGE_SIZE = 50 件）
+ * mode = 'checked' : チェック済みURL全件（CHECKED_OP_LIMIT 超えは警告して処理しない）
  *
  * @param {'visible'|'checked'} mode
  */
@@ -1835,11 +1771,8 @@ async function startBodyPreview(mode) {
 }
 
 /**
- * 「表示中の本文をプレビュー」— 段階取得版。（Phase 10.1）
- *
- * 現在ページの URL を対象に、previewCache 未登録の先頭 PREVIEW_FETCH_LIMIT 件を取得。
- * パネルが開いている場合は追記（アコーディオン蓄積）、閉じている場合は新規に開く。
- * ボタン文言は取得後に updatePreviewVisibleBtn() で更新する。
+ * 「現在ページを立ち読み」— 現在ページの未取得URLをすべて取得する。（Phase 11.3）
+ * previewCache 登録済みはスキップ。1件ずつ順番に取得。最大 SITEMAP_PAGE_SIZE 件。
  */
 async function handlePreviewVisible() {
   const start    = sitemapCurrentPage * SITEMAP_PAGE_SIZE;
@@ -1852,11 +1785,9 @@ async function handlePreviewVisible() {
     return;
   }
 
-  const pendingUrls = pageUrls.filter(url => !previewCache.has(url));
-  const targetUrls  = pendingUrls.slice(0, PREVIEW_FETCH_LIMIT);
+  const targetUrls = pageUrls.filter(url => !previewCache.has(url));
 
   if (!targetUrls.length) {
-    // 全件取得済み：パネルが閉じていれば取得済み結果で開く
     if (previewResultArea.hidden) {
       openPreviewPanel(pageUrls.filter(url => previewCache.has(url)));
     }
@@ -1866,7 +1797,6 @@ async function handlePreviewVisible() {
     return;
   }
 
-  // パネルが閉じていれば開く、開いていれば追記
   if (previewResultArea.hidden) {
     previewResultArea.hidden = false;
     previewResultList.innerHTML = '';
@@ -1878,7 +1808,7 @@ async function handlePreviewVisible() {
   let done = 0;
 
   for (const url of targetUrls) {
-    previewStatus.textContent = `${done + 1} / ${targetUrls.length} 取得中...`;
+    previewStatus.textContent = `立ち読み取得中 ${done + 1} / ${targetUrls.length}`;
     try {
       const html  = await fetchHtmlFromWorker(url);
       const title = extractPageTitle(html);
@@ -1893,7 +1823,6 @@ async function handlePreviewVisible() {
     }
     updatePreviewItemDom(url);
     done++;
-    previewStatus.textContent = `${done} / ${targetUrls.length} 完了`;
   }
 
   setPreviewBtnsDisabled(false);
@@ -1904,10 +1833,8 @@ async function handlePreviewVisible() {
 }
 
 /**
- * 「選択中の本文をプレビュー」— 段階取得版。（Phase 10.1）
- *
- * チェック済み URL を対象に、previewCache 未登録の先頭 PREVIEW_FETCH_LIMIT 件を取得。
- * 10件超えは警告メッセージを出してから未取得先頭10件を処理する。
+ * 「チェック済みを立ち読み」— チェック済みURLの未取得をすべて取得する。（Phase 11.3）
+ * CHECKED_OP_LIMIT 超えは警告を出して処理しない。previewCache 登録済みはスキップ。
  */
 async function handlePreviewChecked() {
   const checkedUrls = filteredSitemapUrls.filter(url => checkedSitemapUrls.has(url));
@@ -1918,15 +1845,14 @@ async function handlePreviewChecked() {
     return;
   }
 
-  const pendingUrls = checkedUrls.filter(url => !previewCache.has(url));
-  const targetUrls  = pendingUrls.slice(0, PREVIEW_FETCH_LIMIT);
-
-  // 未取得が10件超えは警告（取得は先頭10件のみ）
-  if (pendingUrls.length > PREVIEW_FETCH_LIMIT) {
+  if (checkedUrls.length > CHECKED_OP_LIMIT) {
     previewStatus.textContent =
-      `⚠️ チェック済み ${checkedUrls.length} 件のうち未取得の先頭 ${PREVIEW_FETCH_LIMIT} 件を立ち読みします`;
-    setTimeout(() => { previewStatus.textContent = ''; }, 5000);
+      `⚠️ チェック済みURLが ${checkedUrls.length} 件あります。${CHECKED_OP_LIMIT}件以内に減らしてから実行してください`;
+    setTimeout(() => { previewStatus.textContent = ''; }, 6000);
+    return;
   }
+
+  const targetUrls = checkedUrls.filter(url => !previewCache.has(url));
 
   if (!targetUrls.length) {
     if (previewResultArea.hidden) {
@@ -1949,7 +1875,7 @@ async function handlePreviewChecked() {
   let done = 0;
 
   for (const url of targetUrls) {
-    previewStatus.textContent = `${done + 1} / ${targetUrls.length} 取得中...`;
+    previewStatus.textContent = `立ち読み取得中 ${done + 1} / ${targetUrls.length}`;
     try {
       const html  = await fetchHtmlFromWorker(url);
       const title = extractPageTitle(html);
@@ -1964,7 +1890,6 @@ async function handlePreviewChecked() {
     }
     updatePreviewItemDom(url);
     done++;
-    previewStatus.textContent = `${done} / ${targetUrls.length} 完了`;
   }
 
   setPreviewBtnsDisabled(false);
@@ -2177,98 +2102,76 @@ function updatePreviewItemDom(url) {
 }
 
 /**
- * 本文プレビューボタン 2 つをまとめて有効 / 無効にする。
+ * 本文立ち読みボタン 2 つをまとめて有効 / 無効にする。（Phase 11.3）
  * @param {boolean} disabled
  */
 function setPreviewBtnsDisabled(disabled) {
-  previewVisibleBtn.disabled       = disabled;
-  previewCheckedBtn.disabled       = disabled;
-  previewVisibleBtnBottom.disabled = disabled;          // Phase 10.2：URL一覧下ボタンも同期
-  if (previewNextBtn) previewNextBtn.disabled = disabled;  // Phase 10.3：フッターボタンも同期
+  previewVisibleBtn.disabled = disabled;
+  previewCheckedBtn.disabled = disabled;
 }
 
 /**
- * 現在ページのプレビュー取得状況・パネル開閉に応じてボタン文言・有効状態を更新する。（Phase 10.5 改訂）
- *
- * 状態遷移（top / bottom ボタン）:
- *   URL 0件                          → enabled 「📖 このページの本文をプレビュー」
- *   未取得あり（初回）               → enabled 「📖 このページの本文をプレビュー」
- *   未取得あり（2回目以降、>10件残） → enabled 「📖 このページの次のN件をプレビュー」
- *   未取得あり（残りN件≤10）        → enabled 「📖 このページの残りN件をプレビュー」
- *   全件取得済み + パネル閉じ        → enabled 「📖 このページの本文プレビューを表示」（再表示）
- *   全件取得済み + パネル開き        → disabled「✅ このページの本文プレビュー取得済み」
- *
- * フッターボタン（previewNextBtn）はパネル内にあるため常に「パネル開き」文脈で算出する。
- */
-function updatePreviewVisibleBtn() {
-  const start       = sitemapCurrentPage * SITEMAP_PAGE_SIZE;
-  const end         = start + SITEMAP_PAGE_SIZE;
-  const pageUrls    = filteredSitemapUrls.slice(start, end);
-  const isPanelOpen = !previewResultArea.hidden;
-  const fetchedCount = pageUrls.filter(url => previewCache.has(url)).length;
-  const pendingCount = pageUrls.length - fetchedCount;
-
-  // パネル開閉を引数に取るヘルパー（top/bottom と footer で共有）
-  const calcState = (panelOpen) => {
-    if (!pageUrls.length) {
-      return { disabled: false, text: '📖 現在ページを立ち読み' };
-    }
-    if (pendingCount === 0) {
-      // 全件取得済み：パネルが閉じているなら再表示ボタンとして有効にする
-      return panelOpen
-        ? { disabled: true,  text: '✅ 現在ページの立ち読み済み' }
-        : { disabled: false, text: '📖 現在ページの立ち読みを表示' };
-    }
-    if (fetchedCount === 0) {
-      return { disabled: false, text: '📖 現在ページを立ち読み' };
-    }
-    if (pendingCount <= PREVIEW_FETCH_LIMIT) {
-      return { disabled: false, text: `📖 現在ページの残り${pendingCount}件を立ち読み` };
-    }
-    return { disabled: false, text: `📖 現在ページの次の${PREVIEW_FETCH_LIMIT}件を立ち読み` };
-  };
-
-  const { disabled, text } = calcState(isPanelOpen);
-  previewVisibleBtn.disabled          = disabled;
-  previewVisibleBtn.textContent       = text;
-  // Phase 10.2：URL一覧下ボタンも同期
-  previewVisibleBtnBottom.disabled    = disabled;
-  previewVisibleBtnBottom.textContent = text;
-  // Phase 10.3：フッターボタンはパネル内なので常に「開いた状態」文脈で算出
-  if (previewNextBtn) {
-    const footer = calcState(true);
-    previewNextBtn.disabled    = footer.disabled;
-    previewNextBtn.textContent = footer.text;
-  }
-}
-
-/**
- * 選択中URLのプレビュー取得状況・パネル開閉に応じてボタン文言・有効状態を更新する。（Phase 10.5 改訂）
+ * 現在ページの立ち読み取得状況・パネル開閉に応じてボタン文言・有効状態を更新する。（Phase 11.3）
  *
  * 状態遷移:
- *   選択 0件                         → disabled「URLを選択するとプレビューできます」
- *   選択あり、未取得あり（初回）     → enabled 「📖 選択中の本文をプレビュー」
- *   選択あり、未取得あり（>10件残）  → enabled 「📖 選択中の次のN件をプレビュー」
- *   選択あり、未取得あり（残りN件≤10）→ enabled 「📖 選択中の残りN件をプレビュー」
- *   全件取得済み + パネル閉じ        → enabled 「📖 選択中の本文プレビューを表示」（再表示）
- *   全件取得済み + パネル開き        → disabled「✅ 選択中の本文プレビュー取得済み」
+ *   未取得あり → enabled 「📖 現在ページを立ち読み」
+ *   全件取得済み + パネル閉じ → enabled 「📖 現在ページの立ち読みを表示」
+ *   全件取得済み + パネル開き → disabled「✅ 現在ページの立ち読み済み」
+ */
+function updatePreviewVisibleBtn() {
+  const start      = sitemapCurrentPage * SITEMAP_PAGE_SIZE;
+  const end        = start + SITEMAP_PAGE_SIZE;
+  const pageUrls   = filteredSitemapUrls.slice(start, end);
+  const isPanelOpen = !previewResultArea.hidden;
+  const allFetched  = pageUrls.length > 0 && pageUrls.every(url => previewCache.has(url));
+
+  let disabled, text;
+  if (allFetched) {
+    if (isPanelOpen) {
+      disabled = true;
+      text     = '✅ 現在ページの立ち読み済み';
+    } else {
+      disabled = false;
+      text     = '📖 現在ページの立ち読みを表示';
+    }
+  } else {
+    disabled = false;
+    text     = '📖 現在ページを立ち読み';
+  }
+
+  previewVisibleBtn.disabled    = disabled;
+  previewVisibleBtn.textContent = text;
+}
+
+/**
+ * チェック済みURLの立ち読み取得状況・パネル開閉に応じてボタン文言・有効状態を更新する。（Phase 11.3）
+ *
+ * 状態遷移:
+ *   チェック 0件              → disabled「URLをチェックすると立ち読みできます」
+ *   チェック > CHECKED_OP_LIMIT → disabled「⚠️ チェック済みがN件あります（上限50件）」
+ *   未取得あり                → enabled 「📖 チェック済みを立ち読み」
+ *   全件取得済み + パネル閉じ → enabled 「📖 チェック済みの立ち読みを表示」
+ *   全件取得済み + パネル開き → disabled「✅ チェック済みの立ち読み済み」
  */
 function updatePreviewCheckedBtn() {
   const checkedUrls = filteredSitemapUrls.filter(url => checkedSitemapUrls.has(url));
   const isPanelOpen = !previewResultArea.hidden;
 
   if (!checkedUrls.length) {
-    // Phase 10.5：0件なら無効化して案内文を表示（押せそうに見えないようにする）
     previewCheckedBtn.disabled    = true;
     previewCheckedBtn.textContent = 'URLをチェックすると立ち読みできます';
     return;
   }
 
-  const fetchedCount = checkedUrls.filter(url => previewCache.has(url)).length;
-  const pendingCount = checkedUrls.length - fetchedCount;
+  if (checkedUrls.length > CHECKED_OP_LIMIT) {
+    previewCheckedBtn.disabled    = true;
+    previewCheckedBtn.textContent = `⚠️ チェック済みが${checkedUrls.length}件あります（上限${CHECKED_OP_LIMIT}件）`;
+    return;
+  }
 
-  if (pendingCount === 0) {
-    // 全件取得済み：パネルが閉じているなら再表示ボタンとして有効にする
+  const allFetched = checkedUrls.every(url => previewCache.has(url));
+
+  if (allFetched) {
     if (isPanelOpen) {
       previewCheckedBtn.disabled    = true;
       previewCheckedBtn.textContent = '✅ チェック済みの立ち読み済み';
@@ -2276,15 +2179,9 @@ function updatePreviewCheckedBtn() {
       previewCheckedBtn.disabled    = false;
       previewCheckedBtn.textContent = '📖 チェック済みの立ち読みを表示';
     }
-  } else if (fetchedCount === 0) {
-    previewCheckedBtn.disabled    = false;
-    previewCheckedBtn.textContent = '📖 チェック済みを立ち読み';
-  } else if (pendingCount <= PREVIEW_FETCH_LIMIT) {
-    previewCheckedBtn.disabled    = false;
-    previewCheckedBtn.textContent = `📖 チェック済みの残り${pendingCount}件を立ち読み`;
   } else {
     previewCheckedBtn.disabled    = false;
-    previewCheckedBtn.textContent = `📖 チェック済みの次の${PREVIEW_FETCH_LIMIT}件を立ち読み`;
+    previewCheckedBtn.textContent = '📖 チェック済みを立ち読み';
   }
 }
 
@@ -2892,10 +2789,10 @@ function closeBodySearchPanel() {
 }
 
 /**
- * 本文検索を実行する。
- * mode='page'    → 現在ページのURLのうち、選択済みがあればそれを、なければ先頭10件
- * mode='checked' → フィルター済みURLのうちチェック済みの先頭10件
- * bodySearchCache を使って同一URLの二重取得を避ける。
+ * 本文検索を実行する。（Phase 11.3）
+ * mode='page'    → 現在ページのURL全件（最大 SITEMAP_PAGE_SIZE 件）
+ * mode='checked' → チェック済みURL全件（CHECKED_OP_LIMIT 超えは警告して処理しない）
+ * bodySearchCache を使って同一URLの二重取得を避ける。1件ずつ順番に取得。
  * @param {'page'|'checked'} mode
  */
 async function handleBodySearch(mode) {
@@ -2912,27 +2809,29 @@ async function handleBodySearch(mode) {
   // 対象URLを決定する
   let targetUrls;
   if (mode === 'page') {
-    const start         = sitemapCurrentPage * SITEMAP_PAGE_SIZE;
-    const end           = start + SITEMAP_PAGE_SIZE;
-    const pageUrls      = filteredSitemapUrls.slice(start, end);
-    const checkedOnPage = pageUrls.filter(url => checkedSitemapUrls.has(url));
-    // 選択済みがあればそれを優先、なければページ先頭から
-    targetUrls = (checkedOnPage.length > 0 ? checkedOnPage : pageUrls)
-      .slice(0, BODY_SEARCH_LIMIT);
-    if (!targetUrls.length) {
+    const start    = sitemapCurrentPage * SITEMAP_PAGE_SIZE;
+    const end      = start + SITEMAP_PAGE_SIZE;
+    const pageUrls = filteredSitemapUrls.slice(start, end);
+    if (!pageUrls.length) {
       bodySearchStatus.textContent = '❌ 現在ページに URL がありません';
       setTimeout(() => { bodySearchStatus.textContent = ''; }, 3000);
       return;
     }
+    targetUrls = pageUrls;
   } else {
-    targetUrls = filteredSitemapUrls
-      .filter(url => checkedSitemapUrls.has(url))
-      .slice(0, BODY_SEARCH_LIMIT);
-    if (!targetUrls.length) {
-      bodySearchStatus.textContent = '⚠️ URLを選択してください';
+    const allChecked = filteredSitemapUrls.filter(url => checkedSitemapUrls.has(url));
+    if (!allChecked.length) {
+      bodySearchStatus.textContent = '⚠️ URLをチェックしてください';
       setTimeout(() => { bodySearchStatus.textContent = ''; }, 3000);
       return;
     }
+    if (allChecked.length > CHECKED_OP_LIMIT) {
+      bodySearchStatus.textContent =
+        `⚠️ チェック済みURLが ${allChecked.length} 件あります。${CHECKED_OP_LIMIT}件以内に減らしてから実行してください`;
+      setTimeout(() => { bodySearchStatus.textContent = ''; }, 6000);
+      return;
+    }
+    targetUrls = allChecked;
   }
 
   // 結果パネルを開いてローディング表示
@@ -2957,7 +2856,7 @@ async function handleBodySearch(mode) {
   const rawResults = [];
 
   for (const url of targetUrls) {
-    bodySearchStatus.textContent = `${done + 1} / ${targetUrls.length} 取得中...`;
+    bodySearchStatus.textContent = `本文検索中 ${done + 1} / ${targetUrls.length}`;
 
     // キャッシュ未登録の場合のみ取得（フル本文を bodySearchCache に保存）
     if (!bodySearchCache.has(url)) {
@@ -2991,7 +2890,6 @@ async function handleBodySearch(mode) {
     }
 
     done++;
-    bodySearchStatus.textContent = `${done} / ${targetUrls.length} 完了`;
   }
 
   // スコア降順 → 検索ヒット降順 → 元の並び順
