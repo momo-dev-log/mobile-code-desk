@@ -4,13 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NotebookLM 資料化ツール</title>
-  <link rel="stylesheet" href="style.css?v=phase11-2">
+  <link rel="stylesheet" href="style.css?v=phase11-3">
 </head>
 <body>
 
   <header class="app-header">
     <h1>📄 NotebookLM 資料化ツール</h1>
-    <p class="app-subtitle">Phase 11.2 — UI文言・導線整理</p>
+    <p class="app-subtitle">Phase 11.3 — 現在ページ一括処理</p>
   </header>
 
   <main class="app-main">
@@ -345,21 +345,11 @@
         <div id="sitemap-page-btns" class="sitemap-page-btns"></div>
       </div>
 
-      <!-- Phase 10.2：下側操作バー（ページ番号の下 — 50件確認後にその場で操作できる） -->
+      <!-- Phase 10.2：下側操作バー（Phase 11.3 で全選択/全解除のみに整理） -->
       <div class="sitemap-bottom-bar">
         <div class="sitemap-select-bar">
           <button type="button" id="sitemap-select-visible-btn-bottom"   class="select-ctrl-btn">現在ページを全選択</button>
           <button type="button" id="sitemap-deselect-visible-btn-bottom" class="select-ctrl-btn">現在ページを全解除</button>
-        </div>
-        <div class="sitemap-title-fetch-bar">
-          <button type="button" id="fetch-titles-btn-bottom" class="select-ctrl-btn fetch-titles-btn">
-            🔍 現在ページのタイトルを取得
-          </button>
-        </div>
-        <div class="sitemap-preview-bar">
-          <button type="button" id="preview-visible-btn-bottom" class="select-ctrl-btn preview-btn">
-            📖 現在ページを立ち読み
-          </button>
         </div>
       </div>
 
@@ -370,11 +360,8 @@
           <button type="button" id="preview-close-btn" class="preview-close-btn">✕ 閉じる</button>
         </div>
         <div id="preview-result-list" class="preview-result-list"></div>
-        <!-- Phase 10.3：プレビュー結果フッター（末尾から次の取得・閉じるへ進める導線） -->
+        <!-- Phase 10.3：プレビュー結果フッター（Phase 11.3 で閉じるのみに整理） -->
         <div class="preview-result-footer">
-          <button type="button" id="preview-next-btn" class="select-ctrl-btn preview-btn">
-            📖 現在ページの次の10件を立ち読み
-          </button>
           <button type="button" id="preview-close-bottom-btn" class="preview-close-btn">
             ✕ 閉じる
           </button>
@@ -403,6 +390,6 @@
 
   </main>
 
-  <script src="app.js?v=phase11-2"></script>
+  <script src="app.js?v=phase11-3"></script>
 </body>
 </html>
