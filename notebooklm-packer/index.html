@@ -4,13 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NotebookLM 資料化ツール</title>
-  <link rel="stylesheet" href="style.css?v=phase11-3">
+  <link rel="stylesheet" href="style.css?v=phase11-4">
 </head>
 <body>
 
   <header class="app-header">
     <h1>📄 NotebookLM 資料化ツール</h1>
-    <p class="app-subtitle">Phase 11.3 — 現在ページ一括処理</p>
+    <p class="app-subtitle">Phase 11.4 — 本文検索から資料パック化</p>
   </header>
 
   <main class="app-main">
@@ -301,6 +301,12 @@
             <button type="button" id="body-search-close-btn" class="preview-close-btn">✕ 閉じる</button>
           </div>
           <div id="body-search-result-list" class="body-search-result-list"></div>
+          <!-- Phase 11.4：本文検索結果フッター（資料パック反映ボタン） -->
+          <div class="body-search-result-footer">
+            <button type="button" id="body-search-to-pack-btn" class="fetch-btn body-search-to-pack-btn">
+              📤 チェック済みURLを資料パック欄へ反映
+            </button>
+          </div>
         </div>
       </div>
 
@@ -390,6 +396,6 @@
 
   </main>
 
-  <script src="app.js?v=phase11-3"></script>
+  <script src="app.js?v=phase11-4"></script>
 </body>
 </html>
