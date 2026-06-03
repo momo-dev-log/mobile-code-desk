@@ -1583,13 +1583,20 @@ body {
    Phase 11：本文検索スコア
    =============================================== */
 
+/* Phase 11.1：冒頭（action-bar直後）に移動したため border-top を上罫線に変更 */
 .body-search-section {
-  border-top: 1px dashed var(--border);
-  margin-top: 10px;
+  border-top: 1px solid var(--border);
+  margin-top: 8px;
   padding-top: 14px;
   display: flex;
   flex-direction: column;
   gap: 0;
+}
+
+/* OR検索ヒント文（アクセント色で目立たせる） */
+.body-search-or-hint {
+  color: var(--accent);
+  font-size: 0.80rem;
 }
 
 .body-search-fields {
