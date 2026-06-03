@@ -112,6 +112,8 @@ const bodySearchStatus       = document.getElementById('body-search-status');
 const bodySearchResultArea   = document.getElementById('body-search-result-area');
 const bodySearchResultList   = document.getElementById('body-search-result-list');
 const bodySearchCloseBtn     = document.getElementById('body-search-close-btn');
+// Phase 11.4 追加（本文検索結果フッター — 資料パック反映ボタン）
+const bodySearchToPackBtn    = document.getElementById('body-search-to-pack-btn');
 
 // -----------------------------------------------
 // 状態管理
@@ -195,6 +197,8 @@ if (previewCloseBottomBtn) previewCloseBottomBtn.addEventListener('click', close
 if (bodySearchPageBtn)    bodySearchPageBtn   .addEventListener('click', () => handleBodySearch('page'));
 if (bodySearchCheckedBtn) bodySearchCheckedBtn.addEventListener('click', () => handleBodySearch('checked'));
 if (bodySearchCloseBtn)   bodySearchCloseBtn  .addEventListener('click', closeBodySearchPanel);
+// Phase 11.4：本文検索結果フッター — 資料パック反映
+if (bodySearchToPackBtn)  bodySearchToPackBtn .addEventListener('click', sendToPackInput);
 
 // -----------------------------------------------
 // タブ切り替え
@@ -1311,8 +1315,9 @@ function renderSitemapCheckboxList(urls) {
         checkedSitemapUrls.delete(url);
       }
       updateSitemapSelectCount();
-      updatePreviewCheckedBtn();    // Phase 10.1：チェック変更時に選択中プレビューボタンも更新
-      updatePreviewCardSelection(url); // Phase 10.4：プレビューカードの選択UIも同期
+      updatePreviewCheckedBtn();
+      updatePreviewCardSelection(url);
+      updateSearchCardSelection(url); // Phase 11.4：本文検索結果カードの選択UIも同期
     });
 
     // ── info ブロック（右側）──
