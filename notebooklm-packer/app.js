@@ -1112,7 +1112,7 @@ async function handleSitemapFetch() {
     if (stored.length > PACK_WARN_LIMIT) {
       sitemapBulkHint.textContent =
         `URL候補が ${stored.length} 件あります。候補が多いため初期状態は未選択です。` +
-        `キーワードで絞り込んでから「このページを全選択」で必要なページを選んでください。`;
+        `キーワードで絞り込んでから「現在ページを全選択」で必要なページを選んでください。`;
       sitemapBulkHint.hidden = false;
     } else {
       sitemapBulkHint.hidden = true;
@@ -1681,7 +1681,7 @@ async function fetchVisibleTitles() {
   const pageUrls = filteredSitemapUrls.slice(start, end);
 
   if (!pageUrls.length) {
-    fetchTitlesStatus.textContent = '❌ 表示中の候補がありません';
+    fetchTitlesStatus.textContent = '❌ 現在ページに候補がありません';
     setTimeout(() => { fetchTitlesStatus.textContent = ''; }, 3000);
     return;
   }
@@ -1772,7 +1772,7 @@ function updateFetchTitlesBtn() {
   if (!pageUrls.length) {
     // 候補なし：ボタンはデフォルト文言・有効に戻す
     disabled = false;
-    text     = '🔍 表示中のタイトルを取得';
+    text     = '🔍 現在ページのタイトルを取得';
   } else {
     const fetchedCount = pageUrls.filter(url => titleCache.has(url)).length;
     const pendingCount = pageUrls.length - fetchedCount;
@@ -1780,19 +1780,19 @@ function updateFetchTitlesBtn() {
     if (pendingCount === 0) {
       // 全件取得済み
       disabled = true;
-      text     = '✅ 表示中のタイトル取得済み';
+      text     = '✅ 現在ページのタイトル取得済み';
     } else if (fetchedCount === 0) {
       // まだ 1 件も取得していない（初回）
       disabled = false;
-      text     = '🔍 表示中のタイトルを取得';
+      text     = '🔍 現在ページのタイトルを取得';
     } else if (pendingCount <= TITLE_FETCH_LIMIT) {
       // 残りが TITLE_FETCH_LIMIT 以下
       disabled = false;
-      text     = `🔍 残り${pendingCount}件のタイトルを取得`;
+      text     = `🔍 現在ページの残り${pendingCount}件のタイトルを取得`;
     } else {
       // まだ TITLE_FETCH_LIMIT 件以上残っている
       disabled = false;
-      text     = `🔍 次の${TITLE_FETCH_LIMIT}件のタイトルを取得`;
+      text     = `🔍 現在ページの次の${TITLE_FETCH_LIMIT}件のタイトルを取得`;
     }
   }
 
@@ -1847,7 +1847,7 @@ async function handlePreviewVisible() {
   const pageUrls = filteredSitemapUrls.slice(start, end);
 
   if (!pageUrls.length) {
-    previewStatus.textContent = '❌ このページに表示中の URL がありません';
+    previewStatus.textContent = '❌ 現在ページに URL がありません';
     setTimeout(() => { previewStatus.textContent = ''; }, 3000);
     return;
   }
@@ -1860,7 +1860,7 @@ async function handlePreviewVisible() {
     if (previewResultArea.hidden) {
       openPreviewPanel(pageUrls.filter(url => previewCache.has(url)));
     }
-    previewStatus.textContent = '✅ このページの本文プレビューは取得済みです';
+    previewStatus.textContent = '✅ 現在ページの立ち読みは取得済みです';
     setTimeout(() => { previewStatus.textContent = ''; }, 3000);
     updatePreviewVisibleBtn();
     return;
@@ -1899,7 +1899,7 @@ async function handlePreviewVisible() {
   setPreviewBtnsDisabled(false);
   updatePreviewVisibleBtn();
   updatePreviewCheckedBtn();
-  previewStatus.textContent = `✅ ${done} 件のプレビューを取得しました`;
+  previewStatus.textContent = `✅ ${done} 件の立ち読みを取得しました`;
   setTimeout(() => { previewStatus.textContent = ''; }, 4000);
 }
 
@@ -1924,7 +1924,7 @@ async function handlePreviewChecked() {
   // 未取得が10件超えは警告（取得は先頭10件のみ）
   if (pendingUrls.length > PREVIEW_FETCH_LIMIT) {
     previewStatus.textContent =
-      `⚠️ 選択中 ${checkedUrls.length} 件のうち未取得の先頭 ${PREVIEW_FETCH_LIMIT} 件をプレビューします`;
+      `⚠️ チェック済み ${checkedUrls.length} 件のうち未取得の先頭 ${PREVIEW_FETCH_LIMIT} 件を立ち読みします`;
     setTimeout(() => { previewStatus.textContent = ''; }, 5000);
   }
 
@@ -1932,7 +1932,7 @@ async function handlePreviewChecked() {
     if (previewResultArea.hidden) {
       openPreviewPanel(checkedUrls.filter(url => previewCache.has(url)));
     }
-    previewStatus.textContent = '✅ 選択中の本文プレビューは取得済みです';
+    previewStatus.textContent = '✅ チェック済みURLの立ち読みは取得済みです';
     setTimeout(() => { previewStatus.textContent = ''; }, 3000);
     updatePreviewCheckedBtn();
     return;
@@ -1970,7 +1970,7 @@ async function handlePreviewChecked() {
   setPreviewBtnsDisabled(false);
   updatePreviewCheckedBtn();
   updatePreviewVisibleBtn();
-  previewStatus.textContent = `✅ ${done} 件のプレビューを取得しました`;
+  previewStatus.textContent = `✅ ${done} 件の立ち読みを取得しました`;
   setTimeout(() => { previewStatus.textContent = ''; }, 4000);
 }
 
@@ -2015,7 +2015,7 @@ function refreshPreviewPanel() {
   if (cachedUrls.length === 0) {
     const msg = document.createElement('p');
     msg.className   = 'preview-empty-msg';
-    msg.textContent = 'このページの本文プレビューはまだ取得していません。';
+    msg.textContent = '現在ページの立ち読みはまだ取得していません。';
     previewResultList.appendChild(msg);
   } else {
     cachedUrls.forEach(url => previewResultList.appendChild(buildPreviewItemDom(url)));
@@ -2130,7 +2130,7 @@ function buildPreviewItemDom(url) {
         buildSelectionRowHtml(isChecked) +
         `<p class="preview-item-source">${escapeHtml(url)}</p>` +
       `</div>` +
-      `<p class="preview-item-body preview-item-body--error">❌ 本文プレビュー取得不可</p>`;
+      `<p class="preview-item-body preview-item-body--error">❌ 立ち読み取得不可</p>`;
 
   } else {
     // ── 取得済み ──
@@ -2211,21 +2211,21 @@ function updatePreviewVisibleBtn() {
   // パネル開閉を引数に取るヘルパー（top/bottom と footer で共有）
   const calcState = (panelOpen) => {
     if (!pageUrls.length) {
-      return { disabled: false, text: '📖 このページの本文をプレビュー' };
+      return { disabled: false, text: '📖 現在ページを立ち読み' };
     }
     if (pendingCount === 0) {
       // 全件取得済み：パネルが閉じているなら再表示ボタンとして有効にする
       return panelOpen
-        ? { disabled: true,  text: '✅ このページの本文プレビュー取得済み' }
-        : { disabled: false, text: '📖 このページの本文プレビューを表示' };
+        ? { disabled: true,  text: '✅ 現在ページの立ち読み済み' }
+        : { disabled: false, text: '📖 現在ページの立ち読みを表示' };
     }
     if (fetchedCount === 0) {
-      return { disabled: false, text: '📖 このページの本文をプレビュー' };
+      return { disabled: false, text: '📖 現在ページを立ち読み' };
     }
     if (pendingCount <= PREVIEW_FETCH_LIMIT) {
-      return { disabled: false, text: `📖 このページの残り${pendingCount}件をプレビュー` };
+      return { disabled: false, text: `📖 現在ページの残り${pendingCount}件を立ち読み` };
     }
-    return { disabled: false, text: `📖 このページの次の${PREVIEW_FETCH_LIMIT}件をプレビュー` };
+    return { disabled: false, text: `📖 現在ページの次の${PREVIEW_FETCH_LIMIT}件を立ち読み` };
   };
 
   const { disabled, text } = calcState(isPanelOpen);
@@ -2260,7 +2260,7 @@ function updatePreviewCheckedBtn() {
   if (!checkedUrls.length) {
     // Phase 10.5：0件なら無効化して案内文を表示（押せそうに見えないようにする）
     previewCheckedBtn.disabled    = true;
-    previewCheckedBtn.textContent = 'URLを選択するとプレビューできます';
+    previewCheckedBtn.textContent = 'URLをチェックすると立ち読みできます';
     return;
   }
 
@@ -2271,20 +2271,20 @@ function updatePreviewCheckedBtn() {
     // 全件取得済み：パネルが閉じているなら再表示ボタンとして有効にする
     if (isPanelOpen) {
       previewCheckedBtn.disabled    = true;
-      previewCheckedBtn.textContent = '✅ 選択中の本文プレビュー取得済み';
+      previewCheckedBtn.textContent = '✅ チェック済みの立ち読み済み';
     } else {
       previewCheckedBtn.disabled    = false;
-      previewCheckedBtn.textContent = '📖 選択中の本文プレビューを表示';
+      previewCheckedBtn.textContent = '📖 チェック済みの立ち読みを表示';
     }
   } else if (fetchedCount === 0) {
     previewCheckedBtn.disabled    = false;
-    previewCheckedBtn.textContent = '📖 選択中の本文をプレビュー';
+    previewCheckedBtn.textContent = '📖 チェック済みを立ち読み';
   } else if (pendingCount <= PREVIEW_FETCH_LIMIT) {
     previewCheckedBtn.disabled    = false;
-    previewCheckedBtn.textContent = `📖 選択中の残り${pendingCount}件をプレビュー`;
+    previewCheckedBtn.textContent = `📖 チェック済みの残り${pendingCount}件を立ち読み`;
   } else {
     previewCheckedBtn.disabled    = false;
-    previewCheckedBtn.textContent = `📖 選択中の次の${PREVIEW_FETCH_LIMIT}件をプレビュー`;
+    previewCheckedBtn.textContent = `📖 チェック済みの次の${PREVIEW_FETCH_LIMIT}件を立ち読み`;
   }
 }
 
@@ -2920,7 +2920,7 @@ async function handleBodySearch(mode) {
     targetUrls = (checkedOnPage.length > 0 ? checkedOnPage : pageUrls)
       .slice(0, BODY_SEARCH_LIMIT);
     if (!targetUrls.length) {
-      bodySearchStatus.textContent = '❌ このページに URL がありません';
+      bodySearchStatus.textContent = '❌ 現在ページに URL がありません';
       setTimeout(() => { bodySearchStatus.textContent = ''; }, 3000);
       return;
     }

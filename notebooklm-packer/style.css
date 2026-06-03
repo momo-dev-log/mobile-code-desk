@@ -1739,6 +1739,23 @@ body {
   font-size: 0.82rem;
 }
 
+/* Phase 11.2：セクション見出し（本文スコアで絞り込む / URL候補一覧） */
+.section-heading {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin-top: 4px;
+  margin-bottom: 6px;
+}
+
+/* body-search-section 内の .section-heading は padding-top を考慮して上余白なし */
+.body-search-section .section-heading {
+  margin-top: 0;
+  margin-bottom: 10px;
+}
+
 @media (max-width: 480px) {
   .body-search-btn-bar {
     flex-direction: column;
