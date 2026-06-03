@@ -1768,6 +1768,50 @@ body {
   margin-top: 0;
 }
 
+/* Phase 11.5：URL候補一覧 折りたたみトグル */
+.url-list-section {
+  margin-top: 4px;
+}
+
+.url-list-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 6px 0;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  text-align: left;
+  margin-bottom: 6px;
+  line-height: 1.4;
+}
+
+.url-list-toggle-btn:hover {
+  opacity: 0.72;
+}
+
+.url-list-toggle-icon {
+  font-size: 0.68rem;
+  flex-shrink: 0;
+  line-height: 1;
+  margin-top: 1px;
+}
+
+.url-list-toggle-summary {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--text-muted);
+  text-transform: none;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
 @media (max-width: 480px) {
   .body-search-btn-bar {
     flex-direction: column;

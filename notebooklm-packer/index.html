@@ -4,13 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NotebookLM 資料化ツール</title>
-  <link rel="stylesheet" href="style.css?v=phase11-4">
+  <link rel="stylesheet" href="style.css?v=phase11-5">
 </head>
 <body>
 
   <header class="app-header">
     <h1>📄 NotebookLM 資料化ツール</h1>
-    <p class="app-subtitle">Phase 11.4 — 本文検索から資料パック化</p>
+    <p class="app-subtitle">Phase 11.5 — 本文検索後URL候補一覧を折りたたむ</p>
   </header>
 
   <main class="app-main">
@@ -313,66 +313,76 @@
       <!-- Phase 9.4：大量候補時の案内（51件以上のとき表示） -->
       <p id="sitemap-bulk-hint" class="sitemap-bulk-hint" hidden></p>
 
-      <!-- Phase 11.2：URL候補一覧 セクション見出し -->
-      <p class="section-heading">URL候補一覧</p>
-
-      <!-- 選択コントロールバー（全選択/全解除は現在ページのみに作用） -->
-      <div class="sitemap-select-bar">
-        <button type="button" id="sitemap-select-visible-btn"   class="select-ctrl-btn">現在ページを全選択</button>
-        <button type="button" id="sitemap-deselect-visible-btn" class="select-ctrl-btn">現在ページを全解除</button>
-        <span id="sitemap-select-count" class="select-count-text"></span>
-      </div>
-
-      <!-- タイトル一括取得バー -->
-      <div class="sitemap-title-fetch-bar">
-        <button type="button" id="fetch-titles-btn" class="select-ctrl-btn fetch-titles-btn">
-          🔍 現在ページのタイトルを取得
+      <!-- Phase 11.5：URL候補一覧 折りたたみセクション -->
+      <div class="url-list-section">
+        <button type="button" id="url-list-toggle-btn" class="url-list-toggle-btn">
+          <span id="url-list-toggle-icon" class="url-list-toggle-icon">▼</span>
+          URL候補一覧
+          <span id="url-list-toggle-summary" class="url-list-toggle-summary"></span>
         </button>
-        <span id="fetch-titles-status" class="fetch-titles-status"></span>
-      </div>
 
-      <!-- Phase 10：本文プレビュー ボタンバー -->
-      <div class="sitemap-preview-bar">
-        <button type="button" id="preview-visible-btn" class="select-ctrl-btn preview-btn">
-          📖 現在ページを立ち読み
-        </button>
-        <button type="button" id="preview-checked-btn" class="select-ctrl-btn preview-btn">
-          📖 チェック済みを立ち読み
-        </button>
-        <span id="preview-status" class="fetch-titles-status"></span>
-      </div>
+        <div id="url-list-content" class="url-list-content">
 
-      <!-- URL チェックボックスリスト -->
-      <div id="sitemap-url-checkboxes" class="sitemap-checkbox-list"></div>
+          <!-- 選択コントロールバー（全選択/全解除は現在ページのみに作用） -->
+          <div class="sitemap-select-bar">
+            <button type="button" id="sitemap-select-visible-btn"   class="select-ctrl-btn">現在ページを全選択</button>
+            <button type="button" id="sitemap-deselect-visible-btn" class="select-ctrl-btn">現在ページを全解除</button>
+            <span id="sitemap-select-count" class="select-count-text"></span>
+          </div>
 
-      <!-- ページ情報 + ページボタン（Phase 9.2） -->
-      <div class="sitemap-pagination">
-        <p id="sitemap-page-info" class="sitemap-page-info"></p>
-        <div id="sitemap-page-btns" class="sitemap-page-btns"></div>
-      </div>
+          <!-- タイトル一括取得バー -->
+          <div class="sitemap-title-fetch-bar">
+            <button type="button" id="fetch-titles-btn" class="select-ctrl-btn fetch-titles-btn">
+              🔍 現在ページのタイトルを取得
+            </button>
+            <span id="fetch-titles-status" class="fetch-titles-status"></span>
+          </div>
 
-      <!-- Phase 10.2：下側操作バー（Phase 11.3 で全選択/全解除のみに整理） -->
-      <div class="sitemap-bottom-bar">
-        <div class="sitemap-select-bar">
-          <button type="button" id="sitemap-select-visible-btn-bottom"   class="select-ctrl-btn">現在ページを全選択</button>
-          <button type="button" id="sitemap-deselect-visible-btn-bottom" class="select-ctrl-btn">現在ページを全解除</button>
-        </div>
-      </div>
+          <!-- Phase 10：本文プレビュー ボタンバー -->
+          <div class="sitemap-preview-bar">
+            <button type="button" id="preview-visible-btn" class="select-ctrl-btn preview-btn">
+              📖 現在ページを立ち読み
+            </button>
+            <button type="button" id="preview-checked-btn" class="select-ctrl-btn preview-btn">
+              📖 チェック済みを立ち読み
+            </button>
+            <span id="preview-status" class="fetch-titles-status"></span>
+          </div>
 
-      <!-- Phase 10：本文プレビュー 結果エリア -->
-      <div id="preview-result-area" class="preview-result-area" hidden>
-        <div class="preview-result-header">
-          <span class="preview-result-title">📖 立ち読みプレビュー</span>
-          <button type="button" id="preview-close-btn" class="preview-close-btn">✕ 閉じる</button>
-        </div>
-        <div id="preview-result-list" class="preview-result-list"></div>
-        <!-- Phase 10.3：プレビュー結果フッター（Phase 11.3 で閉じるのみに整理） -->
-        <div class="preview-result-footer">
-          <button type="button" id="preview-close-bottom-btn" class="preview-close-btn">
-            ✕ 閉じる
-          </button>
-        </div>
-      </div>
+          <!-- URL チェックボックスリスト -->
+          <div id="sitemap-url-checkboxes" class="sitemap-checkbox-list"></div>
+
+          <!-- ページ情報 + ページボタン（Phase 9.2） -->
+          <div class="sitemap-pagination">
+            <p id="sitemap-page-info" class="sitemap-page-info"></p>
+            <div id="sitemap-page-btns" class="sitemap-page-btns"></div>
+          </div>
+
+          <!-- Phase 10.2：下側操作バー（Phase 11.3 で全選択/全解除のみに整理） -->
+          <div class="sitemap-bottom-bar">
+            <div class="sitemap-select-bar">
+              <button type="button" id="sitemap-select-visible-btn-bottom"   class="select-ctrl-btn">現在ページを全選択</button>
+              <button type="button" id="sitemap-deselect-visible-btn-bottom" class="select-ctrl-btn">現在ページを全解除</button>
+            </div>
+          </div>
+
+          <!-- Phase 10：本文プレビュー 結果エリア -->
+          <div id="preview-result-area" class="preview-result-area" hidden>
+            <div class="preview-result-header">
+              <span class="preview-result-title">📖 立ち読みプレビュー</span>
+              <button type="button" id="preview-close-btn" class="preview-close-btn">✕ 閉じる</button>
+            </div>
+            <div id="preview-result-list" class="preview-result-list"></div>
+            <!-- Phase 10.3：プレビュー結果フッター（Phase 11.3 で閉じるのみに整理） -->
+            <div class="preview-result-footer">
+              <button type="button" id="preview-close-bottom-btn" class="preview-close-btn">
+                ✕ 閉じる
+              </button>
+            </div>
+          </div>
+
+        </div><!-- /url-list-content -->
+      </div><!-- /url-list-section -->
 
       <!-- 反映ボタン（フィルター済みかつチェック済みURLを資料パック欄へ） -->
       <button type="button" id="to-pack-btn" class="fetch-btn sitemap-to-pack-btn">
@@ -396,6 +406,6 @@
 
   </main>
 
-  <script src="app.js?v=phase11-4"></script>
+  <script src="app.js?v=phase11-5"></script>
 </body>
 </html>
