@@ -114,6 +114,11 @@ const bodySearchResultList   = document.getElementById('body-search-result-list'
 const bodySearchCloseBtn     = document.getElementById('body-search-close-btn');
 // Phase 11.4 追加（本文検索結果フッター — 資料パック反映ボタン）
 const bodySearchToPackBtn    = document.getElementById('body-search-to-pack-btn');
+// Phase 11.5 追加（URL候補一覧 折りたたみ）
+const urlListToggleBtn     = document.getElementById('url-list-toggle-btn');
+const urlListContent       = document.getElementById('url-list-content');
+const urlListToggleIcon    = document.getElementById('url-list-toggle-icon');
+const urlListToggleSummary = document.getElementById('url-list-toggle-summary');
 
 // -----------------------------------------------
 // 状態管理
@@ -199,6 +204,8 @@ if (bodySearchCheckedBtn) bodySearchCheckedBtn.addEventListener('click', () => h
 if (bodySearchCloseBtn)   bodySearchCloseBtn  .addEventListener('click', closeBodySearchPanel);
 // Phase 11.4：本文検索結果フッター — 資料パック反映
 if (bodySearchToPackBtn)  bodySearchToPackBtn .addEventListener('click', sendToPackInput);
+// Phase 11.5：URL候補一覧 折りたたみトグル
+if (urlListToggleBtn)     urlListToggleBtn    .addEventListener('click', toggleUrlList);
 
 // -----------------------------------------------
 // タブ切り替え
@@ -1385,6 +1392,8 @@ function updateSitemapSelectCount() {
   const total   = filteredSitemapUrls.length;
   const checked = filteredSitemapUrls.filter(url => checkedSitemapUrls.has(url)).length;
   sitemapSelectCount.textContent = total > 0 ? `${checked} / ${total} 件選択中` : '';
+  // Phase 11.5：折りたたみ時はサマリーテキストも更新する
+  updateUrlListToggleSummary();
 }
 
 // ===============================================
@@ -2787,10 +2796,57 @@ function updateAllSearchCardSelections() {
 
 /**
  * 本文検索パネルを閉じてリストをクリアする。
+ * Phase 11.5：クリア後はURL候補一覧を展開状態に戻す。
  */
 function closeBodySearchPanel() {
   if (bodySearchResultArea) bodySearchResultArea.hidden = true;
   if (bodySearchResultList) bodySearchResultList.innerHTML = '';
+  expandUrlList();
+}
+
+// -----------------------------------------------
+// Phase 11.5：URL候補一覧 折りたたみ制御
+// -----------------------------------------------
+
+/** URL候補一覧を折りたたむ。立ち読みパネルが開いている場合は先に閉じる。 */
+function collapseUrlList() {
+  if (!urlListContent || !urlListToggleBtn) return;
+  if (!previewResultArea.hidden) closePreviewPanel();
+  urlListContent.hidden = true;
+  if (urlListToggleIcon) urlListToggleIcon.textContent = '▶';
+  urlListToggleBtn.classList.add('url-list-toggle-btn--collapsed');
+  updateUrlListToggleSummary();
+}
+
+/** URL候補一覧を展開する。 */
+function expandUrlList() {
+  if (!urlListContent || !urlListToggleBtn) return;
+  urlListContent.hidden = false;
+  if (urlListToggleIcon) urlListToggleIcon.textContent = '▼';
+  urlListToggleBtn.classList.remove('url-list-toggle-btn--collapsed');
+  if (urlListToggleSummary) urlListToggleSummary.textContent = '';
+}
+
+/** トグルボタン押下で開閉を切り替える。 */
+function toggleUrlList() {
+  if (!urlListContent) return;
+  if (urlListContent.hidden) {
+    expandUrlList();
+  } else {
+    collapseUrlList();
+  }
+}
+
+/**
+ * 折りたたみ時にトグルボタンの概要テキストを更新する。
+ * 「— 500件 / チェック済み3件」のような形式で表示。
+ */
+function updateUrlListToggleSummary() {
+  if (!urlListToggleSummary) return;
+  const total   = filteredSitemapUrls.length;
+  const checked = filteredSitemapUrls.filter(url => checkedSitemapUrls.has(url)).length;
+  const checkedNote = checked > 0 ? ` / チェック済み ${checked} 件` : '';
+  urlListToggleSummary.textContent = total > 0 ? ` — ${total} 件${checkedNote}` : '';
 }
 
 /**
@@ -2841,6 +2897,8 @@ async function handleBodySearch(mode) {
 
   // 結果パネルを開いてローディング表示
   bodySearchResultArea.hidden = false;
+  // Phase 11.5：本文検索開始時にURL候補一覧を折りたたむ
+  collapseUrlList();
   bodySearchResultList.innerHTML = '';
   targetUrls.forEach(url => {
     const el = document.createElement('div');
