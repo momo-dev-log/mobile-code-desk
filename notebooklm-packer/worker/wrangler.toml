@@ -1,0 +1,14 @@
+# Cloudflare Worker 設定ファイル（v2: JSON応答仕様）
+# Wrangler CLI でデプロイする場合に使用
+# ダッシュボードからデプロイする場合はこのファイルは不要
+#
+# 旧Worker（notebooklm-packer-worker, v1/worker/）とは別名でデプロイし、
+# 旧Workerは v1/ アプリ用にそのまま残す。
+
+name = "notebooklm-packer-worker-v2"
+main = "index.js"
+compatibility_date = "2025-01-01"
+
+# 無料プランで十分
+# リクエスト数：100,000 / 日
+# CPU 時間：10ms / リクエスト（fetch のみなら余裕）

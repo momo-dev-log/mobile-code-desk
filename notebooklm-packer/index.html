@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>notebooklm-packer (Phase 2)</title>
+  <link rel="stylesheet" href="style.css?v=phase2">
+</head>
+<body>
+  <header class="app-header">
+    <h1>notebooklm-packer</h1>
+    <p class="app-subtitle">Phase 2 — 一本通し（取り込み→取得→立ち読み→候補→仕上げ）</p>
+  </header>
+
+  <main>
+    <section class="import-section">
+      <label for="url-textarea">URLを取り込む</label>
+      <textarea id="url-textarea" rows="3" placeholder="https://example.com/article&#10;（複数可・改行区切り）"></textarea>
+      <button type="button" id="import-btn" class="btn btn-primary">URLを取り込む</button>
+      <p id="import-status" class="status-text"></p>
+    </section>
+
+    <section class="article-list-section">
+      <h2>取り込み済みURL</h2>
+      <div id="article-list"></div>
+    </section>
+
+    <section class="pack-section">
+      <h2>候補 <span id="pack-count"></span></h2>
+      <p id="pack-warn" class="pack-warn" hidden></p>
+      <ul id="pack-list" class="pack-list"></ul>
+      <button type="button" id="finish-btn" class="btn btn-primary">仕上げへ進む</button>
+    </section>
+
+    <section id="finish-section" class="finish-section" hidden>
+      <h2>仕上げ</h2>
+      <label for="pack-name-input">パック名</label>
+      <input type="text" id="pack-name-input" value="資料パック">
+      <label class="checkbox-label">
+        <input type="checkbox" id="txt-checkbox">
+        テキスト版（.txt）も一緒に作る
+      </label>
+      <button type="button" id="build-btn" class="btn btn-primary">パックのファイルを作る</button>
+      <button type="button" id="save-btn" class="btn btn-primary" hidden>ファイルを保存</button>
+      <p id="build-status" class="status-text"></p>
+      <p class="finish-note">保存後、NotebookLMへはご自身でアップロードしてください</p>
+      <p class="finish-note">iPhoneでは長期間使わないと保存データが消えることがあります。ホーム画面に追加すると防げます</p>
+    </section>
+  </main>
+
+  <script type="module" src="js/main.js?v=phase2"></script>
+</body>
+</html>
