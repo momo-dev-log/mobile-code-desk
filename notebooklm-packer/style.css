@@ -145,49 +145,6 @@ input[type="text"] {
   color: var(--error);
 }
 
-.article-warn,
-.article-warn-inline {
-  color: var(--warn);
-  font-size: 0.85rem;
-  margin: 0 0 0.5rem;
-}
-
-.article-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  align-items: center;
-}
-
-.badge {
-  font-size: 0.85rem;
-  padding: 0.25rem 0.5rem;
-  border-radius: 4px;
-}
-
-.badge-checked {
-  background: #e3f3e8;
-  color: var(--success);
-}
-
-.preview-area {
-  margin-top: 0.75rem;
-  border-top: 1px solid var(--border);
-  padding-top: 0.5rem;
-}
-
-.preview-text {
-  max-height: 240px;
-  overflow-y: auto;
-  white-space: pre-wrap;
-  font-size: 0.85rem;
-  background: #fff;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 0.5rem;
-  margin: 0.5rem 0;
-}
-
 .pack-list {
   list-style: none;
   padding: 0;
@@ -225,11 +182,6 @@ input[type="text"] {
   padding: 0.5rem;
   font-size: 0.85rem;
   margin: 0 0 0.75rem;
-}
-
-.finish-note {
-  font-size: 0.8rem;
-  color: #888;
 }
 
 /* -----------------------------------------------
@@ -274,20 +226,6 @@ input[type="text"] {
 }
 
 .tab-panel {
-  margin-bottom: 0;
-}
-
-/* -----------------------------------------------
-   さがすタブ: 検索バー
-   ----------------------------------------------- */
-.search-bar {
-  display: flex;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
-}
-
-.search-bar input[type="text"] {
-  flex: 1;
   margin-bottom: 0;
 }
 
@@ -359,94 +297,6 @@ input[type="text"] {
 .import-confirm p {
   margin: 0 0 0.5rem;
   font-size: 0.9rem;
-}
-
-/* -----------------------------------------------
-   sitemap展開
-   ----------------------------------------------- */
-.sitemap-section {
-  margin-top: 0.75rem;
-  padding: 0.5rem;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-}
-
-.sitemap-index-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  padding: 0.35rem 0;
-  border-bottom: 1px solid var(--border);
-  font-size: 0.85rem;
-}
-
-.sitemap-index-url {
-  word-break: break-all;
-  flex: 1;
-}
-
-.sitemap-url-actions {
-  display: flex;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
-}
-
-.sitemap-url-list {
-  list-style: none;
-  margin: 0 0 0.75rem;
-  padding: 0;
-  max-height: 300px;
-  overflow-y: auto;
-}
-
-.sitemap-url-item {
-  padding: 0.3rem 0;
-  border-bottom: 1px solid var(--border);
-  font-size: 0.85rem;
-}
-
-.sitemap-url-text {
-  word-break: break-all;
-}
-
-/* -----------------------------------------------
-   関連度カード: バッジ・抜粋
-   ----------------------------------------------- */
-.relevance-badge {
-  display: inline-block;
-  margin: 0 0 0.5rem;
-  padding: 0.15rem 0.5rem;
-  border-radius: 4px;
-  font-size: 0.8rem;
-  font-weight: 600;
-}
-
-.relevance-badge--high {
-  background: #fde2e2;
-  color: var(--error);
-}
-
-.relevance-badge--mid {
-  background: #fff4e5;
-  color: var(--warn);
-}
-
-.relevance-badge--low {
-  background: #eef1f6;
-  color: #666;
-}
-
-.article-excerpt {
-  font-size: 0.85rem;
-  color: #555;
-  margin: 0 0 0.5rem;
-}
-
-.article-excerpt mark {
-  background: #ffe28a;
-  color: inherit;
-  border-radius: 2px;
 }
 
 /* -----------------------------------------------

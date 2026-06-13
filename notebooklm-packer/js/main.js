@@ -3,54 +3,29 @@ import {
   recoverOrphanedFetches,
   getAllArticleMeta,
   getArticleMeta,
-  getArticleBody,
   putArticleMeta,
   putArticleMetaAndBody,
   deleteArticle,
   getOrCreatePack,
   putPack,
-  DEFAULT_PACK_NAME,
 } from './db.js';
 import { normalizeUrl } from './normalize.js';
 import { fetchArticleHtml } from './fetch.js';
 import { extractArticle } from './extract.js';
-import { parseSitemap, isSitemapUrlCandidate } from './sitemap.js';
-import { scoreArticles } from './scorer.js';
-import { buildPackMarkdown, markdownToPlainText, generateFilename, sanitizePackName } from './markdown.js';
 import {
-  SHORT_BODY_THRESHOLD,
   BODY_TOO_LARGE_CHARS,
   PACK_WARN_THRESHOLD,
-  PREVIEW_CHARS,
-  MAX_SITEMAP_URLS,
-  RELEVANCE_HIGH_MIN_HITS,
-  RELEVANCE_MID_MIN_HITS,
 } from './constants.js';
 
 let db;
 let pack;
 
-// 立ち読み展開中のID（表示のみ。永続化しない）
-const expandedIds = new Set();
-
-// 現在の検索キーワード
-let searchQuery = '';
-
-// 仕上げで生成済みのMarkdown/txt（ダウンロード用に保持）
-let generatedFiles = null;
-
 // 複数URL取り込み確認待ちのID一覧
 let pendingFetchIds = [];
-
-// sitemap展開で見つかったURL一覧（チェックボックスのインデックス対応用）
-let sitemapUrls = [];
 
 // -----------------------------------------------
 // DOM要素
 // -----------------------------------------------
-const searchInput = document.getElementById('search-input');
-const searchBtn = document.getElementById('search-btn');
-
 const urlFoldToggle = document.getElementById('url-fold-toggle');
 const urlFoldArrow = document.getElementById('url-fold-arrow');
 const urlFoldCountEl = document.getElementById('url-fold-count');
@@ -65,27 +40,12 @@ const importConfirmEl = document.getElementById('import-confirm');
 const importConfirmText = document.getElementById('import-confirm-text');
 const importConfirmFetchBtn = document.getElementById('import-confirm-fetch-btn');
 
-const sitemapSectionEl = document.getElementById('sitemap-section');
-const sitemapStatusEl = document.getElementById('sitemap-status');
-const sitemapIndexListEl = document.getElementById('sitemap-index-list');
-const sitemapUrlListSectionEl = document.getElementById('sitemap-url-list-section');
-const sitemapUrlListEl = document.getElementById('sitemap-url-list');
-const sitemapSelectAllBtn = document.getElementById('sitemap-select-all-btn');
-const sitemapDeselectAllBtn = document.getElementById('sitemap-deselect-all-btn');
-const sitemapImportBtn = document.getElementById('sitemap-import-btn');
-
 const articleListEl = document.getElementById('article-card-list');
 
 const packCountEl = document.getElementById('pack-count');
 const packWarnEl = document.getElementById('pack-warn');
 const packListEl = document.getElementById('pack-list');
 const tabPackBadgeEl = document.getElementById('tab-pack-badge');
-
-const packNameInput = document.getElementById('pack-name-input');
-const txtCheckbox = document.getElementById('txt-checkbox');
-const buildBtn = document.getElementById('build-btn');
-const saveBtn = document.getElementById('save-btn');
-const buildStatus = document.getElementById('build-status');
 
 const tabBtns = document.querySelectorAll('.tab-btn');
 const tabPanels = document.querySelectorAll('.tab-panel');
@@ -102,11 +62,6 @@ async function init() {
 
   setupTabs();
 
-  searchBtn.addEventListener('click', handleSearch);
-  searchInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') handleSearch();
-  });
-
   urlFoldToggle.addEventListener('click', () => {
     const isOpen = !urlFoldBody.hidden;
     urlFoldBody.hidden = isOpen;
@@ -115,10 +70,6 @@ async function init() {
 
   importBtn.addEventListener('click', handleImport);
   importConfirmFetchBtn.addEventListener('click', handleImportConfirmFetch);
-
-  sitemapSelectAllBtn.addEventListener('click', () => setSitemapCheckboxes(true));
-  sitemapDeselectAllBtn.addEventListener('click', () => setSitemapCheckboxes(false));
-  sitemapImportBtn.addEventListener('click', handleSitemapImport);
 
   await renderAll();
 }
@@ -142,15 +93,7 @@ function switchTab(tabName) {
 }
 
 // -----------------------------------------------
-// 検索
-// -----------------------------------------------
-async function handleSearch() {
-  searchQuery = searchInput.value;
-  await renderArticleList();
-}
-
-// -----------------------------------------------
-// 取り込み（さがすタブ）
+// 取り込み（記事タブ）
 // -----------------------------------------------
 async function handleImport() {
   const rawInput = urlTextarea.value;
@@ -176,12 +119,6 @@ async function handleImport() {
 
   if (validUrls.length === 0) {
     setImportStatus('有効なURLが見つかりませんでした', 'error');
-    return;
-  }
-
-  if (validUrls.length === 1 && isSitemapUrlCandidate(validUrls[0])) {
-    urlTextarea.value = '';
-    await handleSitemapCandidate(validUrls[0]);
     return;
   }
 
@@ -273,128 +210,6 @@ async function importUrls(urls) {
 }
 
 // -----------------------------------------------
-// sitemap展開
-// -----------------------------------------------
-async function handleSitemapCandidate(url) {
-  sitemapSectionEl.hidden = false;
-  sitemapIndexListEl.hidden = true;
-  sitemapUrlListSectionEl.hidden = true;
-  sitemapStatusEl.textContent = 'sitemapを確認しています…';
-  sitemapStatusEl.className = 'status-text';
-
-  const result = await fetchArticleHtml(url);
-  if (!result.ok) {
-    sitemapStatusEl.textContent = `sitemapを取得できませんでした: ${describeFailReason(classifyFailReason(result), result.httpStatus)}`;
-    sitemapStatusEl.className = 'status-text status-error';
-    return;
-  }
-
-  const parsed = parseSitemap(result.html);
-  if (!parsed) {
-    sitemapStatusEl.textContent = 'sitemapとして解析できませんでした';
-    sitemapStatusEl.className = 'status-text status-error';
-    return;
-  }
-
-  if (parsed.type === 'sitemapindex') {
-    showSitemapIndexList(parsed.urls);
-    return;
-  }
-
-  showSitemapUrlList(parsed.urls);
-}
-
-function showSitemapIndexList(childUrls) {
-  sitemapIndexListEl.hidden = false;
-  sitemapUrlListSectionEl.hidden = true;
-  sitemapStatusEl.textContent = `子sitemapが${childUrls.length}件見つかりました。展開する1件を選んでください`;
-  sitemapStatusEl.className = 'status-text';
-
-  sitemapIndexListEl.innerHTML = '';
-  for (const childUrl of childUrls) {
-    const div = document.createElement('div');
-    div.className = 'sitemap-index-item';
-    div.innerHTML = `
-      <span class="sitemap-index-url">${escapeHtml(childUrl)}</span>
-      <button type="button" class="btn btn-small btn-expand-child">展開</button>
-    `;
-    div.querySelector('.btn-expand-child').addEventListener('click', () => expandChildSitemap(childUrl));
-    sitemapIndexListEl.appendChild(div);
-  }
-}
-
-async function expandChildSitemap(url) {
-  sitemapStatusEl.textContent = 'sitemapを確認しています…';
-  sitemapStatusEl.className = 'status-text';
-
-  const result = await fetchArticleHtml(url);
-  if (!result.ok) {
-    sitemapStatusEl.textContent = `sitemapを取得できませんでした: ${describeFailReason(classifyFailReason(result), result.httpStatus)}`;
-    sitemapStatusEl.className = 'status-text status-error';
-    return;
-  }
-
-  const parsed = parseSitemap(result.html);
-  if (!parsed || parsed.type !== 'urlset') {
-    sitemapStatusEl.textContent = '多段の入れ子sitemapには対応していません';
-    sitemapStatusEl.className = 'status-text status-error';
-    return;
-  }
-
-  showSitemapUrlList(parsed.urls);
-}
-
-function showSitemapUrlList(urls) {
-  let truncated = false;
-  if (urls.length > MAX_SITEMAP_URLS) {
-    urls = urls.slice(0, MAX_SITEMAP_URLS);
-    truncated = true;
-  }
-
-  sitemapUrls = urls;
-  sitemapIndexListEl.hidden = true;
-  sitemapUrlListSectionEl.hidden = false;
-
-  sitemapStatusEl.textContent = `${urls.length}件のURLが見つかりました${truncated ? '（200件で打ち切りました）' : ''}`;
-  sitemapStatusEl.className = truncated ? 'status-text status-warn' : 'status-text';
-
-  sitemapUrlListEl.innerHTML = '';
-  urls.forEach((u, i) => {
-    const li = document.createElement('li');
-    li.className = 'sitemap-url-item';
-    li.innerHTML = `
-      <label>
-        <input type="checkbox" class="sitemap-url-checkbox" data-index="${i}" checked>
-        <span class="sitemap-url-text">${escapeHtml(u)}</span>
-      </label>
-    `;
-    sitemapUrlListEl.appendChild(li);
-  });
-}
-
-function setSitemapCheckboxes(checked) {
-  sitemapUrlListEl.querySelectorAll('.sitemap-url-checkbox').forEach((cb) => {
-    cb.checked = checked;
-  });
-}
-
-async function handleSitemapImport() {
-  const checked = [...sitemapUrlListEl.querySelectorAll('.sitemap-url-checkbox:checked')]
-    .map(cb => sitemapUrls[Number(cb.dataset.index)]);
-
-  if (checked.length === 0) {
-    sitemapStatusEl.textContent = 'URLを選択してください';
-    sitemapStatusEl.className = 'status-text status-error';
-    return;
-  }
-
-  sitemapSectionEl.hidden = true;
-
-  const { createdCount, duplicateCount, createdIds } = await importUrls(checked);
-  await finishImport(createdCount, duplicateCount, createdIds);
-}
-
-// -----------------------------------------------
 // 本文取得（取得・取り直し共通）
 // -----------------------------------------------
 async function startFetch(id) {
@@ -428,10 +243,10 @@ async function startFetch(id) {
       meta.httpStatus = prevHttpStatus;
       meta.updatedAt = new Date().toISOString();
       await putArticleMeta(db, meta);
-      setImportStatus(`再取得に失敗しました: ${describeFailReason(classifyFailReason(result), result.httpStatus)}`, 'error');
+      setImportStatus('再取得に失敗しました', 'error');
     } else {
       meta.fetchState = 'failed';
-      meta.failReason = classifyFailReason(result);
+      meta.failReason = null;
       meta.httpStatus = result.httpStatus ?? null;
       meta.finalUrl = null;
       meta.updatedAt = new Date().toISOString();
@@ -457,7 +272,7 @@ async function startFetch(id) {
       setImportStatus('再取得に失敗しました: 本文を取り出せませんでした', 'error');
     } else {
       meta.fetchState = 'failed';
-      meta.failReason = 'extract_empty';
+      meta.failReason = null;
       meta.httpStatus = result.httpStatus;
       meta.finalUrl = result.finalUrl;
       meta.updatedAt = new Date().toISOString();
@@ -481,7 +296,7 @@ async function startFetch(id) {
       setImportStatus('再取得に失敗しました: ページが大きすぎるため対象外です', 'error');
     } else {
       meta.fetchState = 'failed';
-      meta.failReason = 'too_large';
+      meta.failReason = null;
       meta.httpStatus = result.httpStatus;
       meta.finalUrl = result.finalUrl;
       meta.updatedAt = new Date().toISOString();
@@ -492,9 +307,6 @@ async function startFetch(id) {
   }
 
   // 成功
-  const warnings = [];
-  if (charCount < SHORT_BODY_THRESHOLD) warnings.push('short_body');
-
   const now = new Date().toISOString();
   meta.fetchState = 'fetched';
   meta.failReason = null;
@@ -504,41 +316,16 @@ async function startFetch(id) {
   meta.fetchedAt = now;
   meta.finalUrl = result.finalUrl;
   meta.httpStatus = result.httpStatus;
-  meta.warnings = warnings;
+  meta.warnings = [];
   meta.updatedAt = now;
 
   await putArticleMetaAndBody(db, meta, { id, body });
   await renderAll();
 }
 
-function classifyFailReason(result) {
-  if (result.reason === 'network' || result.reason === 'http_error' || result.reason === 'too_large') {
-    return result.reason;
-  }
-  return 'network';
-}
-
-function describeFailReason(reason, httpStatus) {
-  switch (reason) {
-    case 'network': return '接続できませんでした';
-    case 'http_error': return `ページを取得できませんでした（${httpStatus ?? ''}）`;
-    case 'too_large': return 'ページが大きすぎるため対象外です';
-    case 'extract_empty': return '本文を取り出せませんでした（会員限定ページの可能性があります）';
-    default: return '取得に失敗しました';
-  }
-}
-
 // -----------------------------------------------
-// 候補（pack）操作
+// 候補（pack）操作（旧UI互換: #legacy-pack-compat内のみで使用）
 // -----------------------------------------------
-async function addToPack(id) {
-  if (pack.items.includes(id)) return;
-  pack.items.push(id);
-  pack.updatedAt = new Date().toISOString();
-  await putPack(db, pack);
-  await renderAll();
-}
-
 async function removeFromPack(id) {
   pack.items = pack.items.filter(itemId => itemId !== id);
   pack.updatedAt = new Date().toISOString();
@@ -551,26 +338,7 @@ async function removeFromPack(id) {
 // -----------------------------------------------
 async function handleDeleteArticle(id) {
   await deleteArticle(db, id);
-  expandedIds.delete(id);
   await renderAll();
-}
-
-// -----------------------------------------------
-// 立ち読み
-// -----------------------------------------------
-async function togglePreview(id) {
-  const wasExpanded = expandedIds.has(id);
-  if (wasExpanded) {
-    expandedIds.delete(id);
-  } else {
-    expandedIds.add(id);
-  }
-  await renderAll();
-
-  if (wasExpanded) {
-    const card = articleListEl.querySelector(`[data-article-id="${id}"]`);
-    if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
 }
 
 // -----------------------------------------------
@@ -614,70 +382,29 @@ async function renderUrlFoldList() {
 }
 
 // -----------------------------------------------
-// 関連度カード一覧
+// 記事カード一覧
 // -----------------------------------------------
 async function renderArticleList() {
   const metas = await getAllArticleMeta(db);
-  const query = searchQuery.trim();
-  const queryWords = query ? [...new Set(query.toLowerCase().split(/\s+/).filter(Boolean))] : [];
-
-  let cards;
-
-  if (queryWords.length === 0) {
-    metas.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
-    cards = metas.map(meta => ({ meta, score: 0, highlights: [], body: null }));
-  } else {
-    const fetched = metas.filter(m => m.fetchState === 'fetched');
-    const others = metas.filter(m => m.fetchState !== 'fetched');
-
-    const scoringInput = [];
-    const bodyMap = new Map();
-    for (const meta of fetched) {
-      const bodyRecord = await getArticleBody(db, meta.id);
-      const body = bodyRecord ? bodyRecord.body : '';
-      bodyMap.set(meta.id, body);
-      scoringInput.push({ id: meta.id, title: meta.title, body });
-    }
-    const scores = scoreArticles(query, scoringInput);
-
-    const matched = fetched
-      .map(meta => {
-        const { score, highlights } = scores.get(meta.id);
-        return { meta, score, highlights, body: bodyMap.get(meta.id) };
-      })
-      .filter(item => item.score > 0)
-      .sort((a, b) => b.score - a.score || (b.meta.createdAt || '').localeCompare(a.meta.createdAt || ''));
-
-    others.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
-    const otherCards = others.map(meta => ({ meta, score: 0, highlights: [], body: null }));
-
-    cards = [...matched, ...otherCards];
-  }
+  metas.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
 
   articleListEl.innerHTML = '';
 
-  if (cards.length === 0) {
+  if (metas.length === 0) {
     const p = document.createElement('p');
     p.className = 'empty-note';
-    p.textContent = query
-      ? '該当する記事が見つかりませんでした'
-      : 'まだURLが取り込まれていません';
+    p.textContent = 'まだURLが取り込まれていません';
     articleListEl.appendChild(p);
     return;
   }
 
-  for (const item of cards) {
-    const card = await buildArticleCard(item.meta, {
-      score: item.score,
-      highlights: item.highlights,
-      queryWords,
-      body: item.body,
-    });
+  for (const meta of metas) {
+    const card = await buildArticleCard(meta);
     articleListEl.appendChild(card);
   }
 }
 
-async function buildArticleCard(meta, searchInfo) {
+async function buildArticleCard(meta) {
   const card = document.createElement('div');
   card.className = `article-card article-card--${meta.fetchState}`;
   card.dataset.articleId = meta.id;
@@ -696,62 +423,12 @@ async function buildArticleCard(meta, searchInfo) {
     bodyHtml = `<p class="article-state">取得中…</p>`;
   } else if (meta.fetchState === 'failed') {
     bodyHtml = `
-      <p class="article-state article-state--error">${escapeHtml(describeFailReason(meta.failReason, meta.httpStatus))}</p>
+      <p class="article-state article-state--error">取得に失敗しました</p>
       <button type="button" class="btn btn-retry">再試行</button>
     `;
   } else if (meta.fetchState === 'fetched') {
-    const isChecked = pack.items.includes(meta.id);
-    const warnHtml = meta.warnings.includes('short_body')
-      ? `<p class="article-warn">⚠️ 本文が短いため要確認（約${meta.charCount.toLocaleString('ja-JP')}字）</p>`
-      : '';
-
-    const addBtnHtml = isChecked
-      ? `<span class="badge badge-checked">✅ パック候補に追加済み</span>
-         <button type="button" class="btn btn-small btn-remove-pack">候補から外す</button>`
-      : `<button type="button" class="btn btn-add-pack">パック候補に追加</button>`;
-
-    const isExpanded = expandedIds.has(meta.id);
-    const previewBtnHtml = isExpanded
-      ? `<button type="button" class="btn btn-toggle-preview">立ち読みを閉じる</button>`
-      : `<button type="button" class="btn btn-toggle-preview">立ち読みを開く</button>`;
-
-    const refetchBtnHtml = meta.warnings.includes('short_body')
-      ? `<button type="button" class="btn btn-small btn-refetch">最新版を取り直す</button>`
-      : '';
-
-    // 関連度バッジ・抜粋（検索クエリがある場合のみ）
-    const relevanceHtml = buildRelevanceHtml(searchInfo);
-    const excerptHtml = buildExcerptHtml(searchInfo);
-
-    let previewAreaHtml = '';
-    if (isExpanded) {
-      const bodyRecord = await getArticleBody(db, meta.id);
-      const bodyText = bodyRecord ? bodyRecord.body : '';
-      const previewText = bodyText.slice(0, PREVIEW_CHARS);
-      const smallRefetchHtml = !meta.warnings.includes('short_body')
-        ? `<button type="button" class="btn btn-small btn-refetch">最新版を取り直す</button>`
-        : '';
-      previewAreaHtml = `
-        <div class="preview-area">
-          <button type="button" class="btn btn-toggle-preview">立ち読みを閉じる</button>
-          <div class="preview-text">${escapeHtml(previewText)}</div>
-          <button type="button" class="btn btn-toggle-preview">立ち読みを閉じる</button>
-          ${smallRefetchHtml}
-        </div>
-      `;
-    }
-
     bodyHtml = `
-      ${relevanceHtml}
       <p class="article-state">約${meta.charCount.toLocaleString('ja-JP')}字</p>
-      ${warnHtml}
-      ${excerptHtml}
-      <div class="article-actions">
-        ${addBtnHtml}
-        ${isExpanded ? '' : previewBtnHtml}
-        ${refetchBtnHtml}
-      </div>
-      ${previewAreaHtml}
     `;
   }
 
@@ -769,85 +446,11 @@ async function buildArticleCard(meta, searchInfo) {
   const retryBtn = card.querySelector('.btn-retry');
   if (retryBtn) retryBtn.addEventListener('click', () => startFetch(meta.id));
 
-  const refetchBtns = card.querySelectorAll('.btn-refetch');
-  refetchBtns.forEach(btn => btn.addEventListener('click', () => startFetch(meta.id)));
-
-  const addBtn = card.querySelector('.btn-add-pack');
-  if (addBtn) addBtn.addEventListener('click', () => addToPack(meta.id));
-
-  const removeBtn = card.querySelector('.btn-remove-pack');
-  if (removeBtn) removeBtn.addEventListener('click', () => removeFromPack(meta.id));
-
-  const toggleBtns = card.querySelectorAll('.btn-toggle-preview');
-  toggleBtns.forEach(btn => btn.addEventListener('click', () => togglePreview(meta.id)));
-
   return card;
 }
 
-/**
- * 関連度バッジ（高/中/低）のHTMLを構築する。
- * docs/spec.md 10章: 高/中/低の3段階。導出はUI側で行う。
- */
-function buildRelevanceHtml(searchInfo) {
-  if (!searchInfo || searchInfo.score === 0 || searchInfo.queryWords.length === 0) return '';
-
-  const totalWords = searchInfo.queryWords.length;
-  const matchedWordCount = Math.floor(searchInfo.score / 1000);
-  const hitPart = searchInfo.score % 1000;
-  const allMatched = matchedWordCount === totalWords;
-
-  let level;
-  let label;
-  if (allMatched && hitPart >= RELEVANCE_HIGH_MIN_HITS) {
-    level = 'high';
-    label = '高';
-  } else if (allMatched || hitPart >= RELEVANCE_MID_MIN_HITS) {
-    level = 'mid';
-    label = '中';
-  } else {
-    level = 'low';
-    label = '低';
-  }
-
-  return `<p class="relevance-badge relevance-badge--${level}">関連度: ${label}</p>`;
-}
-
-/**
- * ヒット箇所の抜粋（キーワード強調付き）のHTMLを構築する。
- */
-function buildExcerptHtml(searchInfo) {
-  if (!searchInfo || searchInfo.highlights.length === 0 || !searchInfo.body) return '';
-
-  const sorted = [...searchInfo.highlights].sort((a, b) => a.index - b.index);
-  const first = sorted[0];
-
-  const start = Math.max(0, first.index - 30);
-  const end = Math.min(searchInfo.body.length, first.index + first.word.length + 100);
-
-  let snippet = searchInfo.body.slice(start, end).replace(/\s+/g, ' ').trim();
-  if (start > 0) snippet = '…' + snippet;
-  if (end < searchInfo.body.length) snippet += '…';
-
-  const highlighted = highlightSnippet(snippet, searchInfo.queryWords);
-  return `<p class="article-excerpt">${highlighted}</p>`;
-}
-
-function highlightSnippet(snippet, words) {
-  let escaped = escapeHtml(snippet);
-  for (const word of words) {
-    if (!word) continue;
-    const re = new RegExp(escapeRegExp(escapeHtml(word)), 'gi');
-    escaped = escaped.replace(re, m => `<mark>${m}</mark>`);
-  }
-  return escaped;
-}
-
-function escapeRegExp(str) {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
 // -----------------------------------------------
-// 候補一覧
+// 候補一覧（旧UI互換: #legacy-pack-compat内のみで使用）
 // -----------------------------------------------
 async function renderPackSection() {
   packCountEl.textContent = `${pack.items.length}件選択中`;
@@ -872,65 +475,13 @@ async function renderPackSection() {
 
     const li = document.createElement('li');
     li.className = 'pack-list-item';
-    const warnNote = meta.warnings.includes('short_body')
-      ? ` <span class="article-warn-inline">⚠️ 約${meta.charCount.toLocaleString('ja-JP')}字</span>`
-      : '';
     li.innerHTML = `
       <span class="pack-item-title truncate">${escapeHtml(meta.title)}</span>
-      <span class="pack-item-domain truncate">${escapeHtml(meta.domain)}</span>${warnNote}
+      <span class="pack-item-domain truncate">${escapeHtml(meta.domain)}</span>
       <button type="button" class="btn btn-small btn-remove-pack-item">候補から外す</button>
     `;
     li.querySelector('.btn-remove-pack-item').addEventListener('click', () => removeFromPack(id));
     packListEl.appendChild(li);
-  }
-}
-
-// -----------------------------------------------
-// 仕上げ
-// -----------------------------------------------
-async function handleBuildPack() {
-  if (pack.items.length === 0) {
-    setBuildStatus('候補が0件のため、パックのファイルを作成できません', 'error');
-    return;
-  }
-
-  const packName = sanitizePackName(packNameInput.value || DEFAULT_PACK_NAME);
-
-  const articles = [];
-  for (const id of pack.items) {
-    const meta = await getArticleMeta(db, id);
-    if (!meta) continue;
-    const bodyRecord = await getArticleBody(db, id);
-    articles.push({
-      title: meta.title,
-      originalUrl: meta.originalUrl,
-      domain: meta.domain,
-      fetchedAt: meta.fetchedAt,
-      charCount: meta.charCount,
-      body: bodyRecord ? bodyRecord.body : null,
-    });
-  }
-
-  const { markdown, skippedCount } = buildPackMarkdown(packName, articles);
-
-  generatedFiles = {
-    packName,
-    markdown,
-    txt: txtCheckbox.checked ? markdownToPlainText(markdown) : null,
-  };
-
-  saveBtn.hidden = false;
-  const skipNote = skippedCount > 0 ? `（${skippedCount}件をスキップしました）` : '';
-  setBuildStatus(`パックのファイルを作成しました${skipNote}`, 'success');
-}
-
-function handleSaveFiles() {
-  if (!generatedFiles) return;
-
-  downloadBlob(generatedFiles.markdown, generateFilename(generatedFiles.packName, 'md'), 'text/markdown');
-
-  if (generatedFiles.txt) {
-    downloadBlob(generatedFiles.txt, generateFilename(generatedFiles.packName, 'txt'), 'text/plain');
   }
 }
 
@@ -973,9 +524,4 @@ function escapeHtml(str) {
 function setImportStatus(message, type) {
   importStatus.textContent = message;
   importStatus.className = `status-text status-${type}`;
-}
-
-function setBuildStatus(message, type) {
-  buildStatus.textContent = message;
-  buildStatus.className = `status-text status-${type}`;
 }

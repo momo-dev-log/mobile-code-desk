@@ -15,12 +15,6 @@
   <main>
     <!-- 記事タブ -->
     <section id="tab-articles" class="tab-panel" data-tab="articles">
-      <div class="search-bar">
-        <label for="search-input" class="visually-hidden">キーワード</label>
-        <input type="text" id="search-input" placeholder="キーワード（スペース区切りで複数指定）">
-        <button type="button" id="search-btn" class="btn btn-primary">探す</button>
-      </div>
-
       <div class="url-fold-section">
         <button type="button" id="url-fold-toggle" class="url-fold-toggle">
           <span id="url-fold-arrow">▸</span> 取り込み済みURL <span id="url-fold-count">0</span>件
@@ -38,20 +32,6 @@
             <button type="button" id="import-confirm-fetch-btn" class="btn btn-primary">本文を取得する</button>
           </div>
 
-          <div id="sitemap-section" class="sitemap-section" hidden>
-            <p id="sitemap-status" class="status-text"></p>
-
-            <div id="sitemap-index-list" class="sitemap-index-list" hidden></div>
-
-            <div id="sitemap-url-list-section" class="sitemap-url-list-section" hidden>
-              <div class="sitemap-url-actions">
-                <button type="button" id="sitemap-select-all-btn" class="btn btn-small">全選択</button>
-                <button type="button" id="sitemap-deselect-all-btn" class="btn btn-small">全解除</button>
-              </div>
-              <ul id="sitemap-url-list" class="sitemap-url-list"></ul>
-              <button type="button" id="sitemap-import-btn" class="btn btn-primary">URLを取り込む</button>
-            </div>
-          </div>
         </div>
       </div>
 
