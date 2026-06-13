@@ -3,18 +3,18 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>notebooklm-packer (Phase 3)</title>
-  <link rel="stylesheet" href="style.css?v=phase3">
+  <title>notebooklm-packer</title>
+  <link rel="stylesheet" href="style.css?v=2tab">
 </head>
 <body>
   <header class="app-header">
     <h1>notebooklm-packer</h1>
-    <p class="app-subtitle">Phase 3 — さがす・候補・仕上げ</p>
+    <p class="app-subtitle">記事・カテゴリ</p>
   </header>
 
   <main>
-    <!-- さがすタブ -->
-    <section id="tab-search" class="tab-panel" data-tab="search">
+    <!-- 記事タブ -->
+    <section id="tab-articles" class="tab-panel" data-tab="articles">
       <div class="search-bar">
         <label for="search-input" class="visually-hidden">キーワード</label>
         <input type="text" id="search-input" placeholder="キーワード（スペース区切りで複数指定）">
@@ -58,38 +58,27 @@
       <div id="article-card-list"></div>
     </section>
 
-    <!-- 候補タブ -->
-    <section id="tab-pack" class="tab-panel" data-tab="pack" hidden>
-      <h2>候補</h2>
-      <p id="pack-count" class="pack-count"></p>
-      <p id="pack-warn" class="pack-warn" hidden></p>
-      <ul id="pack-list" class="pack-list"></ul>
-      <button type="button" id="finish-btn" class="btn btn-primary">仕上げへ進む</button>
-    </section>
-
-    <!-- 仕上げタブ -->
-    <section id="tab-finish" class="tab-panel" data-tab="finish" hidden>
-      <h2>仕上げ</h2>
-      <label for="pack-name-input">パック名</label>
-      <input type="text" id="pack-name-input" value="資料パック">
-      <label class="checkbox-label">
-        <input type="checkbox" id="txt-checkbox">
-        テキスト版（.txt）も一緒に作る
-      </label>
-      <button type="button" id="build-btn" class="btn btn-primary">パックのファイルを作る</button>
-      <button type="button" id="save-btn" class="btn btn-primary" hidden>ファイルを保存</button>
-      <p id="build-status" class="status-text"></p>
-      <p class="finish-note">保存後、NotebookLMへはご自身でアップロードしてください</p>
-      <p class="finish-note">iPhoneでは長期間使わないと保存データが消えることがあります。ホーム画面に追加すると防げます</p>
+    <!-- カテゴリタブ -->
+    <section id="tab-categories" class="tab-panel" data-tab="categories" hidden>
+      <h2>カテゴリ</h2>
+      <p>まだカテゴリはありません。</p>
+      <ul id="category-list"></ul>
     </section>
   </main>
 
   <nav class="tab-bar">
-    <button type="button" class="tab-btn tab-btn--active" data-tab="search">さがす</button>
-    <button type="button" class="tab-btn" data-tab="pack">候補<span id="tab-pack-badge" class="tab-badge" hidden></span></button>
-    <button type="button" class="tab-btn" data-tab="finish">仕上げ</button>
+    <button type="button" class="tab-btn tab-btn--active" data-tab="articles">記事</button>
+    <button type="button" class="tab-btn" data-tab="categories">カテゴリ</button>
   </nav>
 
-  <script type="module" src="js/main.js?v=phase3"></script>
+  <!-- 旧UI互換のための非表示領域。ユーザー画面には表示しない。 -->
+  <div id="legacy-pack-compat" hidden aria-hidden="true">
+    <p id="pack-count"></p>
+    <p id="pack-warn" hidden></p>
+    <ul id="pack-list"></ul>
+    <span id="tab-pack-badge" hidden></span>
+  </div>
+
+  <script type="module" src="js/main.js?v=2tab"></script>
 </body>
 </html>

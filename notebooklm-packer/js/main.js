@@ -79,7 +79,6 @@ const articleListEl = document.getElementById('article-card-list');
 const packCountEl = document.getElementById('pack-count');
 const packWarnEl = document.getElementById('pack-warn');
 const packListEl = document.getElementById('pack-list');
-const finishBtn = document.getElementById('finish-btn');
 const tabPackBadgeEl = document.getElementById('tab-pack-badge');
 
 const packNameInput = document.getElementById('pack-name-input');
@@ -121,10 +120,6 @@ async function init() {
   sitemapDeselectAllBtn.addEventListener('click', () => setSitemapCheckboxes(false));
   sitemapImportBtn.addEventListener('click', handleSitemapImport);
 
-  finishBtn.addEventListener('click', () => switchTab('finish'));
-  buildBtn.addEventListener('click', handleBuildPack);
-  saveBtn.addEventListener('click', handleSaveFiles);
-
   await renderAll();
 }
 
@@ -144,9 +139,6 @@ function switchTab(tabName) {
   tabBtns.forEach((btn) => {
     btn.classList.toggle('tab-btn--active', btn.dataset.tab === tabName);
   });
-  if (tabName === 'finish') {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }
 }
 
 // -----------------------------------------------
