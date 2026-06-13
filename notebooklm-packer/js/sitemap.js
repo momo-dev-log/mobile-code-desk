@@ -47,31 +47,10 @@ export function parseSitemap(xmlText) {
 }
 
 /**
- * 入力URLが「sitemapらしい」かを判定する（v1/app.js から移植）。
- * パスが .xml で終わる、または "sitemap" を含む場合に true。
+ * URLがsitemap候補かどうかを末尾の拡張子で判定する。
  * @param {string} url
  * @returns {boolean}
  */
-export function looksLikeSitemapUrl(url) {
-  try {
-    const pathname = new URL(url).pathname.toLowerCase();
-    return pathname.endsWith('.xml') || pathname.includes('sitemap');
-  } catch {
-    return false;
-  }
-}
-
-/**
- * サイトURLのオリジンから自動探索するsitemap候補パスを返す（v1/app.js から移植）。
- * /sitemap.xml → /sitemap_index.xml → /wp-sitemap.xml の順。
- * @param {string} siteUrl
- * @returns {string[]}
- */
-export function getSitemapCandidates(siteUrl) {
-  const origin = new URL(siteUrl).origin;
-  return [
-    `${origin}/sitemap.xml`,
-    `${origin}/sitemap_index.xml`,
-    `${origin}/wp-sitemap.xml`,
-  ];
+export function isSitemapUrlCandidate(url) {
+  return /\.xml(?:[?#].*)?$/i.test(url);
 }
