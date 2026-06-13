@@ -14,7 +14,7 @@ import {
 import { normalizeUrl } from './normalize.js';
 import { fetchArticleHtml } from './fetch.js';
 import { extractArticle } from './extract.js';
-import { parseSitemap, isSitemapUrlCandidate } from './sitemap.js';
+import { parseSitemap, looksLikeSitemapUrl, getSitemapCandidates } from './sitemap.js';
 import { scoreArticles } from './scorer.js';
 import { buildPackMarkdown, markdownToPlainText, generateFilename, sanitizePackName } from './markdown.js';
 import {
@@ -187,10 +187,20 @@ async function handleImport() {
     return;
   }
 
-  if (validUrls.length === 1 && isSitemapUrlCandidate(validUrls[0])) {
-    urlTextarea.value = '';
-    await handleSitemapCandidate(validUrls[0]);
-    return;
+  if (validUrls.length === 1) {
+    const single = validUrls[0];
+    if (looksLikeSitemapUrl(single)) {
+      // 明示的なsitemap URL（.xml または "sitemap" を含む）はそのまま展開する
+      urlTextarea.value = '';
+      await handleSitemapCandidate(single);
+      return;
+    }
+    if (isSiteRootUrl(single)) {
+      // サイトのトップURL → sitemapを自動探索して展開する
+      urlTextarea.value = '';
+      await handleSiteUrlAutoDiscover(single);
+      return;
+    }
   }
 
   const { createdCount, duplicateCount, createdIds } = await importUrls(validUrls);
@@ -283,6 +293,71 @@ async function importUrls(urls) {
 // -----------------------------------------------
 // sitemap展開
 // -----------------------------------------------
+
+/**
+ * 入力URLがサイトのトップ（オリジン直下）かどうかを判定する。
+ * パスが "/" または空で、クエリ・フラグメントを持たない場合に true。
+ * @param {string} urlStr
+ * @returns {boolean}
+ */
+function isSiteRootUrl(urlStr) {
+  try {
+    const u = new URL(urlStr);
+    return (u.pathname === '/' || u.pathname === '') && !u.search && !u.hash;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * サイトのトップURLから sitemap を自動探索する（v1/app.js の handleSitemapFetch 相当）。
+ * /sitemap.xml → /sitemap_index.xml → /wp-sitemap.xml の順に試行し、
+ * 最初に解析できた sitemap を展開する。
+ * sitemapindex の場合は既存の子sitemap選択UI（showSitemapIndexList）に乗せる。
+ * @param {string} siteUrl
+ */
+async function handleSiteUrlAutoDiscover(siteUrl) {
+  sitemapSectionEl.hidden = false;
+  sitemapIndexListEl.hidden = true;
+  sitemapUrlListSectionEl.hidden = true;
+  sitemapStatusEl.textContent = 'サイトのsitemapを自動探索しています…';
+  sitemapStatusEl.className = 'status-text';
+
+  let candidates;
+  try {
+    candidates = getSitemapCandidates(siteUrl);
+  } catch {
+    sitemapStatusEl.textContent = 'URLの形式が正しくありません';
+    sitemapStatusEl.className = 'status-text status-error';
+    return;
+  }
+
+  for (const candidate of candidates) {
+    sitemapStatusEl.textContent = `試行中: ${candidate}`;
+    sitemapStatusEl.className = 'status-text';
+
+    const result = await fetchArticleHtml(candidate);
+    if (!result.ok) continue;
+
+    const parsed = parseSitemap(result.html);
+    if (!parsed) continue;
+
+    if (parsed.type === 'sitemapindex' && parsed.urls.length > 0) {
+      showSitemapIndexList(parsed.urls);
+      return;
+    }
+    if (parsed.type === 'urlset' && parsed.urls.length > 0) {
+      showSitemapUrlList(parsed.urls);
+      return;
+    }
+    // URL候補0件の候補は次へ
+  }
+
+  sitemapStatusEl.textContent =
+    'sitemapが見つかりませんでした（/sitemap.xml /sitemap_index.xml /wp-sitemap.xml を試しました）';
+  sitemapStatusEl.className = 'status-text status-error';
+}
+
 async function handleSitemapCandidate(url) {
   sitemapSectionEl.hidden = false;
   sitemapIndexListEl.hidden = true;
