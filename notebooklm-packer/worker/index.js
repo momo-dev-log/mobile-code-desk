@@ -1,6 +1,7 @@
 /**
  * notebooklm-packer v2 用 Cloudflare Worker
  * docs/spec.md 9章「Worker応答仕様（JSON）」に準拠。
+ * (GitHub Actions経由デプロイの動作確認用コミット)
  *
  * 使い方:
  *   GET https://your-worker.workers.dev/?url=https://target-site.com/page
