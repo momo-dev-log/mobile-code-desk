@@ -942,8 +942,12 @@ function handleSaveFiles() {
   }
 }
 
+// UTF-8 BOM。Windows標準アプリ（メモ帳・Excel等）でUTF-8として
+// 正しく認識させるために付与する。
+const UTF8_BOM = '﻿';
+
 function downloadBlob(content, filename, mimeType) {
-  const blob = new Blob([content], { type: `${mimeType}; charset=utf-8` });
+  const blob = new Blob([UTF8_BOM, content], { type: `${mimeType}; charset=utf-8` });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
