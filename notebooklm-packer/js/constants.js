@@ -16,5 +16,14 @@ export const PACK_WARN_THRESHOLD = 50;
 // sitemap展開の上限件数
 export const MAX_SITEMAP_URLS = 200;
 
+// 立ち読みプレビューで表示する本文の先頭文字数
+export const PREVIEW_CHARS = 800;
+
+// 関連度バッジ（高/中/低）の閾値。
+// scorer.jsが返すscoreは「マッチした語の種類数 * 1000 + ヒット数/タイトル一致ボーナス（0-899）」。
+// ここではヒット数側の閾値のみを定義する（語種数による高/中の分岐はUI側で行う）。
+export const RELEVANCE_HIGH_MIN_HITS = 5;
+export const RELEVANCE_MID_MIN_HITS = 2;
+
 // 新Workerのエンドポイント（v1とは別名でデプロイする）
 export const WORKER_URL = 'https://notebooklm-packer-worker-v2.momo19830831.workers.dev';

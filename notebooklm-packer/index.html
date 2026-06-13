@@ -3,36 +3,72 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>notebooklm-packer (Phase 2)</title>
-  <link rel="stylesheet" href="style.css?v=phase2.1">
+  <title>notebooklm-packer (Phase 3)</title>
+  <link rel="stylesheet" href="style.css?v=phase3">
 </head>
 <body>
   <header class="app-header">
     <h1>notebooklm-packer</h1>
-    <p class="app-subtitle">Phase 2 — 一本通し（取り込み→取得→立ち読み→候補→仕上げ）</p>
+    <p class="app-subtitle">Phase 3 — さがす・候補・仕上げ</p>
   </header>
 
   <main>
-    <section class="import-section">
-      <label for="url-textarea">URLを取り込む</label>
-      <textarea id="url-textarea" rows="3" placeholder="https://example.com/article&#10;（複数可・改行区切り）"></textarea>
-      <button type="button" id="import-btn" class="btn btn-primary">URLを取り込む</button>
-      <p id="import-status" class="status-text"></p>
+    <!-- さがすタブ -->
+    <section id="tab-search" class="tab-panel" data-tab="search">
+      <div class="search-bar">
+        <label for="search-input" class="visually-hidden">キーワード</label>
+        <input type="text" id="search-input" placeholder="キーワード（スペース区切りで複数指定）">
+        <button type="button" id="search-btn" class="btn btn-primary">探す</button>
+      </div>
+
+      <div class="url-fold-section">
+        <button type="button" id="url-fold-toggle" class="url-fold-toggle">
+          <span id="url-fold-arrow">▸</span> 取り込み済みURL <span id="url-fold-count">0</span>件
+        </button>
+        <div id="url-fold-body" class="url-fold-body" hidden>
+          <ul id="url-list" class="url-list"></ul>
+
+          <label for="url-textarea">URLを貼り付け</label>
+          <textarea id="url-textarea" rows="3" placeholder="https://example.com/article&#10;（複数可・改行区切り。sitemap.xmlのURLも可）"></textarea>
+          <button type="button" id="import-btn" class="btn btn-primary">URLを取り込む</button>
+          <p id="import-status" class="status-text"></p>
+
+          <div id="import-confirm" class="import-confirm" hidden>
+            <p id="import-confirm-text"></p>
+            <button type="button" id="import-confirm-fetch-btn" class="btn btn-primary">本文を取得する</button>
+          </div>
+
+          <div id="sitemap-section" class="sitemap-section" hidden>
+            <p id="sitemap-status" class="status-text"></p>
+
+            <div id="sitemap-index-list" class="sitemap-index-list" hidden></div>
+
+            <div id="sitemap-url-list-section" class="sitemap-url-list-section" hidden>
+              <div class="sitemap-url-actions">
+                <button type="button" id="sitemap-select-all-btn" class="btn btn-small">全選択</button>
+                <button type="button" id="sitemap-deselect-all-btn" class="btn btn-small">全解除</button>
+              </div>
+              <ul id="sitemap-url-list" class="sitemap-url-list"></ul>
+              <button type="button" id="sitemap-import-btn" class="btn btn-primary">URLを取り込む</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="article-card-list"></div>
     </section>
 
-    <section class="article-list-section">
-      <h2>取り込み済みURL</h2>
-      <div id="article-list"></div>
-    </section>
-
-    <section class="pack-section">
-      <h2>候補 <span id="pack-count"></span></h2>
+    <!-- 候補タブ -->
+    <section id="tab-pack" class="tab-panel" data-tab="pack" hidden>
+      <h2>候補</h2>
+      <p id="pack-count" class="pack-count"></p>
       <p id="pack-warn" class="pack-warn" hidden></p>
       <ul id="pack-list" class="pack-list"></ul>
       <button type="button" id="finish-btn" class="btn btn-primary">仕上げへ進む</button>
     </section>
 
-    <section id="finish-section" class="finish-section" hidden>
+    <!-- 仕上げタブ -->
+    <section id="tab-finish" class="tab-panel" data-tab="finish" hidden>
       <h2>仕上げ</h2>
       <label for="pack-name-input">パック名</label>
       <input type="text" id="pack-name-input" value="資料パック">
@@ -48,6 +84,12 @@
     </section>
   </main>
 
-  <script type="module" src="js/main.js?v=phase2"></script>
+  <nav class="tab-bar">
+    <button type="button" class="tab-btn tab-btn--active" data-tab="search">さがす</button>
+    <button type="button" class="tab-btn" data-tab="pack">候補<span id="tab-pack-badge" class="tab-badge" hidden></span></button>
+    <button type="button" class="tab-btn" data-tab="finish">仕上げ</button>
+  </nav>
+
+  <script type="module" src="js/main.js?v=phase3"></script>
 </body>
 </html>

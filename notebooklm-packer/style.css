@@ -16,9 +16,18 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans", "Noto Sans JP", sans-serif;
   margin: 0;
   padding: 1rem;
+  padding-bottom: calc(1rem + 56px);
   max-width: 720px;
   margin-inline: auto;
   line-height: 1.6;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
 }
 
 .app-header h1 {
@@ -197,9 +206,13 @@ input[type="text"] {
 
 .pack-item-title {
   font-weight: 600;
+  flex: 2;
+  min-width: 0;
 }
 
 .pack-item-domain {
+  flex: 1;
+  min-width: 0;
   font-size: 0.8rem;
   color: #888;
 }
@@ -217,4 +230,230 @@ input[type="text"] {
 .finish-note {
   font-size: 0.8rem;
   color: #888;
+}
+
+/* -----------------------------------------------
+   下部固定タブ
+   ----------------------------------------------- */
+.tab-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  background: var(--bg-card);
+  border-top: 1px solid var(--border);
+  z-index: 10;
+}
+
+.tab-btn {
+  flex: 1;
+  border: none;
+  background: none;
+  padding: 0.6rem 0.5rem;
+  font-size: 0.9rem;
+  color: #888;
+  cursor: pointer;
+  position: relative;
+}
+
+.tab-btn--active {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.tab-badge {
+  display: inline-block;
+  margin-left: 0.25rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.75rem;
+  vertical-align: middle;
+}
+
+.tab-panel {
+  margin-bottom: 0;
+}
+
+/* -----------------------------------------------
+   さがすタブ: 検索バー
+   ----------------------------------------------- */
+.search-bar {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.search-bar input[type="text"] {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+/* -----------------------------------------------
+   折りたたみ: 取り込み済みURL
+   ----------------------------------------------- */
+.url-fold-section {
+  margin-bottom: 1rem;
+}
+
+.url-fold-toggle {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+  color: inherit;
+}
+
+.url-fold-body {
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 6px 6px;
+  padding: 0.75rem;
+}
+
+.url-list {
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+}
+
+.url-list-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.85rem;
+}
+
+.url-list-title {
+  font-weight: 600;
+  flex: 2;
+  min-width: 0;
+}
+
+.url-list-domain {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.8rem;
+  color: #888;
+}
+
+/* -----------------------------------------------
+   取り込み確認
+   ----------------------------------------------- */
+.import-confirm {
+  margin-top: 0.75rem;
+  padding: 0.5rem;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+}
+
+.import-confirm p {
+  margin: 0 0 0.5rem;
+  font-size: 0.9rem;
+}
+
+/* -----------------------------------------------
+   sitemap展開
+   ----------------------------------------------- */
+.sitemap-section {
+  margin-top: 0.75rem;
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.sitemap-index-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.85rem;
+}
+
+.sitemap-index-url {
+  word-break: break-all;
+  flex: 1;
+}
+
+.sitemap-url-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.sitemap-url-list {
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.sitemap-url-item {
+  padding: 0.3rem 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.85rem;
+}
+
+.sitemap-url-text {
+  word-break: break-all;
+}
+
+/* -----------------------------------------------
+   関連度カード: バッジ・抜粋
+   ----------------------------------------------- */
+.relevance-badge {
+  display: inline-block;
+  margin: 0 0 0.5rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.relevance-badge--high {
+  background: #fde2e2;
+  color: var(--error);
+}
+
+.relevance-badge--mid {
+  background: #fff4e5;
+  color: var(--warn);
+}
+
+.relevance-badge--low {
+  background: #eef1f6;
+  color: #666;
+}
+
+.article-excerpt {
+  font-size: 0.85rem;
+  color: #555;
+  margin: 0 0 0.5rem;
+}
+
+.article-excerpt mark {
+  background: #ffe28a;
+  color: inherit;
+  border-radius: 2px;
+}
+
+/* -----------------------------------------------
+   長いテキストの省略表示
+   ----------------------------------------------- */
+.truncate {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
