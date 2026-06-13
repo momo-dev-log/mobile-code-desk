@@ -1,11 +1,11 @@
 import {
   openDb,
-  recoverOrphanedFetches,
   getAllArticleMeta,
   getArticleMeta,
-  putArticleMeta,
-  putArticleMetaAndBody,
-  deleteArticle,
+  existsArticleMeta,
+  saveSuccessArticle,
+  saveFailedArticle,
+  deleteArticleRecord,
   getOrCreatePack,
   putPack,
 } from './db.js';
@@ -20,8 +20,8 @@ import {
 let db;
 let pack;
 
-// 複数URL取り込み確認待ちのID一覧
-let pendingFetchIds = [];
+// 取得中のURL（DBには保存しない、UI上の一時状態）
+let fetchingItems = [];
 
 // -----------------------------------------------
 // DOM要素
@@ -35,10 +35,6 @@ const urlListEl = document.getElementById('url-list');
 const urlTextarea = document.getElementById('url-textarea');
 const importBtn = document.getElementById('import-btn');
 const importStatus = document.getElementById('import-status');
-
-const importConfirmEl = document.getElementById('import-confirm');
-const importConfirmText = document.getElementById('import-confirm-text');
-const importConfirmFetchBtn = document.getElementById('import-confirm-fetch-btn');
 
 const articleListEl = document.getElementById('article-card-list');
 
@@ -54,10 +50,6 @@ init();
 
 async function init() {
   db = await openDb();
-  const recovered = await recoverOrphanedFetches(db);
-  if (recovered > 0) {
-    setImportStatus(`取得中だった${recovered}件を「取得できませんでした」として復帰しました`, 'warn');
-  }
   pack = await getOrCreatePack(db);
 
   setupTabs();
@@ -69,7 +61,6 @@ async function init() {
   });
 
   importBtn.addEventListener('click', handleImport);
-  importConfirmFetchBtn.addEventListener('click', handleImportConfirmFetch);
 
   await renderAll();
 }
@@ -122,54 +113,18 @@ async function handleImport() {
     return;
   }
 
-  const { createdCount, duplicateCount, createdIds } = await importUrls(validUrls);
   urlTextarea.value = '';
-  await finishImport(createdCount, duplicateCount, createdIds);
+  await importAndFetch(validUrls);
 }
 
 /**
- * 取り込み確定後の共通処理。
- * 0件: 案内のみ。1件: 即時取得。2件以上: 確認UIを表示する。
- */
-async function finishImport(createdCount, duplicateCount, createdIds) {
-  const dupNote = duplicateCount > 0 ? `（既存${duplicateCount}件は取り込み済みのためスキップ）` : '';
-
-  if (createdCount === 0) {
-    setImportStatus(`新しいURLはありませんでした${dupNote}`, 'warn');
-    await renderAll();
-    return;
-  }
-
-  setImportStatus(`${createdCount}件のURLを取り込みました${dupNote}`, 'success');
-  await renderAll();
-
-  if (createdCount === 1) {
-    await startFetch(createdIds[0]);
-  } else {
-    pendingFetchIds = createdIds;
-    importConfirmText.textContent = `${createdCount}件のURLを取り込みました。本文を取得しますか？`;
-    importConfirmEl.hidden = false;
-  }
-}
-
-async function handleImportConfirmFetch() {
-  importConfirmEl.hidden = true;
-  const ids = pendingFetchIds;
-  pendingFetchIds = [];
-  for (const id of ids) {
-    await startFetch(id);
-  }
-}
-
-/**
- * URL一覧をarticleMetaとして取り込む（重複は既存記事を維持）。
+ * URLを正規化・重複チェックし、新規分のみ取得中カードを表示してから本文取得を開始する。
  * @param {string[]} urls
- * @returns {Promise<{ createdCount: number, duplicateCount: number, createdIds: string[] }>}
  */
-async function importUrls(urls) {
-  let createdCount = 0;
+async function importAndFetch(urls) {
+  const targets = [];
+  const seenIds = new Set();
   let duplicateCount = 0;
-  const createdIds = [];
 
   for (const originalUrl of urls) {
     let id;
@@ -179,148 +134,102 @@ async function importUrls(urls) {
       continue;
     }
 
-    const existing = await getArticleMeta(db, id);
-    if (existing) {
+    if (seenIds.has(id) || fetchingItems.some(item => item.id === id)) {
       duplicateCount += 1;
       continue;
     }
 
-    const now = new Date().toISOString();
-    const meta = {
-      id,
-      originalUrl,
-      finalUrl: null,
-      title: originalUrl,
-      domain: getDomain(originalUrl),
-      charCount: 0,
-      fetchedAt: null,
-      fetchState: 'idle',
-      failReason: null,
-      warnings: [],
-      httpStatus: null,
-      createdAt: now,
-      updatedAt: now,
-    };
-    await putArticleMeta(db, meta);
-    createdCount += 1;
-    createdIds.push(id);
+    if (await existsArticleMeta(db, id)) {
+      duplicateCount += 1;
+      continue;
+    }
+
+    seenIds.add(id);
+    targets.push({ id, originalUrl });
   }
 
-  return { createdCount, duplicateCount, createdIds };
+  const dupNote = duplicateCount > 0 ? `（既存${duplicateCount}件は取り込み済みのためスキップ）` : '';
+
+  if (targets.length === 0) {
+    setImportStatus(`新しいURLはありませんでした${dupNote}`, 'warn');
+    return;
+  }
+
+  setImportStatus(`${targets.length}件のURLの取得を開始しました${dupNote}`, 'success');
+
+  for (const target of targets) {
+    fetchingItems.push({
+      id: target.id,
+      originalUrl: target.originalUrl,
+      domain: getDomain(target.originalUrl),
+    });
+  }
+  await renderAll();
+
+  for (const target of targets) {
+    await startFetch(target.id, target.originalUrl);
+  }
 }
 
 // -----------------------------------------------
-// 本文取得（取得・取り直し共通）
+// 本文取得
 // -----------------------------------------------
-async function startFetch(id) {
-  const meta = await getArticleMeta(db, id);
-  if (!meta) return;
+async function startFetch(id, originalUrl) {
+  const domain = getDomain(originalUrl);
+  const now = new Date().toISOString();
 
-  const isRefetch = meta.fetchState === 'fetched';
-  const prevWarnings = meta.warnings;
-  const prevTitle = meta.title;
-  const prevCharCount = meta.charCount;
-  const prevFetchedAt = meta.fetchedAt;
-  const prevFinalUrl = meta.finalUrl;
-  const prevHttpStatus = meta.httpStatus;
-
-  meta.fetchState = 'fetching';
-  meta.updatedAt = new Date().toISOString();
-  await putArticleMeta(db, meta);
-  await renderAll();
-
-  const result = await fetchArticleHtml(meta.originalUrl);
+  const result = await fetchArticleHtml(originalUrl);
 
   if (!result.ok) {
-    if (isRefetch) {
-      // 再取得モード: 失敗時は既存の本文・メタを保持したままfetchedに戻す
-      meta.fetchState = 'fetched';
-      meta.warnings = prevWarnings;
-      meta.title = prevTitle;
-      meta.charCount = prevCharCount;
-      meta.fetchedAt = prevFetchedAt;
-      meta.finalUrl = prevFinalUrl;
-      meta.httpStatus = prevHttpStatus;
-      meta.updatedAt = new Date().toISOString();
-      await putArticleMeta(db, meta);
-      setImportStatus('再取得に失敗しました', 'error');
-    } else {
-      meta.fetchState = 'failed';
-      meta.failReason = null;
-      meta.httpStatus = result.httpStatus ?? null;
-      meta.finalUrl = null;
-      meta.updatedAt = new Date().toISOString();
-      await putArticleMeta(db, meta);
-    }
+    await saveFailedArticle(db, {
+      id,
+      normalizedUrl: id,
+      originalUrl,
+      domain,
+      categoryId: '',
+      isExported: false,
+      fetchedAt: now,
+    });
+    removeFetchingItem(id);
     await renderAll();
     return;
   }
 
-  const { title, body, charCount } = extractArticle(result.html, meta.originalUrl);
+  const { title, body, charCount } = extractArticle(result.html, originalUrl);
 
-  if (body.trim() === '') {
-    if (isRefetch) {
-      meta.fetchState = 'fetched';
-      meta.warnings = prevWarnings;
-      meta.title = prevTitle;
-      meta.charCount = prevCharCount;
-      meta.fetchedAt = prevFetchedAt;
-      meta.finalUrl = prevFinalUrl;
-      meta.httpStatus = prevHttpStatus;
-      meta.updatedAt = new Date().toISOString();
-      await putArticleMeta(db, meta);
-      setImportStatus('再取得に失敗しました: 本文を取り出せませんでした', 'error');
-    } else {
-      meta.fetchState = 'failed';
-      meta.failReason = null;
-      meta.httpStatus = result.httpStatus;
-      meta.finalUrl = result.finalUrl;
-      meta.updatedAt = new Date().toISOString();
-      await putArticleMeta(db, meta);
-    }
+  if (body.trim() === '' || charCount > BODY_TOO_LARGE_CHARS) {
+    await saveFailedArticle(db, {
+      id,
+      normalizedUrl: id,
+      originalUrl,
+      domain,
+      categoryId: '',
+      isExported: false,
+      fetchedAt: now,
+    });
+    removeFetchingItem(id);
     await renderAll();
     return;
   }
 
-  if (charCount > BODY_TOO_LARGE_CHARS) {
-    if (isRefetch) {
-      meta.fetchState = 'fetched';
-      meta.warnings = prevWarnings;
-      meta.title = prevTitle;
-      meta.charCount = prevCharCount;
-      meta.fetchedAt = prevFetchedAt;
-      meta.finalUrl = prevFinalUrl;
-      meta.httpStatus = prevHttpStatus;
-      meta.updatedAt = new Date().toISOString();
-      await putArticleMeta(db, meta);
-      setImportStatus('再取得に失敗しました: ページが大きすぎるため対象外です', 'error');
-    } else {
-      meta.fetchState = 'failed';
-      meta.failReason = null;
-      meta.httpStatus = result.httpStatus;
-      meta.finalUrl = result.finalUrl;
-      meta.updatedAt = new Date().toISOString();
-      await putArticleMeta(db, meta);
-    }
-    await renderAll();
-    return;
-  }
+  await saveSuccessArticle(db, {
+    id,
+    normalizedUrl: id,
+    originalUrl,
+    title,
+    domain,
+    categoryId: '',
+    isExported: false,
+    fetchedAt: now,
+    charCount,
+  }, { id, body });
 
-  // 成功
-  const now = new Date().toISOString();
-  meta.fetchState = 'fetched';
-  meta.failReason = null;
-  meta.title = title;
-  meta.domain = getDomain(meta.originalUrl);
-  meta.charCount = charCount;
-  meta.fetchedAt = now;
-  meta.finalUrl = result.finalUrl;
-  meta.httpStatus = result.httpStatus;
-  meta.warnings = [];
-  meta.updatedAt = now;
-
-  await putArticleMetaAndBody(db, meta, { id, body });
+  removeFetchingItem(id);
   await renderAll();
+}
+
+function removeFetchingItem(id) {
+  fetchingItems = fetchingItems.filter(item => item.id !== id);
 }
 
 // -----------------------------------------------
@@ -337,7 +246,7 @@ async function removeFromPack(id) {
 // URL一覧からの削除
 // -----------------------------------------------
 async function handleDeleteArticle(id) {
-  await deleteArticle(db, id);
+  await deleteArticleRecord(db, id);
   await renderAll();
 }
 
@@ -355,7 +264,7 @@ async function renderAll() {
 // -----------------------------------------------
 async function renderUrlFoldList() {
   const metas = await getAllArticleMeta(db);
-  metas.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+  metas.sort((a, b) => (b.fetchedAt || '').localeCompare(a.fetchedAt || ''));
 
   urlFoldCountEl.textContent = String(metas.length);
   urlListEl.innerHTML = '';
@@ -372,7 +281,7 @@ async function renderUrlFoldList() {
     const li = document.createElement('li');
     li.className = 'url-list-item';
     li.innerHTML = `
-      <span class="url-list-title truncate">${escapeHtml(meta.title)}</span>
+      <span class="url-list-title truncate">${escapeHtml(meta.title || meta.originalUrl)}</span>
       <span class="url-list-domain truncate">${escapeHtml(meta.domain)}</span>
       <button type="button" class="btn btn-small btn-delete-url">削除</button>
     `;
@@ -386,11 +295,13 @@ async function renderUrlFoldList() {
 // -----------------------------------------------
 async function renderArticleList() {
   const metas = await getAllArticleMeta(db);
-  metas.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+  const successMetas = metas
+    .filter(meta => meta.status === 'success')
+    .sort((a, b) => (b.fetchedAt || '').localeCompare(a.fetchedAt || ''));
 
   articleListEl.innerHTML = '';
 
-  if (metas.length === 0) {
+  if (fetchingItems.length === 0 && successMetas.length === 0) {
     const p = document.createElement('p');
     p.className = 'empty-note';
     p.textContent = 'まだURLが取り込まれていません';
@@ -398,53 +309,40 @@ async function renderArticleList() {
     return;
   }
 
-  for (const meta of metas) {
-    const card = await buildArticleCard(meta);
-    articleListEl.appendChild(card);
+  for (const item of fetchingItems) {
+    articleListEl.appendChild(buildFetchingCard(item));
+  }
+
+  for (const meta of successMetas) {
+    articleListEl.appendChild(buildArticleCard(meta));
   }
 }
 
-async function buildArticleCard(meta) {
+function buildFetchingCard(item) {
   const card = document.createElement('div');
-  card.className = `article-card article-card--${meta.fetchState}`;
+  card.className = 'article-card article-card--fetching';
+  card.dataset.articleId = item.id;
+
+  card.innerHTML = `
+    <p class="article-source truncate">Source: ${escapeHtml(item.originalUrl)}</p>
+    <p class="article-domain truncate">${escapeHtml(item.domain)}</p>
+    <p class="article-state">取得中…</p>
+  `;
+
+  return card;
+}
+
+function buildArticleCard(meta) {
+  const card = document.createElement('div');
+  card.className = 'article-card article-card--success';
   card.dataset.articleId = meta.id;
-
-  const titleHtml = `<p class="article-title truncate">${escapeHtml(meta.title)}</p>`;
-  const domainHtml = `<p class="article-domain truncate">${escapeHtml(meta.domain)}</p>`;
-
-  let bodyHtml = '';
-
-  if (meta.fetchState === 'idle') {
-    bodyHtml = `
-      <p class="article-state">未取得</p>
-      <button type="button" class="btn btn-fetch">本文を取得する</button>
-    `;
-  } else if (meta.fetchState === 'fetching') {
-    bodyHtml = `<p class="article-state">取得中…</p>`;
-  } else if (meta.fetchState === 'failed') {
-    bodyHtml = `
-      <p class="article-state article-state--error">取得に失敗しました</p>
-      <button type="button" class="btn btn-retry">再試行</button>
-    `;
-  } else if (meta.fetchState === 'fetched') {
-    bodyHtml = `
-      <p class="article-state">約${meta.charCount.toLocaleString('ja-JP')}字</p>
-    `;
-  }
 
   card.innerHTML = `
     <p class="article-source truncate">Source: ${escapeHtml(meta.originalUrl)}</p>
-    ${titleHtml}
-    ${domainHtml}
-    ${bodyHtml}
+    <p class="article-title truncate">${escapeHtml(meta.title)}</p>
+    <p class="article-domain truncate">${escapeHtml(meta.domain)}</p>
+    <p class="article-state">約${(meta.charCount ?? 0).toLocaleString('ja-JP')}字</p>
   `;
-
-  // イベントバインド
-  const fetchBtn = card.querySelector('.btn-fetch');
-  if (fetchBtn) fetchBtn.addEventListener('click', () => startFetch(meta.id));
-
-  const retryBtn = card.querySelector('.btn-retry');
-  if (retryBtn) retryBtn.addEventListener('click', () => startFetch(meta.id));
 
   return card;
 }
