@@ -467,20 +467,6 @@ input[type="text"] {
   font-weight: 600;
 }
 
-.category-bar-add-form {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
-  margin-top: 0.5rem;
-}
-
-.category-bar-add-form input[type="text"] {
-  flex: 1;
-  min-width: 0;
-  margin-bottom: 0;
-}
-
 /* -----------------------------------------------
    記事カードのカテゴリ欄
    ----------------------------------------------- */

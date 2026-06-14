@@ -74,10 +74,6 @@ const categorySheetStatus = document.getElementById('category-sheet-status');
 const categorySheetCloseBtn = document.getElementById('category-sheet-close-btn');
 
 const categoryBarEl = document.getElementById('category-bar');
-const categoryBarAddFormEl = document.getElementById('category-bar-add-form');
-const categoryBarAddInput = document.getElementById('category-bar-add-input');
-const categoryBarAddSaveBtn = document.getElementById('category-bar-add-save-btn');
-const categoryBarAddCancelBtn = document.getElementById('category-bar-add-cancel-btn');
 const categoryBarStatus = document.getElementById('category-bar-status');
 
 // カテゴリ付けシートの対象記事ID（シートが閉じている時はnull）
@@ -101,9 +97,6 @@ async function init() {
   categorySheetOverlay.addEventListener('click', closeCategorySheet);
   categorySheetCloseBtn.addEventListener('click', closeCategorySheet);
   categorySheetCreateBtn.addEventListener('click', handleCreateCategoryInSheet);
-
-  categoryBarAddSaveBtn.addEventListener('click', handleCreateCategoryFromBar);
-  categoryBarAddCancelBtn.addEventListener('click', closeCategoryBarAddForm);
 
   categoryDetailBackBtn.addEventListener('click', closeCategoryDetail);
   categoryDetailExportBtn.addEventListener('click', handleExportCategoryDetail);
@@ -410,13 +403,6 @@ async function renderCategoryBar() {
   for (const category of categories) {
     categoryBarEl.appendChild(buildCategoryBarItem(category.name, category.id));
   }
-
-  const addBtn = document.createElement('button');
-  addBtn.type = 'button';
-  addBtn.className = 'category-bar-item';
-  addBtn.textContent = '＋';
-  addBtn.addEventListener('click', handleOpenCategoryBarAddForm);
-  categoryBarEl.appendChild(addBtn);
 }
 
 const LONG_PRESS_DURATION_MS = 600;
@@ -484,36 +470,6 @@ async function handleSelectCategoryFilter(value) {
   currentCategoryFilter = value;
   await renderCategoryBar();
   await renderArticleList();
-}
-
-function handleOpenCategoryBarAddForm() {
-  categoryBarAddInput.value = '';
-  setCategoryBarStatus('', '');
-  categoryBarAddFormEl.hidden = false;
-}
-
-function closeCategoryBarAddForm() {
-  categoryBarAddFormEl.hidden = true;
-}
-
-async function handleCreateCategoryFromBar() {
-  const name = categoryBarAddInput.value;
-
-  let category;
-  try {
-    category = await createCategory(db, name);
-  } catch (err) {
-    setCategoryBarStatus(err.message, 'error');
-    return;
-  }
-
-  currentCategoryFilter = category.id;
-  categoryBarAddInput.value = '';
-  setCategoryBarStatus('', '');
-  closeCategoryBarAddForm();
-  await renderCategoryBar();
-  await renderArticleList();
-  await renderCategoryList();
 }
 
 function setCategoryBarStatus(message, type) {
