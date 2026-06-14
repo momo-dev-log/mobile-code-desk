@@ -120,6 +120,7 @@ function switchTab(tabName) {
   tabBtns.forEach((btn) => {
     btn.classList.toggle('tab-btn--active', btn.dataset.tab === tabName);
   });
+  document.body.classList.toggle('tab-articles-active', tabName === 'articles');
 }
 
 // -----------------------------------------------
