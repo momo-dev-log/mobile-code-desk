@@ -11,6 +11,8 @@ import {
   renameCategory,
   deleteCategory,
   assignCategory,
+  getArticleBody,
+  setExported,
 } from './db.js';
 import { normalizeUrl } from './normalize.js';
 import { fetchArticleHtml } from './fetch.js';
@@ -58,6 +60,8 @@ const categoryListView = document.getElementById('category-list-view');
 const categoryDetailView = document.getElementById('category-detail-view');
 const categoryDetailBackBtn = document.getElementById('category-detail-back-btn');
 const categoryDetailTitle = document.getElementById('category-detail-title');
+const categoryDetailExportBtn = document.getElementById('category-detail-export-btn');
+const categoryDetailExportStatus = document.getElementById('category-detail-export-status');
 const categoryDetailEmpty = document.getElementById('category-detail-empty');
 const categoryDetailListEl = document.getElementById('category-detail-list');
 
@@ -106,6 +110,7 @@ async function init() {
   categoryBarAddCancelBtn.addEventListener('click', closeCategoryBarAddForm);
 
   categoryDetailBackBtn.addEventListener('click', closeCategoryDetail);
+  categoryDetailExportBtn.addEventListener('click', handleExportCategoryDetail);
 
   await renderAll();
 }
@@ -530,7 +535,10 @@ function buildCategoryItem(category, count) {
     </div>
   `;
 
-  li.addEventListener('click', () => renderCategoryDetail(category.id));
+  li.addEventListener('click', () => {
+    setCategoryDetailExportStatus('', '');
+    renderCategoryDetail(category.id);
+  });
 
   li.querySelector('.btn-rename-category').addEventListener('click', (e) => {
     e.stopPropagation();
@@ -552,7 +560,10 @@ function buildUncategorizedItem(count) {
     <span class="category-name truncate">未分類 <span class="category-count">(${count})</span></span>
   `;
 
-  li.addEventListener('click', () => renderCategoryDetail('unclassified'));
+  li.addEventListener('click', () => {
+    setCategoryDetailExportStatus('', '');
+    renderCategoryDetail('unclassified');
+  });
 
   return li;
 }
@@ -626,6 +637,7 @@ async function renderCategoryDetail(target) {
 
   currentCategoryDetailTarget = target;
   categoryDetailTitle.textContent = title;
+  categoryDetailExportBtn.hidden = target === 'unclassified';
 
   const metas = await getAllArticleMeta(db);
   const targetMetas = metas
@@ -648,15 +660,11 @@ function buildCategoryDetailItem(meta) {
   const li = document.createElement('li');
   li.className = 'category-detail-item';
 
-  const exportedBadge = meta.isExported
-    ? '<span class="category-detail-item-exported">出力済み</span>'
-    : '';
-
   li.innerHTML = `
     <p class="category-detail-item-title truncate">${escapeHtml(meta.title)}</p>
     <p class="category-detail-item-domain truncate">${escapeHtml(meta.domain)}</p>
     <p class="category-detail-item-url truncate">${escapeHtml(meta.originalUrl)}</p>
-    ${exportedBadge}
+    ${buildExportedBadge(meta)}
   `;
 
   return li;
@@ -666,6 +674,125 @@ function closeCategoryDetail() {
   currentCategoryDetailTarget = null;
   categoryDetailView.hidden = true;
   categoryListView.hidden = false;
+}
+
+/**
+ * 出力済みバッジのHTMLを返す（未出力の場合は空文字）。
+ * @param {{ isExported?: boolean }} meta
+ * @returns {string}
+ */
+function buildExportedBadge(meta) {
+  return meta.isExported ? '<span class="exported-badge">● 出力済み</span>' : '';
+}
+
+// -----------------------------------------------
+// Markdown出力（カテゴリ単位）
+// -----------------------------------------------
+async function handleExportCategoryDetail() {
+  if (currentCategoryDetailTarget === null || currentCategoryDetailTarget === 'unclassified') {
+    return;
+  }
+
+  const categoryId = currentCategoryDetailTarget;
+  const categories = await getAllCategories(db);
+  const category = categories.find(c => c.id === categoryId);
+  if (!category) {
+    setCategoryDetailExportStatus('カテゴリが見つかりませんでした', 'error');
+    return;
+  }
+
+  const metas = await getAllArticleMeta(db);
+  const targetMetas = metas
+    .filter(meta => meta.status === 'success' && meta.categoryId === categoryId)
+    .sort((a, b) => (b.fetchedAt || '').localeCompare(a.fetchedAt || ''));
+
+  if (targetMetas.length === 0) {
+    setCategoryDetailExportStatus('出力対象の記事がありません', 'warn');
+    return;
+  }
+
+  const entries = [];
+  let skippedCount = 0;
+  for (const meta of targetMetas) {
+    const bodyRecord = await getArticleBody(db, meta.id);
+    if (!bodyRecord || !bodyRecord.body) {
+      skippedCount += 1;
+      continue;
+    }
+    entries.push({ meta, body: bodyRecord.body });
+  }
+
+  if (entries.length === 0) {
+    setCategoryDetailExportStatus('出力対象の記事に本文データが見つかりませんでした', 'error');
+    return;
+  }
+
+  const markdown = buildCategoryMarkdown(category.name, entries);
+  const filename = `${sanitizeFileName(category.name)}_${formatDateForFilename(new Date())}.md`;
+
+  try {
+    downloadBlob(markdown, filename, 'text/markdown');
+  } catch {
+    setCategoryDetailExportStatus('書き出しに失敗しました', 'error');
+    return;
+  }
+
+  for (const entry of entries) {
+    await setExported(db, entry.meta.id);
+  }
+
+  const skipNote = skippedCount > 0 ? `（本文データが見つからず${skippedCount}件をスキップしました）` : '';
+  setCategoryDetailExportStatus(`${entries.length}件をMarkdownとして書き出しました${skipNote}`, 'success');
+
+  await renderAll();
+}
+
+/**
+ * カテゴリのMarkdown文字列を組み立てる。
+ * @param {string} categoryName
+ * @param {{ meta: object, body: string }[]} entries
+ * @returns {string}
+ */
+function buildCategoryMarkdown(categoryName, entries) {
+  const parts = [`# ${categoryName}`, ''];
+
+  for (const { meta, body } of entries) {
+    parts.push(`## ${meta.title}`);
+    parts.push(`URL: ${meta.originalUrl}`);
+    parts.push(`ドメイン: ${meta.domain}`);
+    parts.push('');
+    parts.push(body);
+    parts.push('');
+    parts.push('---');
+    parts.push('');
+  }
+
+  return parts.join('\n');
+}
+
+/**
+ * カテゴリ名をファイル名として安全な文字列に変換する。
+ * @param {string} name
+ * @returns {string}
+ */
+function sanitizeFileName(name) {
+  const sanitized = name
+    .trim()
+    .replace(/[\\/:*?"<>|]/g, '_')
+    .replace(/[\x00-\x1f]/g, '_');
+  return sanitized === '' ? 'category' : sanitized;
+}
+
+function formatDateForFilename(date) {
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function setCategoryDetailExportStatus(message, type) {
+  categoryDetailExportStatus.textContent = message;
+  categoryDetailExportStatus.className = `status-text${type ? ` status-${type}` : ''}`;
 }
 
 // -----------------------------------------------
@@ -828,6 +955,7 @@ function buildArticleCard(meta, categoryMap) {
     <p class="article-title truncate">${escapeHtml(meta.title)}</p>
     <p class="article-domain truncate">${escapeHtml(meta.domain)}</p>
     <button type="button" class="article-category-btn">${escapeHtml(categoryLabel)} ▾</button>
+    ${buildExportedBadge(meta)}
     <p class="article-state">約${(meta.charCount ?? 0).toLocaleString('ja-JP')}字</p>
   `;
 

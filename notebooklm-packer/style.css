@@ -402,14 +402,17 @@ input[type="text"] {
   margin: 0 0 0.15rem;
 }
 
-.category-detail-item-exported {
+/* -----------------------------------------------
+   出力済みバッジ
+   ----------------------------------------------- */
+.exported-badge {
   display: inline-block;
   font-size: 0.75rem;
-  color: var(--success);
-  border: 1px solid var(--success);
+  color: #fff;
+  background: var(--error);
   border-radius: 999px;
   padding: 0.05rem 0.5rem;
-  margin-top: 0.15rem;
+  margin: 0.25rem 0 0;
 }
 
 /* -----------------------------------------------
