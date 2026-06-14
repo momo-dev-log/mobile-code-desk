@@ -90,6 +90,11 @@ input[type="text"] {
   font-size: 0.8rem;
 }
 
+.btn-danger {
+  border-color: var(--error);
+  color: var(--error);
+}
+
 .checkbox-label {
   display: block;
   margin: 0.5rem 0;
@@ -324,16 +329,7 @@ input[type="text"] {
   border-radius: 8px;
   background: rgba(127, 127, 127, 0.08);
   margin-bottom: 0.75rem;
-  overflow: hidden;
-}
-
-.category-card-main {
   padding: 0.75rem;
-  cursor: pointer;
-}
-
-.category-card-main:active {
-  background: rgba(127, 127, 127, 0.15);
 }
 
 .category-card-name {
@@ -344,13 +340,26 @@ input[type="text"] {
 .category-card-meta {
   font-size: 0.85rem;
   color: #888;
+  margin: 0 0 0.5rem;
+}
+
+.category-card-note {
+  font-size: 0.85rem;
+  color: #888;
   margin: 0;
+}
+
+.category-card-export-btn {
+  display: block;
+  width: 100%;
+  text-align: center;
+  margin-bottom: 0.5rem;
 }
 
 .category-card-actions {
   display: flex;
   gap: 0.5rem;
-  padding: 0.5rem 0.75rem;
+  padding-top: 0.5rem;
   border-top: 1px solid var(--border);
 }
 
@@ -420,14 +429,8 @@ input[type="text"] {
    カテゴリバー
    ----------------------------------------------- */
 .category-bar-wrap {
-  position: sticky;
-  top: 0;
-  z-index: 5;
-  margin: 0 -1rem 1rem;
-  padding: 0.5rem 1rem;
-  background: var(--bg-card);
-  border-bottom: 1px solid var(--border);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+  margin: 0;
+  padding: 0;
 }
 
 .category-bar {
@@ -441,10 +444,10 @@ input[type="text"] {
 
 .category-bar-item {
   flex: 0 0 auto;
-  border: 1px solid var(--border);
+  border: 1px solid rgba(255, 255, 255, 0.25);
   border-radius: 999px;
-  background: var(--bg-card);
-  color: #1a1a1a;
+  background: rgba(255, 255, 255, 0.08);
+  color: #f0f0f0;
   font-size: 0.85rem;
   padding: 0.35rem 0.9rem;
   cursor: pointer;
@@ -562,4 +565,85 @@ input[type="text"] {
   display: block;
   font-size: 0.9rem;
   margin-bottom: 0.25rem;
+}
+
+/* -----------------------------------------------
+   記事タブ: 操作エリア固定 + 一覧エリア内部スクロール
+   ----------------------------------------------- */
+body.tab-articles-active {
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-bottom: 56px;
+}
+
+body.tab-articles-active .app-header {
+  flex: 0 0 auto;
+}
+
+body.tab-articles-active main {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+body.tab-articles-active #tab-articles {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+}
+
+.articles-toolbar {
+  flex: 0 0 auto;
+  background: #20232a;
+  color: #f0f0f0;
+  padding: 1rem;
+  border-radius: 8px;
+  margin-bottom: 0.75rem;
+}
+
+.articles-toolbar > *:last-child {
+  margin-bottom: 0;
+}
+
+.articles-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.articles-toolbar .url-input-section {
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  margin-bottom: 0.75rem;
+}
+
+.articles-toolbar #failed-area {
+  border: none;
+  border-left: 3px solid var(--error);
+  border-radius: 0;
+  padding: 0 0 0 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.articles-toolbar textarea,
+.articles-toolbar input[type="text"] {
+  background: #2d313a;
+  color: #f0f0f0;
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.articles-toolbar .url-fold-toggle,
+.articles-toolbar .url-fold-body {
+  border-color: rgba(255, 255, 255, 0.25);
+  color: inherit;
 }
