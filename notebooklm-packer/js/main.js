@@ -495,7 +495,7 @@ async function handleDeleteCategory(id) {
 
   await deleteCategory(db, id);
   setCategoryStatus('カテゴリを削除しました', 'success');
-  await renderCategoryList();
+  await renderAll();
 }
 
 async function renderCategoryList() {
@@ -754,20 +754,31 @@ async function handleExportCategoryDetail() {
  * @returns {string}
  */
 function buildCategoryMarkdown(categoryName, entries) {
-  const parts = [`# ${categoryName}`, ''];
+  const parts = [
+    `# ${categoryName}`,
+    '',
+    `作成日: ${formatDateForFilename(new Date())}`,
+    `記事数: ${entries.length}`,
+    '',
+    '---',
+    '',
+  ];
 
-  for (const { meta, body } of entries) {
+  entries.forEach(({ meta, body }, i) => {
     parts.push(`## ${meta.title}`);
-    parts.push(`URL: ${meta.originalUrl}`);
-    parts.push(`ドメイン: ${meta.domain}`);
+    parts.push('');
+    parts.push(`- URL: ${meta.originalUrl}`);
+    parts.push(`- ドメイン: ${meta.domain}`);
     parts.push('');
     parts.push(body);
-    parts.push('');
-    parts.push('---');
-    parts.push('');
-  }
+    if (i < entries.length - 1) {
+      parts.push('');
+      parts.push('---');
+      parts.push('');
+    }
+  });
 
-  return parts.join('\n');
+  return parts.join('\n') + '\n';
 }
 
 /**
