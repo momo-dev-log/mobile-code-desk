@@ -127,6 +127,7 @@ function switchTab(tabName) {
   tabBtns.forEach((btn) => {
     btn.classList.toggle('tab-btn--active', btn.dataset.tab === tabName);
   });
+  document.body.classList.toggle('tab-articles-active', tabName === 'articles');
 }
 
 // -----------------------------------------------
@@ -511,30 +512,25 @@ function buildCategoryCard(category, count) {
   li.className = 'category-card';
   li.dataset.categoryId = category.id;
 
-  const metaText = count > 0 ? `${count}件 / Markdownファイルを作る` : '0件 / 記事がありません';
-
   li.innerHTML = `
-    <div class="category-card-main">
-      <p class="category-card-name truncate">${escapeHtml(category.name)}</p>
-      <p class="category-card-meta">${metaText}</p>
-    </div>
+    <p class="category-card-name truncate">${escapeHtml(category.name)}</p>
+    <p class="category-card-meta">${count}件</p>
+    <button type="button" class="btn btn-primary category-card-export-btn">Markdownファイルを作る</button>
     <div class="category-card-actions">
       <button type="button" class="btn btn-small btn-rename-category">名前変更</button>
-      <button type="button" class="btn btn-small btn-delete-category">削除</button>
+      <button type="button" class="btn btn-small btn-danger btn-delete-category">削除</button>
     </div>
   `;
 
-  li.querySelector('.category-card-main').addEventListener('click', () => {
+  li.querySelector('.category-card-export-btn').addEventListener('click', () => {
     setCategoryDetailExportStatus('', '');
     renderCategoryDetail(category.id);
   });
 
-  li.querySelector('.btn-rename-category').addEventListener('click', (e) => {
-    e.stopPropagation();
+  li.querySelector('.btn-rename-category').addEventListener('click', () => {
     showCategoryRenameForm(li, category);
   });
-  li.querySelector('.btn-delete-category').addEventListener('click', (e) => {
-    e.stopPropagation();
+  li.querySelector('.btn-delete-category').addEventListener('click', () => {
     handleDeleteCategory(category.id);
   });
 
@@ -543,19 +539,13 @@ function buildCategoryCard(category, count) {
 
 function buildUncategorizedCard(count) {
   const li = document.createElement('li');
-  li.className = 'category-card';
+  li.className = 'category-card category-card--unclassified';
 
   li.innerHTML = `
-    <div class="category-card-main">
-      <p class="category-card-name">未分類</p>
-      <p class="category-card-meta">${count}件 / 確認のみ</p>
-    </div>
+    <p class="category-card-name">未分類</p>
+    <p class="category-card-meta">${count}件</p>
+    <p class="category-card-note">確認のみ</p>
   `;
-
-  li.querySelector('.category-card-main').addEventListener('click', () => {
-    setCategoryDetailExportStatus('', '');
-    renderCategoryDetail('unclassified');
-  });
 
   return li;
 }
@@ -642,6 +632,7 @@ async function renderCategoryDetail(target) {
 
   categoryListView.hidden = true;
   categoryDetailView.hidden = false;
+  categoryDetailBackBtn.hidden = false;
 }
 
 function buildCategoryDetailItem(meta) {
@@ -661,6 +652,7 @@ function buildCategoryDetailItem(meta) {
 function closeCategoryDetail() {
   currentCategoryDetailTarget = null;
   categoryDetailView.hidden = true;
+  categoryDetailBackBtn.hidden = true;
   categoryListView.hidden = false;
 }
 

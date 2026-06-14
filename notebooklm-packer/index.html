@@ -6,7 +6,7 @@
   <title>notebooklm-packer</title>
   <link rel="stylesheet" href="style.css?v=2tab">
 </head>
-<body>
+<body class="tab-articles-active">
   <header class="app-header">
     <h1>notebooklm-packer</h1>
     <p class="app-subtitle">記事・カテゴリ</p>
@@ -15,38 +15,42 @@
   <main>
     <!-- 記事タブ -->
     <section id="tab-articles" class="tab-panel" data-tab="articles">
-      <section class="url-input-section">
-        <label for="url-textarea">URLを貼り付けて取り込む</label>
-        <textarea id="url-textarea" rows="3" placeholder="https://example.com/article&#10;（複数可・改行区切り）"></textarea>
-        <button type="button" id="import-btn" class="btn btn-primary">URLを取り込む</button>
-        <p id="import-status" class="status-text"></p>
-      </section>
+      <div id="articles-toolbar" class="articles-toolbar">
+        <section class="url-input-section">
+          <label for="url-textarea">URLを貼り付けて取り込む</label>
+          <textarea id="url-textarea" rows="3" placeholder="https://example.com/article&#10;（複数可・改行区切り）"></textarea>
+          <button type="button" id="import-btn" class="btn btn-primary">URLを取り込む</button>
+          <p id="import-status" class="status-text"></p>
+        </section>
 
-      <div class="url-fold-section">
-        <button type="button" id="url-fold-toggle" class="url-fold-toggle">
-          <span id="url-fold-arrow">▸</span> 取り込み済みURL <span id="url-fold-count">0</span>件
-        </button>
-        <div id="url-fold-body" class="url-fold-body" hidden>
-          <ul id="url-list" class="url-list"></ul>
+        <div class="url-fold-section">
+          <button type="button" id="url-fold-toggle" class="url-fold-toggle">
+            <span id="url-fold-arrow">▸</span> 取り込み済みURL <span id="url-fold-count">0</span>件
+          </button>
+          <div id="url-fold-body" class="url-fold-body" hidden>
+            <ul id="url-list" class="url-list"></ul>
+          </div>
+        </div>
+
+        <section id="failed-area" class="failed-area" hidden>
+          <h2>取得失敗 <span id="failed-count">0</span>件</h2>
+          <ul id="failed-list" class="failed-list"></ul>
+        </section>
+
+        <div id="category-bar-wrap" class="category-bar-wrap">
+          <div id="category-bar" class="category-bar"></div>
+          <div id="category-bar-add-form" class="category-bar-add-form" hidden>
+            <input type="text" id="category-bar-add-input" placeholder="新しいカテゴリ名">
+            <button type="button" id="category-bar-add-save-btn" class="btn btn-small btn-primary">作成</button>
+            <button type="button" id="category-bar-add-cancel-btn" class="btn btn-small">キャンセル</button>
+          </div>
+          <p id="category-bar-status" class="status-text"></p>
         </div>
       </div>
 
-      <section id="failed-area" class="failed-area" hidden>
-        <h2>取得失敗 <span id="failed-count">0</span>件</h2>
-        <ul id="failed-list" class="failed-list"></ul>
-      </section>
-
-      <div id="category-bar-wrap" class="category-bar-wrap">
-        <div id="category-bar" class="category-bar"></div>
-        <div id="category-bar-add-form" class="category-bar-add-form" hidden>
-          <input type="text" id="category-bar-add-input" placeholder="新しいカテゴリ名">
-          <button type="button" id="category-bar-add-save-btn" class="btn btn-small btn-primary">作成</button>
-          <button type="button" id="category-bar-add-cancel-btn" class="btn btn-small">キャンセル</button>
-        </div>
-        <p id="category-bar-status" class="status-text"></p>
+      <div id="articles-scroll" class="articles-scroll">
+        <div id="article-card-list"></div>
       </div>
-
-      <div id="article-card-list"></div>
     </section>
 
     <!-- カテゴリタブ -->
@@ -64,12 +68,12 @@
       <!-- カテゴリ詳細ビュー -->
       <div id="category-detail-view" hidden>
         <h2 id="category-detail-title"></h2>
-        <button type="button" id="category-detail-export-btn" class="btn btn-primary">このカテゴリをMarkdownで書き出す</button>
+        <button type="button" id="category-detail-export-btn" class="btn btn-primary">Markdownファイルを書き出す</button>
         <p id="category-detail-export-status" class="status-text"></p>
         <p id="category-detail-empty" class="empty-note" hidden>このカテゴリにはまだ記事がありません</p>
         <ul id="category-detail-list" class="category-detail-list"></ul>
-        <button type="button" id="category-detail-back-btn" class="btn-back-link">← 一覧に戻る</button>
       </div>
+      <button type="button" id="category-detail-back-btn" class="btn-back-link" hidden>← 一覧に戻る</button>
     </section>
   </main>
 
