@@ -5,6 +5,7 @@ import {
   saveSuccessArticle,
   saveFailedArticle,
   deleteArticleRecord,
+  deleteFailedUrl,
 } from './db.js';
 import { normalizeUrl } from './normalize.js';
 import { fetchArticleHtml } from './fetch.js';
@@ -28,6 +29,10 @@ const urlListEl = document.getElementById('url-list');
 const urlTextarea = document.getElementById('url-textarea');
 const importBtn = document.getElementById('import-btn');
 const importStatus = document.getElementById('import-status');
+
+const failedAreaEl = document.getElementById('failed-area');
+const failedCountEl = document.getElementById('failed-count');
+const failedListEl = document.getElementById('failed-list');
 
 const articleListEl = document.getElementById('article-card-list');
 
@@ -162,6 +167,18 @@ async function importAndFetch(urls) {
 // 本文取得
 // -----------------------------------------------
 async function startFetch(id, originalUrl) {
+  await fetchAndSave(id, originalUrl);
+  removeFetchingItem(id);
+  await renderAll();
+}
+
+/**
+ * 本文を取得し、結果に応じてarticleMeta(+articleBody)を保存する。
+ * 既存のレコード（failed等）があっても上書きする想定。
+ * @param {string} id
+ * @param {string} originalUrl
+ */
+async function fetchAndSave(id, originalUrl) {
   const domain = getDomain(originalUrl);
   const now = new Date().toISOString();
 
@@ -177,8 +194,6 @@ async function startFetch(id, originalUrl) {
       isExported: false,
       fetchedAt: now,
     });
-    removeFetchingItem(id);
-    await renderAll();
     return;
   }
 
@@ -194,8 +209,6 @@ async function startFetch(id, originalUrl) {
       isExported: false,
       fetchedAt: now,
     });
-    removeFetchingItem(id);
-    await renderAll();
     return;
   }
 
@@ -210,9 +223,6 @@ async function startFetch(id, originalUrl) {
     fetchedAt: now,
     charCount,
   }, { id, body });
-
-  removeFetchingItem(id);
-  await renderAll();
 }
 
 function removeFetchingItem(id) {
@@ -228,10 +238,28 @@ async function handleDeleteArticle(id) {
 }
 
 // -----------------------------------------------
+// 取得失敗エリア
+// -----------------------------------------------
+async function handleRetryFailed(id, originalUrl) {
+  await fetchAndSave(id, originalUrl);
+  await renderAll();
+}
+
+function handleOpenFailed(originalUrl) {
+  window.open(originalUrl, '_blank', 'noopener');
+}
+
+async function handleDeleteFailed(id) {
+  await deleteFailedUrl(db, id);
+  await renderAll();
+}
+
+// -----------------------------------------------
 // 一覧描画
 // -----------------------------------------------
 async function renderAll() {
   await renderUrlFoldList();
+  await renderFailedArea();
   await renderArticleList();
 }
 
@@ -264,6 +292,46 @@ async function renderUrlFoldList() {
     li.querySelector('.btn-delete-url').addEventListener('click', () => handleDeleteArticle(meta.id));
     urlListEl.appendChild(li);
   }
+}
+
+// -----------------------------------------------
+// 取得失敗エリア
+// -----------------------------------------------
+async function renderFailedArea() {
+  const metas = await getAllArticleMeta(db);
+  const failedMetas = metas
+    .filter(meta => meta.status === 'failed')
+    .sort((a, b) => (b.fetchedAt || '').localeCompare(a.fetchedAt || ''));
+
+  failedAreaEl.hidden = failedMetas.length === 0;
+  failedCountEl.textContent = String(failedMetas.length);
+  failedListEl.innerHTML = '';
+
+  for (const meta of failedMetas) {
+    failedListEl.appendChild(buildFailedItem(meta));
+  }
+}
+
+function buildFailedItem(meta) {
+  const li = document.createElement('li');
+  li.className = 'failed-item';
+  li.dataset.articleId = meta.id;
+
+  li.innerHTML = `
+    <p class="failed-url truncate">${escapeHtml(meta.originalUrl)}</p>
+    <p class="failed-domain truncate">${escapeHtml(meta.domain)}</p>
+    <div class="failed-actions">
+      <button type="button" class="btn btn-small btn-retry-failed">再試行</button>
+      <button type="button" class="btn btn-small btn-open-failed">開く</button>
+      <button type="button" class="btn btn-small btn-delete-failed">削除</button>
+    </div>
+  `;
+
+  li.querySelector('.btn-retry-failed').addEventListener('click', () => handleRetryFailed(meta.id, meta.originalUrl));
+  li.querySelector('.btn-open-failed').addEventListener('click', () => handleOpenFailed(meta.originalUrl));
+  li.querySelector('.btn-delete-failed').addEventListener('click', () => handleDeleteFailed(meta.id));
+
+  return li;
 }
 
 // -----------------------------------------------

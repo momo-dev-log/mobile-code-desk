@@ -105,6 +105,52 @@ input[type="text"] {
   font-size: 0.9rem;
 }
 
+.failed-area {
+  margin-bottom: 1rem;
+  border: 1px solid var(--error);
+  border-radius: 6px;
+  padding: 0.75rem;
+}
+
+.failed-area h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  color: var(--error);
+}
+
+.failed-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.failed-item {
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.failed-item:last-child {
+  border-bottom: none;
+}
+
+.failed-url {
+  font-size: 0.8rem;
+  color: #888;
+  word-break: break-all;
+  margin: 0 0 0.15rem;
+}
+
+.failed-domain {
+  font-size: 0.8rem;
+  color: #888;
+  margin: 0 0 0.5rem;
+}
+
+.failed-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
 .article-card {
   background: var(--bg-card);
   color: #1a1a1a;
