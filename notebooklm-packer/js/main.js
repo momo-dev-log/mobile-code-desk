@@ -127,7 +127,6 @@ function switchTab(tabName) {
   tabBtns.forEach((btn) => {
     btn.classList.toggle('tab-btn--active', btn.dataset.tab === tabName);
   });
-  document.body.classList.toggle('tab-articles-active', tabName === 'articles');
 }
 
 // -----------------------------------------------
@@ -420,6 +419,9 @@ async function renderCategoryBar() {
   categoryBarEl.appendChild(addBtn);
 }
 
+const LONG_PRESS_DURATION_MS = 600;
+const LONG_PRESS_MOVE_THRESHOLD_PX = 10;
+
 function buildCategoryBarItem(label, value) {
   const btn = document.createElement('button');
   btn.type = 'button';
@@ -428,7 +430,53 @@ function buildCategoryBarItem(label, value) {
     btn.classList.add('category-bar-item--active');
   }
   btn.textContent = label;
-  btn.addEventListener('click', () => handleSelectCategoryFilter(value));
+
+  const isDeletable = value !== 'all' && value !== 'unclassified';
+
+  if (!isDeletable) {
+    btn.addEventListener('click', () => handleSelectCategoryFilter(value));
+    return btn;
+  }
+
+  let longPressTimer = null;
+  let longPressTriggered = false;
+  let startX = 0;
+  let startY = 0;
+
+  const cancelLongPress = () => {
+    clearTimeout(longPressTimer);
+  };
+
+  btn.addEventListener('pointerdown', (e) => {
+    longPressTriggered = false;
+    startX = e.clientX;
+    startY = e.clientY;
+    longPressTimer = setTimeout(() => {
+      longPressTriggered = true;
+      handleDeleteCategory(value);
+    }, LONG_PRESS_DURATION_MS);
+  });
+
+  btn.addEventListener('pointermove', (e) => {
+    if (Math.abs(e.clientX - startX) > LONG_PRESS_MOVE_THRESHOLD_PX || Math.abs(e.clientY - startY) > LONG_PRESS_MOVE_THRESHOLD_PX) {
+      cancelLongPress();
+    }
+  });
+
+  btn.addEventListener('pointerup', cancelLongPress);
+  btn.addEventListener('pointercancel', cancelLongPress);
+  btn.addEventListener('pointerleave', cancelLongPress);
+  btn.addEventListener('contextmenu', (e) => e.preventDefault());
+
+  btn.addEventListener('click', (e) => {
+    if (longPressTriggered) {
+      e.preventDefault();
+      longPressTriggered = false;
+      return;
+    }
+    handleSelectCategoryFilter(value);
+  });
+
   return btn;
 }
 
@@ -476,13 +524,21 @@ function setCategoryBarStatus(message, type) {
 // カテゴリ
 // -----------------------------------------------
 async function handleDeleteCategory(id) {
-  const confirmed = window.confirm('このカテゴリを削除します。記事は削除されず、未分類に戻ります。よろしいですか？');
+  const confirmed = window.confirm('カテゴリを削除します。\nこのカテゴリの記事は未分類に戻ります。\nよろしいですか？');
   if (!confirmed) {
     return;
   }
 
   await deleteCategory(db, id);
-  setCategoryStatus('カテゴリを削除しました', 'success');
+
+  if (currentCategoryFilter === id) {
+    currentCategoryFilter = 'all';
+  }
+  if (currentCategoryDetailTarget === id) {
+    closeCategoryDetail();
+  }
+
+  setCategoryBarStatus('カテゴリを削除しました', 'success');
   await renderAll();
 }
 
@@ -493,16 +549,24 @@ async function renderCategoryList() {
   const metas = await getAllArticleMeta(db);
   const successMetas = metas.filter(meta => meta.status === 'success');
 
-  categoryEmptyNote.hidden = categories.length > 0;
   categoryListEl.innerHTML = '';
 
+  let visibleCount = 0;
   for (const category of categories) {
     const count = successMetas.filter(meta => meta.categoryId === category.id).length;
-    categoryListEl.appendChild(buildCategoryCard(category, count));
+    if (count > 0) {
+      categoryListEl.appendChild(buildCategoryCard(category, count));
+      visibleCount += 1;
+    }
   }
 
   const uncategorizedCount = successMetas.filter(meta => !meta.categoryId).length;
-  categoryListEl.appendChild(buildUncategorizedCard(uncategorizedCount));
+  if (uncategorizedCount > 0) {
+    categoryListEl.appendChild(buildUncategorizedCard(uncategorizedCount));
+    visibleCount += 1;
+  }
+
+  categoryEmptyNote.hidden = visibleCount > 0;
 
   if (currentCategoryDetailTarget) {
     await renderCategoryDetail(currentCategoryDetailTarget);
@@ -520,7 +584,6 @@ function buildCategoryCard(category, count) {
     <button type="button" class="btn btn-primary category-card-export-btn">Markdownファイルを作る</button>
     <div class="category-card-actions">
       <button type="button" class="btn btn-small btn-rename-category">名前変更</button>
-      <button type="button" class="btn btn-small btn-danger btn-delete-category">削除</button>
     </div>
   `;
 
@@ -531,9 +594,6 @@ function buildCategoryCard(category, count) {
 
   li.querySelector('.btn-rename-category').addEventListener('click', () => {
     showCategoryRenameForm(li, category);
-  });
-  li.querySelector('.btn-delete-category').addEventListener('click', () => {
-    handleDeleteCategory(category.id);
   });
 
   return li;

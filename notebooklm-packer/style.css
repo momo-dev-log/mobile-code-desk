@@ -456,6 +456,8 @@ input[type="text"] {
   padding: 0.35rem 0.9rem;
   cursor: pointer;
   white-space: nowrap;
+  -webkit-touch-callout: none;
+  user-select: none;
 }
 
 .category-bar-item--active {
@@ -572,33 +574,9 @@ input[type="text"] {
 }
 
 /* -----------------------------------------------
-   記事タブ: 操作エリア固定 + 一覧エリア内部スクロール
+   記事タブ: 操作エリアの見た目調整（通常スクロール）
    ----------------------------------------------- */
-body.tab-articles-active {
-  height: 100vh;
-  height: 100dvh;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  padding-bottom: 0;
-}
-
-body.tab-articles-active .app-header {
-  flex: 0 0 auto;
-}
-
-body.tab-articles-active main {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-body.tab-articles-active #tab-articles {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
+#tab-articles {
   margin-bottom: 0;
   padding: 0;
   border: none;
@@ -606,7 +584,6 @@ body.tab-articles-active #tab-articles {
 }
 
 .articles-toolbar {
-  flex: 0 0 auto;
   background: #20232a;
   color: #f0f0f0;
   padding: 1rem;
@@ -616,13 +593,6 @@ body.tab-articles-active #tab-articles {
 
 .articles-toolbar > *:last-child {
   margin-bottom: 0;
-}
-
-.articles-scroll {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  padding-bottom: 56px;
 }
 
 .articles-toolbar .url-input-section {
