@@ -1,24 +1,17 @@
 import {
   openDb,
   getAllArticleMeta,
-  getArticleMeta,
   existsArticleMeta,
   saveSuccessArticle,
   saveFailedArticle,
   deleteArticleRecord,
-  getOrCreatePack,
-  putPack,
 } from './db.js';
 import { normalizeUrl } from './normalize.js';
 import { fetchArticleHtml } from './fetch.js';
 import { extractArticle } from './extract.js';
-import {
-  BODY_TOO_LARGE_CHARS,
-  PACK_WARN_THRESHOLD,
-} from './constants.js';
+import { BODY_TOO_LARGE_CHARS } from './constants.js';
 
 let db;
-let pack;
 
 // 取得中のURL（DBには保存しない、UI上の一時状態）
 let fetchingItems = [];
@@ -38,11 +31,6 @@ const importStatus = document.getElementById('import-status');
 
 const articleListEl = document.getElementById('article-card-list');
 
-const packCountEl = document.getElementById('pack-count');
-const packWarnEl = document.getElementById('pack-warn');
-const packListEl = document.getElementById('pack-list');
-const tabPackBadgeEl = document.getElementById('tab-pack-badge');
-
 const tabBtns = document.querySelectorAll('.tab-btn');
 const tabPanels = document.querySelectorAll('.tab-panel');
 
@@ -50,7 +38,6 @@ init();
 
 async function init() {
   db = await openDb();
-  pack = await getOrCreatePack(db);
 
   setupTabs();
 
@@ -233,16 +220,6 @@ function removeFetchingItem(id) {
 }
 
 // -----------------------------------------------
-// 候補（pack）操作（旧UI互換: #legacy-pack-compat内のみで使用）
-// -----------------------------------------------
-async function removeFromPack(id) {
-  pack.items = pack.items.filter(itemId => itemId !== id);
-  pack.updatedAt = new Date().toISOString();
-  await putPack(db, pack);
-  await renderAll();
-}
-
-// -----------------------------------------------
 // URL一覧からの削除
 // -----------------------------------------------
 async function handleDeleteArticle(id) {
@@ -256,7 +233,6 @@ async function handleDeleteArticle(id) {
 async function renderAll() {
   await renderUrlFoldList();
   await renderArticleList();
-  await renderPackSection();
 }
 
 // -----------------------------------------------
@@ -345,42 +321,6 @@ function buildArticleCard(meta) {
   `;
 
   return card;
-}
-
-// -----------------------------------------------
-// 候補一覧（旧UI互換: #legacy-pack-compat内のみで使用）
-// -----------------------------------------------
-async function renderPackSection() {
-  packCountEl.textContent = `${pack.items.length}件選択中`;
-
-  packWarnEl.hidden = pack.items.length <= PACK_WARN_THRESHOLD;
-  if (!packWarnEl.hidden) {
-    packWarnEl.textContent = '50件を超えています。NotebookLMで扱いやすい量を超えている可能性があります';
-  }
-
-  if (pack.items.length > 0) {
-    tabPackBadgeEl.hidden = false;
-    tabPackBadgeEl.textContent = String(pack.items.length);
-  } else {
-    tabPackBadgeEl.hidden = true;
-  }
-
-  packListEl.innerHTML = '';
-
-  for (const id of pack.items) {
-    const meta = await getArticleMeta(db, id);
-    if (!meta) continue;
-
-    const li = document.createElement('li');
-    li.className = 'pack-list-item';
-    li.innerHTML = `
-      <span class="pack-item-title truncate">${escapeHtml(meta.title)}</span>
-      <span class="pack-item-domain truncate">${escapeHtml(meta.domain)}</span>
-      <button type="button" class="btn btn-small btn-remove-pack-item">候補から外す</button>
-    `;
-    li.querySelector('.btn-remove-pack-item').addEventListener('click', () => removeFromPack(id));
-    packListEl.appendChild(li);
-  }
 }
 
 // UTF-8 BOM。Windows標準アプリ（メモ帳・Excel等）でUTF-8として

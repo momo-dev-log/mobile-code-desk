@@ -6,7 +6,6 @@ import {
   STORE_ARTICLE_META,
   STORE_ARTICLE_BODY,
   STORE_CATEGORY,
-  STORE_PACK,
   openDb,
   existsArticleMeta,
   saveSuccessArticle,
@@ -65,17 +64,95 @@ function makeMeta(id, overrides = {}) {
   };
 }
 
-test('openDb: v2スキーマで articleMeta/articleBody/category/pack ストアが作られる', async () => {
+test('openDb: v3スキーマで articleMeta/articleBody/category ストアが作られ、packストアは存在しない', async () => {
   const db = await openTrackedDb();
   const names = [...db.objectStoreNames];
   assert.ok(names.includes(STORE_ARTICLE_META));
   assert.ok(names.includes(STORE_ARTICLE_BODY));
   assert.ok(names.includes(STORE_CATEGORY));
-  assert.ok(names.includes(STORE_PACK));
+  assert.ok(!names.includes('pack'));
 
   const tx = db.transaction(STORE_ARTICLE_META, 'readonly');
   const store = tx.objectStore(STORE_ARTICLE_META);
   const indexNames = [...store.indexNames];
+  assert.ok(indexNames.includes('status'));
+  assert.ok(indexNames.includes('categoryId'));
+  assert.ok(!indexNames.includes('fetchState'));
+  assert.ok(!indexNames.includes('createdAt'));
+});
+
+test('v2→v3マイグレーション: 既存データを保持したまま不要な要素のみ削除する', async () => {
+  // v2相当のスキーマを手動で作成し、サンプルデータを投入する
+  const v2Db = await new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, 2);
+    request.onupgradeneeded = (event) => {
+      const db = request.result;
+
+      const metaStore = db.createObjectStore(STORE_ARTICLE_META, { keyPath: 'id' });
+      metaStore.createIndex('status', 'status');
+      metaStore.createIndex('categoryId', 'categoryId');
+      metaStore.createIndex('fetchState', 'fetchState');
+      metaStore.createIndex('createdAt', 'createdAt');
+
+      db.createObjectStore(STORE_ARTICLE_BODY, { keyPath: 'id' });
+      db.createObjectStore(STORE_CATEGORY, { keyPath: 'id' });
+      db.createObjectStore('pack', { keyPath: 'id' });
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+
+  const sampleId = 'https://example.com/v2-migration';
+  const sampleCategory = { id: 'cat-v2', name: 'v2カテゴリ', createdAt: new Date().toISOString() };
+
+  await new Promise((resolve, reject) => {
+    const tx = v2Db.transaction([STORE_ARTICLE_META, STORE_ARTICLE_BODY, STORE_CATEGORY], 'readwrite');
+    tx.objectStore(STORE_ARTICLE_META).put({
+      id: sampleId,
+      normalizedUrl: sampleId,
+      originalUrl: sampleId,
+      title: 'v2記事',
+      domain: 'example.com',
+      status: 'success',
+      categoryId: 'cat-v2',
+      isExported: false,
+      fetchedAt: new Date().toISOString(),
+      fetchState: 'done',
+      createdAt: new Date().toISOString(),
+    });
+    tx.objectStore(STORE_ARTICLE_BODY).put({ id: sampleId, body: 'v2本文' });
+    tx.objectStore(STORE_CATEGORY).put(sampleCategory);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+
+  v2Db.close();
+
+  // v3で再オープンし、マイグレーションを実行させる
+  const db = await openTrackedDb();
+
+  // articleMeta/articleBody/categoryのデータが保持されている
+  const meta = await getArticleMeta(db, sampleId);
+  assert.equal(meta.title, 'v2記事');
+  assert.equal(meta.status, 'success');
+  assert.equal(meta.categoryId, 'cat-v2');
+
+  const body = await getArticleBody(db, sampleId);
+  assert.equal(body.body, 'v2本文');
+
+  const categories = await getAllCategories(db);
+  assert.ok(categories.some((c) => c.id === 'cat-v2'));
+
+  // packストアが削除されている
+  const names = [...db.objectStoreNames];
+  assert.ok(!names.includes('pack'));
+
+  // fetchState/createdAt indexが削除され、status/categoryIdは残っている
+  const tx = db.transaction(STORE_ARTICLE_META, 'readonly');
+  const store = tx.objectStore(STORE_ARTICLE_META);
+  const indexNames = [...store.indexNames];
+  assert.ok(!indexNames.includes('fetchState'));
+  assert.ok(!indexNames.includes('createdAt'));
   assert.ok(indexNames.includes('status'));
   assert.ok(indexNames.includes('categoryId'));
 });

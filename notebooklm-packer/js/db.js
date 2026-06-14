@@ -2,104 +2,72 @@
  * IndexedDBラッパー
  * docs/notebooklm-tool-spec-v1.0-text.md 8章（データ構造）に準拠。
  *
- * オブジェクトストア（v2）:
- * - articleMeta (keyPath: id ＝ 正規化URL。indexes: status, categoryId, fetchState, createdAt)
+ * オブジェクトストア（v3）:
+ * - articleMeta (keyPath: id ＝ 正規化URL。indexes: status, categoryId)
  * - articleBody (keyPath: id ＝ articleMetaと同じ正規化URL)
  * - category    (keyPath: id)
- * - pack        (keyPath: id) … フェーズ移行中の暫定残置。フェーズ3で物理削除する。
- *
- * 旧v1スキーマのデータは引き継がない。DB_VERSIONを上げ、
- * 既存ストアをすべて作り直す。
  *
  * 注: "id" の値は正規化URLそのもの。仕様8.1の "normalizedUrl" は、
  * articleMeta内の同値フィールドとして併記する（keyPathはidのまま）。
  */
 
 export const DB_NAME = 'notebooklm-packer';
-export const DB_VERSION = 2;
+export const DB_VERSION = 3;
 
 export const STORE_ARTICLE_META = 'articleMeta';
 export const STORE_ARTICLE_BODY = 'articleBody';
 export const STORE_CATEGORY = 'category';
-export const STORE_PACK = 'pack';
-
-// フェーズ移行中の暫定残置（フェーズ3で削除）
-export const DEFAULT_PACK_ID = 'default';
-export const DEFAULT_PACK_NAME = '資料パック';
 
 /**
  * データベースを開く。
- * onupgradeneeded時、既存の全オブジェクトストアを削除してv2スキーマで作り直す。
- * （新仕様では既存IndexedDBデータを引き継がない）
+ *
+ * - oldVersion < 2（新規インストール・旧v1スキーマ）:
+ *   既存ストアがあればすべて削除してから、v3スキーマで作り直す。
+ * - oldVersion === 2:
+ *   articleMeta/articleBody/categoryの既存データは保持したまま、
+ *   不要になった fetchState/createdAt インデックスと pack ストアのみ削除する。
  * @returns {Promise<IDBDatabase>}
  */
 export function openDb() {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
 
-    request.onupgradeneeded = () => {
+    request.onupgradeneeded = (event) => {
       const db = request.result;
+      const oldVersion = event.oldVersion;
 
-      // 既存ストアをすべて削除してから作り直す（旧データは引き継がない）
-      for (const name of [...db.objectStoreNames]) {
-        db.deleteObjectStore(name);
+      if (oldVersion < 2) {
+        // 既存ストア（旧v1スキーマ、または無し）をすべて削除してから作り直す
+        for (const name of [...db.objectStoreNames]) {
+          db.deleteObjectStore(name);
+        }
+
+        const metaStore = db.createObjectStore(STORE_ARTICLE_META, { keyPath: 'id' });
+        metaStore.createIndex('status', 'status');
+        metaStore.createIndex('categoryId', 'categoryId');
+
+        db.createObjectStore(STORE_ARTICLE_BODY, { keyPath: 'id' });
+        db.createObjectStore(STORE_CATEGORY, { keyPath: 'id' });
+        return;
       }
 
-      const metaStore = db.createObjectStore(STORE_ARTICLE_META, { keyPath: 'id' });
-      metaStore.createIndex('status', 'status');
-      metaStore.createIndex('categoryId', 'categoryId');
-      // 旧UI(main.js)のrecoverOrphanedFetches等が参照するため、互換用に残す。
-      // 新仕様のmetaはこれらのフィールドを持たないため、該当レコードは0件になる。
-      metaStore.createIndex('fetchState', 'fetchState');
-      metaStore.createIndex('createdAt', 'createdAt');
+      // oldVersion === 2: 既存データを保持したまま不要な要素のみ削除する
+      const tx = event.target.transaction;
+      const metaStore = tx.objectStore(STORE_ARTICLE_META);
 
-      db.createObjectStore(STORE_ARTICLE_BODY, { keyPath: 'id' });
-      db.createObjectStore(STORE_CATEGORY, { keyPath: 'id' });
-
-      // フェーズ移行中の暫定残置（フェーズ3で削除）
-      db.createObjectStore(STORE_PACK, { keyPath: 'id' });
+      if (metaStore.indexNames.contains('fetchState')) {
+        metaStore.deleteIndex('fetchState');
+      }
+      if (metaStore.indexNames.contains('createdAt')) {
+        metaStore.deleteIndex('createdAt');
+      }
+      if (db.objectStoreNames.contains('pack')) {
+        db.deleteObjectStore('pack');
+      }
     };
 
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
-  });
-}
-
-/**
- * 起動時の孤児レコード回収。
- * fetchState=fetching のまま残っているarticleMetaを
- * failed（failReason=network）に倒す。
- *
- * 新仕様のarticleMetaはfetchStateを持たないため、通常0件で完了する。
- * 旧UI(main.js)が起動時に呼ぶため、互換用に残す。
- * @param {IDBDatabase} db
- * @returns {Promise<number>} 回収した件数
- */
-export function recoverOrphanedFetches(db) {
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_ARTICLE_META, 'readwrite');
-    const store = tx.objectStore(STORE_ARTICLE_META);
-    const index = store.index('fetchState');
-    const range = IDBKeyRange.only('fetching');
-    const request = index.openCursor(range);
-
-    let recovered = 0;
-
-    request.onsuccess = () => {
-      const cursor = request.result;
-      if (!cursor) return;
-
-      const meta = cursor.value;
-      meta.fetchState = 'failed';
-      meta.failReason = 'network';
-      meta.updatedAt = new Date().toISOString();
-      cursor.update(meta);
-      recovered += 1;
-      cursor.continue();
-    };
-
-    tx.oncomplete = () => resolve(recovered);
-    tx.onerror = () => reject(tx.error);
   });
 }
 
@@ -175,87 +143,6 @@ export function putArticleMetaAndBody(db, meta, body) {
     const tx = db.transaction([STORE_ARTICLE_META, STORE_ARTICLE_BODY], 'readwrite');
     tx.objectStore(STORE_ARTICLE_META).put(meta);
     tx.objectStore(STORE_ARTICLE_BODY).put(body);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
-}
-
-/**
- * 記事をURL一覧から削除する（旧UI互換）。
- * articleMeta・articleBody・pack.items内の参照をすべて除去する。
- *
- * フェーズ移行中の暫定残置。新仕様のフローでは deleteArticleRecord を使う。
- * @param {IDBDatabase} db
- * @param {string} id
- * @returns {Promise<void>}
- */
-export function deleteArticle(db, id) {
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction([STORE_ARTICLE_META, STORE_ARTICLE_BODY, STORE_PACK], 'readwrite');
-    tx.objectStore(STORE_ARTICLE_META).delete(id);
-    tx.objectStore(STORE_ARTICLE_BODY).delete(id);
-
-    const packStore = tx.objectStore(STORE_PACK);
-    const packRequest = packStore.get(DEFAULT_PACK_ID);
-    packRequest.onsuccess = () => {
-      const pack = packRequest.result;
-      if (pack && pack.items.includes(id)) {
-        pack.items = pack.items.filter((itemId) => itemId !== id);
-        pack.updatedAt = new Date().toISOString();
-        packStore.put(pack);
-      }
-    };
-
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
-}
-
-/**
- * デフォルトパックを取得する。存在しない場合は新規作成して返す（旧UI互換）。
- *
- * フェーズ移行中の暫定残置。フェーズ3で物理削除する。
- * @param {IDBDatabase} db
- * @returns {Promise<object>}
- */
-export function getOrCreatePack(db) {
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_PACK, 'readwrite');
-    const store = tx.objectStore(STORE_PACK);
-    const request = store.get(DEFAULT_PACK_ID);
-
-    request.onsuccess = () => {
-      if (request.result) {
-        resolve(request.result);
-        return;
-      }
-      const now = new Date().toISOString();
-      const pack = {
-        id: DEFAULT_PACK_ID,
-        name: DEFAULT_PACK_NAME,
-        items: [],
-        createdAt: now,
-        updatedAt: now,
-      };
-      store.put(pack);
-      resolve(pack);
-    };
-    request.onerror = () => reject(request.error);
-  });
-}
-
-/**
- * パックを保存する（旧UI互換）。
- *
- * フェーズ移行中の暫定残置。フェーズ3で物理削除する。
- * @param {IDBDatabase} db
- * @param {object} pack
- * @returns {Promise<void>}
- */
-export function putPack(db, pack) {
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_PACK, 'readwrite');
-    tx.objectStore(STORE_PACK).put(pack);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });

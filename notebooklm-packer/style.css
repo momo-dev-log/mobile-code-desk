@@ -145,45 +145,6 @@ input[type="text"] {
   color: var(--error);
 }
 
-.pack-list {
-  list-style: none;
-  padding: 0;
-  margin: 0 0 1rem;
-}
-
-.pack-list-item {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.4rem 0;
-  border-bottom: 1px solid var(--border);
-  font-size: 0.9rem;
-}
-
-.pack-item-title {
-  font-weight: 600;
-  flex: 2;
-  min-width: 0;
-}
-
-.pack-item-domain {
-  flex: 1;
-  min-width: 0;
-  font-size: 0.8rem;
-  color: #888;
-}
-
-.pack-warn {
-  background: #fff4e5;
-  color: var(--warn);
-  border: 1px solid var(--warn);
-  border-radius: 6px;
-  padding: 0.5rem;
-  font-size: 0.85rem;
-  margin: 0 0 0.75rem;
-}
-
 /* -----------------------------------------------
    下部固定タブ
    ----------------------------------------------- */
@@ -212,17 +173,6 @@ input[type="text"] {
 .tab-btn--active {
   color: var(--accent);
   font-weight: 600;
-}
-
-.tab-badge {
-  display: inline-block;
-  margin-left: 0.25rem;
-  padding: 0.05rem 0.4rem;
-  border-radius: 999px;
-  background: var(--accent);
-  color: #fff;
-  font-size: 0.75rem;
-  vertical-align: middle;
 }
 
 .tab-panel {
