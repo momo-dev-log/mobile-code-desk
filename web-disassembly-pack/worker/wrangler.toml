@@ -1,0 +1,14 @@
+# Cloudflare Worker 設定ファイル（Web解体パック v0.1）
+# Wrangler CLI でデプロイする場合に使用
+# ダッシュボードからデプロイする場合はこのファイルは不要
+#
+# notebooklm-packer用Worker（notebooklm-packer-worker-v2）とは
+# 完全に別名・別デプロイとし、互いに影響しない。
+
+name = "web-disassembly-pack-worker"
+main = "index.js"
+compatibility_date = "2025-01-01"
+
+# 無料プランで十分
+# リクエスト数：100,000 / 日
+# CPU 時間：10ms / リクエスト（fetch のみなら余裕）
