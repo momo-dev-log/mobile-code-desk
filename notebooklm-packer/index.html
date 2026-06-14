@@ -40,8 +40,16 @@
     <!-- カテゴリタブ -->
     <section id="tab-categories" class="tab-panel" data-tab="categories" hidden>
       <h2>カテゴリ</h2>
-      <p>まだカテゴリはありません。</p>
-      <ul id="category-list"></ul>
+
+      <div class="category-add">
+        <label for="category-name-input">新しいカテゴリ名</label>
+        <input type="text" id="category-name-input" placeholder="例: 技術記事">
+        <button type="button" id="category-add-btn" class="btn btn-primary">追加</button>
+      </div>
+      <p id="category-status" class="status-text"></p>
+
+      <p id="category-empty-note" class="empty-note">まだカテゴリはありません。</p>
+      <ul id="category-list" class="category-list"></ul>
     </section>
   </main>
 

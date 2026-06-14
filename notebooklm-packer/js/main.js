@@ -6,6 +6,10 @@ import {
   saveFailedArticle,
   deleteArticleRecord,
   deleteFailedUrl,
+  getAllCategories,
+  createCategory,
+  renameCategory,
+  deleteCategory,
 } from './db.js';
 import { normalizeUrl } from './normalize.js';
 import { fetchArticleHtml } from './fetch.js';
@@ -39,6 +43,12 @@ const articleListEl = document.getElementById('article-card-list');
 const tabBtns = document.querySelectorAll('.tab-btn');
 const tabPanels = document.querySelectorAll('.tab-panel');
 
+const categoryNameInput = document.getElementById('category-name-input');
+const categoryAddBtn = document.getElementById('category-add-btn');
+const categoryStatus = document.getElementById('category-status');
+const categoryEmptyNote = document.getElementById('category-empty-note');
+const categoryListEl = document.getElementById('category-list');
+
 init();
 
 async function init() {
@@ -53,6 +63,7 @@ async function init() {
   });
 
   importBtn.addEventListener('click', handleImport);
+  categoryAddBtn.addEventListener('click', handleAddCategory);
 
   await renderAll();
 }
@@ -261,6 +272,7 @@ async function renderAll() {
   await renderUrlFoldList();
   await renderFailedArea();
   await renderArticleList();
+  await renderCategoryList();
 }
 
 // -----------------------------------------------
@@ -332,6 +344,103 @@ function buildFailedItem(meta) {
   li.querySelector('.btn-delete-failed').addEventListener('click', () => handleDeleteFailed(meta.id));
 
   return li;
+}
+
+// -----------------------------------------------
+// カテゴリ
+// -----------------------------------------------
+async function handleAddCategory() {
+  const name = categoryNameInput.value;
+
+  try {
+    await createCategory(db, name);
+  } catch (err) {
+    setCategoryStatus(err.message, 'error');
+    return;
+  }
+
+  categoryNameInput.value = '';
+  setCategoryStatus('カテゴリを追加しました', 'success');
+  await renderCategoryList();
+}
+
+async function handleDeleteCategory(id) {
+  const confirmed = window.confirm('このカテゴリを削除します。記事は削除されず、未分類に戻ります。よろしいですか？');
+  if (!confirmed) {
+    return;
+  }
+
+  await deleteCategory(db, id);
+  setCategoryStatus('カテゴリを削除しました', 'success');
+  await renderCategoryList();
+}
+
+async function renderCategoryList() {
+  const categories = await getAllCategories(db);
+  categories.sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
+
+  categoryEmptyNote.hidden = categories.length > 0;
+  categoryListEl.innerHTML = '';
+
+  for (const category of categories) {
+    categoryListEl.appendChild(buildCategoryItem(category));
+  }
+}
+
+function buildCategoryItem(category) {
+  const li = document.createElement('li');
+  li.className = 'category-list-item';
+  li.dataset.categoryId = category.id;
+
+  li.innerHTML = `
+    <span class="category-name truncate">${escapeHtml(category.name)}</span>
+    <div class="category-actions">
+      <button type="button" class="btn btn-small btn-rename-category">名前変更</button>
+      <button type="button" class="btn btn-small btn-delete-category">削除</button>
+    </div>
+  `;
+
+  li.querySelector('.btn-rename-category').addEventListener('click', () => showCategoryRenameForm(li, category));
+  li.querySelector('.btn-delete-category').addEventListener('click', () => handleDeleteCategory(category.id));
+
+  return li;
+}
+
+/**
+ * カテゴリ項目をインライン入力（名前変更フォーム）に切り替える。
+ * @param {HTMLElement} li
+ * @param {{ id: string, name: string }} category
+ */
+function showCategoryRenameForm(li, category) {
+  li.innerHTML = `
+    <input type="text" class="category-rename-input" value="${escapeHtml(category.name)}">
+    <div class="category-actions">
+      <button type="button" class="btn btn-small btn-save-category-rename">保存</button>
+      <button type="button" class="btn btn-small btn-cancel-category-rename">キャンセル</button>
+    </div>
+  `;
+
+  const input = li.querySelector('.category-rename-input');
+
+  li.querySelector('.btn-save-category-rename').addEventListener('click', async () => {
+    try {
+      await renameCategory(db, category.id, input.value);
+    } catch (err) {
+      setCategoryStatus(err.message, 'error');
+      return;
+    }
+    setCategoryStatus('カテゴリ名を変更しました', 'success');
+    await renderCategoryList();
+  });
+
+  li.querySelector('.btn-cancel-category-rename').addEventListener('click', () => {
+    renderCategoryList();
+  });
+}
+
+function setCategoryStatus(message, type) {
+  categoryStatus.textContent = message;
+  categoryStatus.className = `status-text status-${type}`;
 }
 
 // -----------------------------------------------
