@@ -1,0 +1,1827 @@
+/* -----------------------------------------------
+   NotebookLM 資料化ツール — Phase 4 スタイル
+   スマホファースト・シンプル
+   ----------------------------------------------- */
+
+/* --- リセット & ベース --- */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --bg:          #0f1117;
+  --surface:     #1a1d27;
+  --surface2:    #22263a;
+  --border:      #2e3347;
+  --text:        #e2e4f0;
+  --text-muted:  #7a7f9a;
+  --accent:      #7b8cde;
+  --accent-dark: #5c6bc0;
+  --success:     #4caf7d;
+  --error:       #e05c5c;
+  --loading:     #f0b429;
+  --radius:      10px;
+  --font:        -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono:   'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+}
+
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  line-height: 1.6;
+  min-height: 100dvh;
+  padding-bottom: 48px;
+}
+
+/* --- ヘッダー --- */
+.app-header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 20px 20px 16px;
+}
+
+.app-header h1 {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: 0.01em;
+}
+
+.app-subtitle {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+/* --- メインエリア --- */
+.app-main {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 20px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* --- カード --- */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+
+/* --- URL 入力カード --- */
+.input-label {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 10px;
+}
+
+.url-input {
+  display: block;
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  padding: 12px 14px;
+  outline: none;
+  transition: border-color 0.15s;
+  /* iOS でズームしないように font-size: 16px 以上を維持 */
+}
+
+.url-input::placeholder {
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+
+.url-input:focus {
+  border-color: var(--accent);
+}
+
+.fetch-btn {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  background: var(--accent);
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 1rem;
+  font-weight: 700;
+  padding: 14px;
+  transition: background 0.15s, opacity 0.15s;
+  /* タッチターゲット確保 */
+  min-height: 48px;
+  /* スマホ 1タップ対応：300ms 遅延除去・ダブルタップズーム無効化 */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.fetch-btn:hover {
+  background: var(--accent-dark);
+}
+
+.fetch-btn:active {
+  opacity: 0.85;
+}
+
+.fetch-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* --- ステータスバー --- */
+.status-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  border: 1px solid transparent;
+}
+
+.status-bar[hidden] {
+  display: none;
+}
+
+.status-loading {
+  background: rgba(240, 180, 41, 0.1);
+  border-color: rgba(240, 180, 41, 0.3);
+  color: var(--loading);
+}
+
+.status-success {
+  background: rgba(76, 175, 125, 0.1);
+  border-color: rgba(76, 175, 125, 0.3);
+  color: var(--success);
+}
+
+.status-error {
+  background: rgba(224, 92, 92, 0.1);
+  border-color: rgba(224, 92, 92, 0.3);
+  color: var(--error);
+}
+
+#status-icon {
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+/* --- 取得結果カード --- */
+.result-card[hidden] {
+  display: none;
+}
+
+/* --- タブ切り替えバー --- */
+.tab-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.tab-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 8px 16px;
+  min-height: 40px;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tab-btn:hover {
+  background: var(--border);
+  color: var(--text);
+}
+
+.tab-btn.tab-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* iOS tap フィードバック（tap-highlight が transparent のため :active が必要） */
+.tab-btn:active {
+  opacity: 0.7;
+}
+
+.char-count {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+/* --- 共通テキストエリア --- */
+.result-area {
+  display: block;
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 0.78rem;
+  line-height: 1.55;
+  padding: 14px;
+  resize: vertical;
+  outline: none;
+  height: 52vh;
+  min-height: 200px;
+}
+
+/* HTML ソース表示：等幅フォント */
+.result-area-mono {
+  font-family: var(--font-mono);
+}
+
+/* 抽出本文表示：プロポーショナルフォントで読みやすく */
+.result-area-prose {
+  font-family: var(--font);
+  font-size: 0.88rem;
+  line-height: 1.75;
+}
+
+/* Markdown 表示：等幅フォント + 行間を広めに */
+.result-area-markdown {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  line-height: 1.7;
+}
+
+/* 抽出メタ情報（使用セレクタ表示） */
+.extract-meta {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  padding: 4px 10px;
+  background: var(--surface2);
+  border-left: 2px solid var(--accent);
+  border-radius: 0 4px 4px 0;
+}
+
+.result-note {
+  margin-top: 12px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+/* --- アクションバー（Phase 5：Markdown パネル内） --- */
+.action-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.action-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 0.88rem;
+  font-weight: 600;
+  padding: 10px 18px;
+  min-height: 48px;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  white-space: nowrap;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.action-btn:hover {
+  background: var(--border);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.action-btn:active {
+  opacity: 0.8;
+}
+
+/* コピーフィードバック表示 */
+.copy-feedback {
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 6px;
+}
+
+.copy-feedback[hidden] {
+  display: none;
+}
+
+.copy-success {
+  color: var(--success);
+  background: rgba(76, 175, 125, 0.12);
+}
+
+.copy-error {
+  color: var(--error);
+  background: rgba(224, 92, 92, 0.12);
+}
+
+/* -----------------------------------------------
+   Phase 6：複数URL 資料パック
+   ----------------------------------------------- */
+
+/* --- セクション区切り --- */
+.section-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 0;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.section-divider::before,
+.section-divider::after {
+  content: '';
+  flex: 1;
+  border-top: 1px solid var(--border);
+}
+
+/* --- 複数URL 入力テキストエリア --- */
+.multi-url-input {
+  display: block;
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 0.84rem;
+  line-height: 1.7;
+  padding: 12px 14px;
+  outline: none;
+  resize: vertical;
+  min-height: 120px;
+  transition: border-color 0.15s;
+}
+
+.multi-url-input::placeholder {
+  color: var(--text-muted);
+  opacity: 0.5;
+}
+
+.multi-url-input:focus {
+  border-color: var(--accent);
+}
+
+.multi-url-hint {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-top: 6px;
+  margin-bottom: 2px;
+}
+
+/* --- 処理状況リスト --- */
+.progress-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.progress-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.progress-status-icon {
+  font-size: 1rem;
+  flex-shrink: 0;
+  line-height: 1.45;
+}
+
+.progress-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+}
+
+.progress-url-text {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.progress-detail-text {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--text);
+}
+
+/* 状態別スタイル */
+.progress-pending  { border-color: var(--border); }
+.progress-pending  .progress-detail-text { color: var(--text-muted); }
+
+.progress-loading  {
+  border-color: rgba(240, 180, 41, 0.3);
+  background: rgba(240, 180, 41, 0.04);
+}
+.progress-loading  .progress-detail-text { color: var(--loading); }
+
+.progress-success  {
+  border-color: rgba(76, 175, 125, 0.3);
+  background: rgba(76, 175, 125, 0.04);
+}
+.progress-success  .progress-detail-text { color: var(--success); }
+
+.progress-error    {
+  border-color: rgba(224, 92, 92, 0.3);
+  background: rgba(224, 92, 92, 0.04);
+}
+.progress-error    .progress-detail-text { color: var(--error); }
+
+/* --- スマホ最適化 --- */
+@media (max-width: 480px) {
+  .app-header {
+    padding: 16px 16px 12px;
+  }
+
+  .app-header h1 {
+    font-size: 1.05rem;
+  }
+
+  .app-main {
+    padding: 14px 12px;
+    gap: 12px;
+  }
+
+  .card {
+    padding: 16px;
+  }
+
+  .result-area {
+    height: 45vh;
+  }
+
+  .result-area-mono {
+    font-size: 0.72rem;
+  }
+
+  .result-area-prose {
+    font-size: 0.84rem;
+  }
+
+  .tab-btn {
+    font-size: 0.78rem;
+    padding: 7px 13px;
+  }
+
+  /* スマホでは 3 ボタンを均等幅で横並びに */
+  .action-btn {
+    flex: 1;
+    font-size: 0.82rem;
+    padding: 10px 10px;
+    text-align: center;
+  }
+
+  .multi-url-input {
+    font-size: 0.78rem;
+  }
+
+  .progress-url-text {
+    font-size: 0.65rem;
+  }
+
+  .progress-detail-text {
+    font-size: 0.78rem;
+  }
+}
+
+/* -----------------------------------------------
+   Phase 7.5：Sitemap URL 選択チェックボックス
+   ----------------------------------------------- */
+
+/* 選択コントロールバー（全選択 / 全解除 / 選択件数） */
+.sitemap-select-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.select-ctrl-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 7px 16px;
+  min-height: 40px;
+  transition: background 0.15s, color 0.15s;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.select-ctrl-btn:hover {
+  background: var(--border);
+  color: var(--text);
+}
+
+/* iOS tap フィードバック */
+.select-ctrl-btn:active {
+  opacity: 0.7;
+}
+
+/* Phase 10.5：disabled 状態（取得済み・0件案内など） */
+.select-ctrl-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+  pointer-events: none;
+}
+/* preview-btn が disabled のときは accent 色を抑える */
+.select-ctrl-btn.preview-btn:disabled {
+  border-color: var(--border);
+  color: var(--text-muted);
+}
+
+.select-count-text {
+  font-size: 0.82rem;
+  color: var(--accent);
+  font-weight: 600;
+  margin-left: auto;
+}
+
+/* URL チェックボックスリスト */
+.sitemap-checkbox-list {
+  max-height: 36vh;
+  min-height: 80px;
+  overflow-y: auto;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px 0;
+}
+
+/* 1行分の URL アイテム（label 要素） */
+.sitemap-url-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.1s;
+  min-height: 44px; /* タッチターゲット確保 */
+}
+
+/* ── フィルター非表示制御（Phase 9.1）──
+   .sitemap-url-item { display: flex } は author stylesheet のため
+   user-agent の [hidden] { display:none } を上書きしてしまう。
+   クラスベースで制御し、ダブルクラスで特異度 (0,2,0) を確保して
+   display:flex (0,1,0) に確実に勝つ。
+   [hidden] 属性の !important 版も残して念のため両方カバー。 */
+.sitemap-url-item.is-hidden {
+  display: none !important;
+}
+.sitemap-url-item[hidden] {
+  display: none !important;
+}
+
+.sitemap-url-item:last-child {
+  border-bottom: none;
+}
+
+.sitemap-url-item:hover {
+  background: rgba(123, 140, 222, 0.08);
+}
+
+/* チェックボックス本体 */
+.sitemap-url-check {
+  flex-shrink: 0;
+  margin-top: 2px;
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+
+/* URL テキスト */
+.sitemap-url-item-text {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text);
+  word-break: break-all;
+  line-height: 1.5;
+  flex: 1;
+}
+
+/* 反映ボタン：上マージン確保 */
+.sitemap-to-pack-btn {
+  margin-top: 12px;
+}
+
+/* スマホ最適化 */
+@media (max-width: 480px) {
+  .select-ctrl-btn {
+    flex: 1;
+    text-align: center;
+    padding: 7px 10px;
+  }
+
+  .sitemap-checkbox-list {
+    max-height: 42vh;
+  }
+
+  /* Phase 7.6 スマホ調整 */
+  .sitemap-url-label {
+    font-size: 0.8rem;
+  }
+
+  .sitemap-url-domain {
+    font-size: 0.62rem;
+  }
+
+  .url-badge {
+    font-size: 0.58rem;
+    padding: 2px 5px;
+  }
+
+  .url-aux-hint {
+    font-size: 0.58rem;
+  }
+}
+
+/* -----------------------------------------------
+   Phase 7.6：URL 候補表示改善
+   ----------------------------------------------- */
+
+/* info ブロック（ラベル行 ＋ ドメイン行） */
+.sitemap-url-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0; /* flex overflow 防止 */
+}
+
+/* ラベル行：ラベルテキスト ＋ バッジ [＋ 補助ヒント] */
+.sitemap-url-label-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  row-gap: 3px;
+}
+
+/* pathname ラベル（メインテキスト） */
+.sitemap-url-label {
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--text);
+  word-break: break-word;
+  line-height: 1.3;
+}
+
+/* ドメイン ＋ パス（小さめ・1行切り） */
+.sitemap-url-domain {
+  font-family: var(--font-mono);
+  font-size: 0.67rem;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+/* ─── タイプバッジ ─── */
+.url-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.62rem;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  flex-shrink: 0;
+  line-height: 1.5;
+}
+
+.badge-faq     { background: rgba(123, 140, 222, 0.18); color: #8fa0ee; }
+.badge-blog    { background: rgba(76,  175, 125, 0.18); color: #5ac58d; }
+.badge-article { background: rgba(123, 140, 222, 0.10); color: #7b8cde; }
+.badge-home    { background: rgba(122, 127, 154, 0.15); color: #9095b0; }
+.badge-nav     { background: rgba(170, 130, 230, 0.15); color: #b08ed8; }
+.badge-aux     { background: rgba(240, 180,  41, 0.15); color: #c89830; }
+.badge-other   { background: rgba(122, 127, 154, 0.12); color: #7a7f9a; }
+
+/* 補助ページヒント（斜体・小さめ） */
+.url-aux-hint {
+  font-size: 0.62rem;
+  color: var(--text-muted);
+  font-style: italic;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* 補助ページ：行全体を少し抑える（操作は妨げない） */
+.sitemap-url-item--aux {
+  opacity: 0.68;
+}
+
+.sitemap-url-item--aux:hover {
+  opacity: 1;
+}
+
+/* -----------------------------------------------
+   Phase 8：PDF用表示ボタン
+   ----------------------------------------------- */
+
+/* 資料パック textarea の下に置く印刷プレビューボタン */
+.print-preview-btn {
+  margin-top: 10px;
+  /* fetch-btn と区別するためアウトラインスタイルに */
+  background: transparent;
+  border: 2px solid var(--accent);
+  color: var(--accent);
+}
+
+.print-preview-btn:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
+.print-preview-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* -----------------------------------------------
+   Phase 8.5：資料パック名入力（常設）
+   ----------------------------------------------- */
+
+.pack-name-row {
+  margin-bottom: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* テキスト入力（url-input と同仕様） */
+.pack-name-input {
+  display: block;
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 0.92rem;
+  padding: 11px 14px;
+  margin-top: 6px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.pack-name-input::placeholder {
+  color: var(--text-muted);
+  opacity: 0.55;
+}
+
+.pack-name-input:focus {
+  border-color: var(--accent);
+}
+
+.pack-name-hint {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-top: 5px;
+  line-height: 1.5;
+}
+
+/* スマホ最適化 */
+@media (max-width: 480px) {
+  .pack-name-input {
+    font-size: 0.88rem;
+  }
+}
+
+/* -----------------------------------------------
+   スマホ 1タップ対応（全ボタン共通）
+   touch-action: manipulation は .fetch-btn / .action-btn /
+   .tab-btn / .select-ctrl-btn に個別に設定済み。
+   ここでは hover: none メディアで「sticky hover」を無効化する。
+   iOS Safari では最初のタップで :hover が適用され、
+   色枠・フォーカス枠のみ表示されて実際の click が2回目になる問題を防ぐ。
+   ----------------------------------------------- */
+
+/* ポインターが存在しないデバイス（タッチスクリーン）では
+   :hover スタイルをデフォルト値に戻してフリッカーを除去 */
+@media (hover: none) {
+  .fetch-btn:hover {
+    background: var(--accent);
+  }
+  .fetch-btn.print-preview-btn:hover {
+    background: transparent;
+    color: var(--accent);
+  }
+  .action-btn:hover {
+    background: var(--surface2);
+    border-color: var(--border);
+    color: var(--text);
+  }
+  .tab-btn:hover:not(.tab-active) {
+    background: var(--surface2);
+    color: var(--text-muted);
+  }
+  .select-ctrl-btn:hover {
+    background: var(--surface2);
+    color: var(--text-muted);
+  }
+}
+
+/* -----------------------------------------------
+   Phase 9.2：URL候補 絞り込みエリア（検索・除外キーワード）
+   ----------------------------------------------- */
+
+/* 絞り込みエリア全体 */
+.sitemap-filter-area {
+  margin-bottom: 12px;
+}
+
+/* エリアタイトル */
+.sitemap-filter-title {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 10px;
+}
+
+/* 各フィールド（ラベル + 入力 + ヒント） */
+.sitemap-filter-field {
+  margin-bottom: 10px;
+}
+
+/* フィールドラベル（検索キーワード / 除外キーワード） */
+.sitemap-filter-fieldlabel {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 5px;
+}
+
+/* フィルター入力欄 */
+.sitemap-filter-input {
+  display: block;
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 1rem; /* iOS zoom 防止 */
+  padding: 10px 14px;
+  outline: none;
+  transition: border-color 0.15s;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.sitemap-filter-input::placeholder {
+  color: var(--text-muted);
+  opacity: 0.55;
+}
+
+.sitemap-filter-input:focus {
+  border-color: var(--accent);
+}
+
+/* 除外キーワード欄：フォーカス時は error 色 */
+.sitemap-filter-input--exclude:focus {
+  border-color: var(--error);
+}
+
+/* type=search の × クリアボタン非表示 */
+.sitemap-filter-input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* ヒントテキスト（「この言葉を含むURLを表示します」等） */
+.sitemap-filter-hint {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
+/* 区切り文字説明 */
+.sitemap-filter-delim-hint {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+  line-height: 1.4;
+}
+
+/* 表示件数テキスト（フィルター中のみ表示） */
+.sitemap-display-count {
+  display: inline-block;
+  font-size: 0.78rem;
+  color: var(--accent);
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+.sitemap-display-count[hidden] {
+  display: none;
+}
+
+/* -----------------------------------------------
+   Phase 9.1：URL候補へのページタイトル表示
+   ----------------------------------------------- */
+
+/* タイトル行（タイトル取得後に visible になる） */
+.sitemap-url-title {
+  display: block;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.4;
+  word-break: break-word;
+  margin-bottom: 3px;
+}
+
+.sitemap-url-title[hidden] {
+  display: none;
+}
+
+/* 取得中 */
+.sitemap-url-title--loading {
+  color: var(--text-muted);
+  font-style: italic;
+  font-weight: 400;
+  font-size: 0.8rem;
+}
+
+/* 取得不可 */
+.sitemap-url-title--error {
+  color: var(--text-muted);
+  font-style: italic;
+  font-weight: 400;
+  font-size: 0.8rem;
+}
+
+/* タイトル取得バー（ボタン + 進捗テキスト） */
+.sitemap-title-fetch-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+/* 進捗テキスト */
+.fetch-titles-status {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+/* 取得ボタン：accent 縁取りで目立たせる */
+.fetch-titles-btn {
+  color: var(--accent);
+  border-color: var(--accent);
+  flex-shrink: 0;
+}
+
+@media (hover: hover) {
+  .fetch-titles-btn:hover {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+}
+
+@media (hover: none) {
+  .fetch-titles-btn:hover {
+    background: var(--surface2);
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+}
+
+@media (max-width: 480px) {
+  .sitemap-title-fetch-bar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+  .fetch-titles-btn {
+    width: 100%;
+    text-align: center;
+  }
+}
+
+/* -----------------------------------------------
+   Phase 9.2：URL候補 ページネーション
+   ----------------------------------------------- */
+
+/* ページネーションラッパー */
+.sitemap-pagination {
+  padding: 6px 0 2px;
+}
+
+/* ページ情報テキスト（1–50 件目 / 全 N 件） */
+.sitemap-page-info {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  text-align: center;
+  margin-bottom: 6px;
+  line-height: 1.4;
+}
+
+/* ページボタンコンテナ */
+.sitemap-page-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+
+/* 個別ページボタン */
+.page-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 6px 12px;
+  min-height: 36px;
+  min-width: 36px;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.page-btn:hover {
+  background: var(--border);
+  color: var(--text);
+}
+
+/* iOS tap フィードバック */
+.page-btn:active {
+  opacity: 0.7;
+}
+
+/* 現在のページ */
+.page-btn--active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* タッチデバイスで sticky hover を無効化 */
+@media (hover: none) {
+  .page-btn:hover {
+    background: var(--surface2);
+    color: var(--text-muted);
+  }
+  .page-btn--active:hover {
+    background: var(--accent);
+    color: #fff;
+  }
+}
+
+/* スマホ最適化 */
+@media (max-width: 480px) {
+  .page-btn {
+    font-size: 0.78rem;
+    padding: 6px 10px;
+    min-width: 32px;
+    min-height: 34px;
+  }
+}
+
+/* -----------------------------------------------
+   Phase 9.3：分割反映 警告カード
+   ----------------------------------------------- */
+
+/* 警告カード全体（アンバー系ボーダー） */
+.pack-warn-card {
+  margin-top: 12px;
+  background: rgba(240, 180, 41, 0.07);
+  border: 2px solid rgba(240, 180, 41, 0.45);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+}
+
+.pack-warn-card[hidden] {
+  display: none;
+}
+
+/* ⚠️ N件を選択中 ヘッダー */
+.pack-warn-header {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--loading);   /* #f0b429 */
+  margin-bottom: 10px;
+  line-height: 1.4;
+}
+
+/* 説明テキスト */
+.pack-warn-body {
+  font-size: 0.85rem;
+  color: var(--text);
+  line-height: 1.7;
+  margin-bottom: 16px;
+}
+
+/* ボタン縦積みコンテナ */
+.pack-warn-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* 共通：警告カード内ボタン */
+.pack-warn-btn {
+  display: block;
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 0.92rem;
+  font-weight: 600;
+  padding: 13px 16px;
+  min-height: 48px;
+  text-align: left;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, opacity 0.15s;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.pack-warn-btn:active {
+  opacity: 0.8;
+}
+
+/* 「このまま全部を反映」— accent 色で目立たせる */
+.pack-warn-btn--all {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* 「N〜M件だけ反映」— デフォルト（surface2）のまま */
+.pack-warn-btn--chunk {
+  /* inherit base style */
+}
+
+/* 「選択を見直す」— muted でさり気なく */
+.pack-warn-btn--cancel {
+  color: var(--text-muted);
+  border-style: dashed;
+  text-align: center;
+}
+
+/* hover（マウス環境） */
+@media (hover: hover) {
+  .pack-warn-btn--all:hover {
+    background: var(--accent-dark);
+    border-color: var(--accent-dark);
+  }
+  .pack-warn-btn--chunk:hover {
+    background: var(--border);
+  }
+  .pack-warn-btn--cancel:hover {
+    background: var(--surface2);
+    color: var(--text);
+  }
+}
+
+/* タッチデバイスで sticky hover を無効化 */
+@media (hover: none) {
+  .pack-warn-btn--all:hover {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+  .pack-warn-btn--chunk:hover,
+  .pack-warn-btn--cancel:hover {
+    background: var(--surface2);
+  }
+}
+
+/* スマホ最適化 */
+@media (max-width: 480px) {
+  .pack-warn-card {
+    padding: 14px 16px;
+  }
+  .pack-warn-header {
+    font-size: 0.95rem;
+  }
+  .pack-warn-body {
+    font-size: 0.82rem;
+  }
+  .pack-warn-btn {
+    font-size: 0.88rem;
+    padding: 12px 14px;
+  }
+}
+
+/* ===============================================
+   Phase 9.4：大量候補時の案内文
+   =============================================== */
+
+/* 51件以上のURL候補が取得された時に表示される案内文 */
+.sitemap-bulk-hint {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  background: rgba(123, 140, 222, 0.07); /* --accent の薄い背景 */
+  border: 1px solid rgba(123, 140, 222, 0.25);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  padding: 10px 14px;
+  margin: 8px 0 4px;
+  line-height: 1.65;
+}
+
+@media (max-width: 480px) {
+  .sitemap-bulk-hint {
+    font-size: 0.80rem;
+    padding: 8px 12px;
+  }
+}
+
+/* ===============================================
+   Phase 10：本文プレビュー
+   =============================================== */
+
+/* プレビューボタンバー */
+.sitemap-preview-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0 2px;
+}
+
+/* プレビューボタン（select-ctrl-btn をベースに accent 色で区別） */
+.preview-btn {
+  border-color: rgba(123, 140, 222, 0.35);  /* --accent を薄く */
+  color: var(--accent);
+}
+
+.preview-btn:active {
+  opacity: 0.75;
+}
+
+/* プレビュー結果エリア全体 */
+.preview-result-area {
+  margin: 10px 0 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+/* 結果エリアのヘッダー行 */
+.preview-result-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 14px;
+}
+
+.preview-result-title {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+/* 「✕ 閉じる」ボタン */
+.preview-close-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.80rem;
+  padding: 5px 10px;
+  min-height: 32px;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.preview-close-btn:active { opacity: 0.7; }
+
+/* アイテムリスト */
+.preview-result-list {
+  display: flex;
+  flex-direction: column;
+}
+
+/* 個別プレビューアイテム */
+.preview-item {
+  border-bottom: 1px solid var(--border);
+  padding: 14px 16px;
+}
+
+.preview-item:last-child {
+  border-bottom: none;
+}
+
+/* ヘッダー部（タイトル + Source URL） */
+.preview-item-header {
+  margin-bottom: 10px;
+}
+
+.preview-item-title {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 4px;
+  line-height: 1.4;
+}
+
+.preview-item-source {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  word-break: break-all;
+}
+
+/* 本文エリア */
+.preview-item-body {
+  font-size: 0.84rem;
+  color: var(--text);
+  line-height: 1.75;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--surface2);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin: 0;
+}
+
+/* ローディング中 */
+.preview-item-body--loading {
+  color: var(--text-muted);
+  background: var(--surface);
+  font-style: italic;
+}
+
+/* 取得失敗 */
+.preview-item-body--error {
+  color: var(--error);
+  background: var(--surface);
+}
+
+/* 本文抽出不可 */
+.preview-item-body--empty {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* スマホ最適化 */
+@media (max-width: 480px) {
+  .sitemap-preview-bar {
+    gap: 6px;
+  }
+  .preview-item {
+    padding: 12px 14px;
+  }
+  .preview-item-body {
+    font-size: 0.82rem;
+    padding: 8px 10px;
+  }
+}
+
+/* ===============================================
+   Phase 10.2：下側操作バー・プレビュー空状態メッセージ
+   =============================================== */
+
+/* URL リスト下の操作バー（スマホで50件スクロール後その場で操作できる） */
+.sitemap-bottom-bar {
+  border-top: 1px dashed var(--border);
+  margin-top: 4px;
+  padding-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* プレビューパネル：現在ページに取得済みキャッシュがない場合の案内 */
+.preview-empty-msg {
+  font-size: 0.84rem;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 20px 16px;
+  font-style: italic;
+  line-height: 1.6;
+}
+
+/* ===============================================
+   Phase 10.3：プレビュー結果フッター
+   =============================================== */
+
+/* プレビュー結果エリア末尾の操作バー */
+.preview-result-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  border-top: 1px solid var(--border);
+  background: var(--surface2);
+}
+
+@media (max-width: 480px) {
+  .preview-result-footer {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    padding: 8px 12px;
+  }
+  .preview-result-footer .preview-btn,
+  .preview-result-footer .preview-close-btn {
+    width: 100%;
+    text-align: center;
+  }
+}
+
+/* ===============================================
+   Phase 10.4：プレビューカード内 選択トグルUI
+   =============================================== */
+
+/* 選択状態ラベル + トグルボタンの行 */
+.preview-item-selection {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+/* ✅ 選択済み ラベル */
+.preview-check-label {
+  font-size: 0.80rem;
+  color: var(--success);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.preview-check-label[hidden] {
+  display: none;
+}
+
+/* 選択 / 解除トグルボタン */
+.preview-item-toggle-btn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 4px 12px;
+  min-height: 30px;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.preview-item-toggle-btn:active {
+  opacity: 0.75;
+}
+
+/* 選択済み状態：accent 色の縁取り */
+.preview-item-toggle-btn--checked {
+  border-color: rgba(123, 140, 222, 0.55);
+  color: var(--accent);
+}
+
+/* 選択済みカードに accent 左縦線 */
+.preview-item--checked {
+  border-left: 3px solid var(--accent);
+}
+
+/* hover（マウス環境のみ） */
+@media (hover: hover) {
+  .preview-item-toggle-btn:hover {
+    background: var(--border);
+    color: var(--text);
+  }
+  .preview-item-toggle-btn--checked:hover {
+    background: rgba(123, 140, 222, 0.12);
+    color: var(--accent);
+  }
+}
+
+/* スマホ最適化 */
+@media (max-width: 480px) {
+  .preview-item-toggle-btn {
+    font-size: 0.75rem;
+    padding: 4px 10px;
+  }
+}
+
+/* ===============================================
+   Phase 11：本文検索スコア
+   =============================================== */
+
+/* Phase 11.1：冒頭（action-bar直後）に移動したため border-top を上罫線に変更 */
+.body-search-section {
+  border-top: 1px solid var(--border);
+  margin-top: 8px;
+  padding-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* OR検索ヒント文（アクセント色で目立たせる） */
+.body-search-or-hint {
+  color: var(--accent);
+  font-size: 0.80rem;
+}
+
+.body-search-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.body-search-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.body-search-btn-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+/* 本文検索 結果エリア全体 */
+.body-search-result-area {
+  margin: 8px 0 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.body-search-result-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+}
+
+.body-search-result-title {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.body-search-result-list {
+  display: flex;
+  flex-direction: column;
+}
+
+/* 各検索結果カード */
+.search-result-card {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  border-left: 3px solid transparent;
+  transition: border-color 0.15s;
+}
+
+.search-result-card:last-child {
+  border-bottom: none;
+}
+
+.search-result-card--checked {
+  border-left-color: var(--accent);
+}
+
+.search-result-card--error,
+.search-result-card--loading {
+  background: var(--surface2);
+}
+
+/* カードヘッダー行（選択UI + タイトル + URL） */
+.search-result-header-row {
+  margin-bottom: 8px;
+}
+
+.search-result-title {
+  font-size: 0.87rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 4px 0 2px;
+  line-height: 1.4;
+}
+
+.search-result-source {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  word-break: break-all;
+  margin: 2px 0;
+}
+
+/* スコア表示エリア */
+.search-result-scores {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 0.82rem;
+  color: var(--text);
+  padding-left: 2px;
+}
+
+.search-result-relevance {
+  font-weight: 600;
+}
+
+/* 関連度ラベル */
+.search-relevance-label {
+  font-weight: 700;
+}
+.search-relevance-label.rel-high { color: var(--success); }
+.search-relevance-label.rel-mid  { color: var(--loading); }
+.search-relevance-label.rel-low  { color: var(--text-muted); }
+.search-relevance-label.rel-none { color: var(--text-muted); }
+
+.search-result-warn {
+  color: var(--loading);
+  font-weight: 600;
+  font-size: 0.80rem;
+}
+
+.search-result-score {
+  font-weight: 600;
+}
+
+.search-result-counts {
+  color: var(--text-muted);
+}
+
+.search-result-kwcounts {
+  color: var(--text-muted);
+  font-size: 0.79rem;
+  word-break: break-word;
+  line-height: 1.5;
+}
+
+.search-result-loading {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+/* Phase 11.2：セクション見出し（本文スコアで絞り込む / URL候補一覧） */
+.section-heading {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin-top: 4px;
+  margin-bottom: 6px;
+}
+
+/* body-search-section 内の .section-heading は padding-top を考慮して上余白なし */
+.body-search-section .section-heading {
+  margin-top: 0;
+  margin-bottom: 10px;
+}
+
+/* Phase 11.4：本文検索結果フッター（資料パック反映ボタン） */
+.body-search-result-footer {
+  padding: 12px 14px;
+  border-top: 1px solid var(--border);
+  background: var(--surface2);
+}
+
+.body-search-to-pack-btn {
+  width: 100%;
+  margin-top: 0;
+}
+
+/* Phase 11.5：URL候補一覧 折りたたみトグル */
+.url-list-section {
+  margin-top: 4px;
+}
+
+.url-list-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 6px 0;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  text-align: left;
+  margin-bottom: 6px;
+  line-height: 1.4;
+}
+
+.url-list-toggle-btn:hover {
+  opacity: 0.72;
+}
+
+.url-list-toggle-icon {
+  font-size: 0.68rem;
+  flex-shrink: 0;
+  line-height: 1;
+  margin-top: 1px;
+}
+
+.url-list-toggle-summary {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--text-muted);
+  text-transform: none;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+@media (max-width: 480px) {
+  .body-search-btn-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+  .search-result-card {
+    padding: 10px 12px;
+  }
+  .search-result-scores {
+    font-size: 0.79rem;
+  }
+}

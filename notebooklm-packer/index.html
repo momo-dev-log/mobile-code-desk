@@ -3,409 +3,103 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NotebookLM 資料化ツール</title>
-  <link rel="stylesheet" href="style.css?v=phase11-5">
+  <title>notebooklm-packer</title>
+  <link rel="stylesheet" href="style.css?v=2tab">
 </head>
 <body>
-
   <header class="app-header">
-    <h1>📄 NotebookLM 資料化ツール</h1>
-    <p class="app-subtitle">Phase 11.5 — 本文検索後URL候補一覧を折りたたむ</p>
+    <h1>notebooklm-packer</h1>
+    <p class="app-subtitle">記事・カテゴリ</p>
   </header>
 
-  <main class="app-main">
-
-    <!-- ======================================================
-         単一URL セクション（Phase 1–5 からそのまま）
-         ====================================================== -->
-
-    <!-- URL 入力エリア -->
-    <section class="card input-card">
-      <label class="input-label" for="url-input">単一URL — 取得・プレビュー</label>
-      <input
-        type="url"
-        id="url-input"
-        class="url-input"
-        placeholder="https://example.com/article"
-        autocomplete="off"
-        autocorrect="off"
-        autocapitalize="off"
-        spellcheck="false"
-      >
-      <button type="button" id="fetch-btn" class="fetch-btn">取得する</button>
-    </section>
-
-    <!-- ステータス表示 -->
-    <div id="status-bar" class="status-bar" hidden>
-      <span id="status-icon"></span>
-      <span id="status-text"></span>
-    </div>
-
-    <!-- 取得結果エリア -->
-    <section id="result-card" class="card result-card" hidden>
-
-      <!-- タブ切り替えバー -->
-      <div class="tab-bar">
-        <button type="button" class="tab-btn tab-active" id="tab-html">HTML ソース</button>
-        <button type="button" class="tab-btn" id="tab-text">抽出本文</button>
-        <button type="button" class="tab-btn" id="tab-markdown">Markdown</button>
-        <span id="char-count" class="char-count"></span>
-      </div>
-
-      <!-- HTML ソースパネル -->
-      <div id="panel-html">
-        <textarea
-          id="result-html"
-          class="result-area result-area-mono"
-          readonly
-          placeholder="ここに取得した HTML が表示されます"
-        ></textarea>
-      </div>
-
-      <!-- 抽出本文パネル -->
-      <div id="panel-text" hidden>
-        <div id="extract-meta" class="extract-meta"></div>
-        <textarea
-          id="result-text"
-          class="result-area result-area-prose"
-          readonly
-          placeholder="本文を抽出中..."
-        ></textarea>
-      </div>
-
-      <!-- Markdown パネル -->
-      <div id="panel-markdown" hidden>
-        <div class="action-bar">
-          <button type="button" id="copy-markdown-btn" class="action-btn">📋 コピー</button>
-          <button type="button" id="download-txt-btn"  class="action-btn">💾 .txt</button>
-          <button type="button" id="download-md-btn"   class="action-btn">📥 .md</button>
-          <span id="copy-feedback" class="copy-feedback" hidden></span>
-        </div>
-        <textarea
-          id="result-markdown"
-          class="result-area result-area-markdown"
-          readonly
-          placeholder="Markdown に変換中..."
-        ></textarea>
-      </div>
-
-      <p class="result-note" id="result-note"></p>
-    </section>
-
-    <!-- ======================================================
-         複数URL セクション（Phase 6 新規）
-         ====================================================== -->
-
-    <!-- セクション区切り -->
-    <div class="section-divider"><span>複数URL 資料パック</span></div>
-
-    <!-- 複数URL 入力エリア -->
-    <section class="card input-card">
-      <label class="input-label" for="multi-url-input">
-        取得するページの URL（1行1URL）
-      </label>
-      <textarea
-        id="multi-url-input"
-        class="multi-url-input"
-        placeholder="https://example.com/page-1&#10;https://example.com/page-2&#10;https://example.com/page-3"
-        autocomplete="off"
-        autocorrect="off"
-        autocapitalize="off"
-        spellcheck="false"
-        rows="6"
-      ></textarea>
-      <p class="multi-url-hint">空行・重複・無効な URL は自動でスキップされます</p>
-      <button type="button" id="pack-btn" class="fetch-btn">パックを作成</button>
-    </section>
-
-    <!-- パックステータス表示 -->
-    <div id="pack-status-bar" class="status-bar" hidden>
-      <span id="pack-status-icon"></span>
-      <span id="pack-status-text"></span>
-    </div>
-
-    <!-- 処理状況カード -->
-    <section id="pack-progress-card" class="card" hidden>
-      <p class="input-label">処理状況</p>
-      <ul id="progress-list" class="progress-list"></ul>
-    </section>
-
-    <!-- 結合Markdown 結果カード -->
-    <section id="pack-result-card" class="card result-card" hidden>
-
-      <!-- Phase 8.5：資料パック名入力（常設） -->
-      <div class="pack-name-row">
-        <label class="input-label" for="pack-name-input">資料パック名</label>
-        <input
-          type="text"
-          id="pack-name-input"
-          class="pack-name-input"
-          placeholder="NotebookLM資料パック_YYYY-MM-DD"
-          autocomplete="off"
-          spellcheck="false"
-        >
-        <p class="pack-name-hint">.txt / .md 保存・PDF 用表示の名前に使います　空欄の場合はデフォルト名に戻ります</p>
-      </div>
-
-      <div class="action-bar">
-        <button type="button" id="copy-pack-btn"         class="action-btn">📋 コピー</button>
-        <button type="button" id="download-pack-txt-btn" class="action-btn">💾 .txt</button>
-        <button type="button" id="download-pack-md-btn"  class="action-btn">📥 .md</button>
-        <span id="pack-copy-feedback" class="copy-feedback" hidden></span>
-        <span id="pack-char-count" class="char-count"></span>
-      </div>
-      <textarea
-        id="pack-result-markdown"
-        class="result-area result-area-markdown"
-        readonly
-        placeholder="結合 Markdown がここに表示されます"
-      ></textarea>
-
-      <!-- Phase 8：PDF用表示ボタン -->
-      <button type="button" id="print-preview-btn" class="fetch-btn print-preview-btn">
-        🖨️ PDF用表示（印刷 / PDF保存）
-      </button>
-
-      <p class="result-note" id="pack-result-note"></p>
-    </section>
-
-    <!-- ======================================================
-         Sitemap から URL 候補を取得（Phase 7 新規）
-         ====================================================== -->
-
-    <!-- セクション区切り -->
-    <div class="section-divider"><span>Sitemap から URL 候補を取得</span></div>
-
-    <!-- Sitemap 入力エリア -->
-    <section class="card input-card">
-      <label class="input-label" for="sitemap-input">
-        サイト URL または Sitemap URL
-      </label>
-      <input
-        type="url"
-        id="sitemap-input"
-        class="url-input"
-        placeholder="https://example.com  または  https://example.com/sitemap.xml"
-        autocomplete="off"
-        autocorrect="off"
-        autocapitalize="off"
-        spellcheck="false"
-      >
-      <p class="multi-url-hint">サイトURLを入れると /sitemap.xml など候補を自動で試みます　※ sitemap.xml を直接入れても OK</p>
-      <button type="button" id="sitemap-fetch-btn" class="fetch-btn">URL 候補を取得</button>
-    </section>
-
-    <!-- Sitemap ステータス -->
-    <div id="sitemap-status-bar" class="status-bar" hidden>
-      <span id="sitemap-status-icon"></span>
-      <span id="sitemap-status-text"></span>
-    </div>
-
-    <!-- Sitemap 結果カード -->
-    <section id="sitemap-result-card" class="card result-card" hidden>
-
-      <!-- 上段：URL一覧コピー + 取得件数 -->
-      <div class="action-bar">
-        <button type="button" id="copy-sitemap-btn" class="action-btn">📋 URL一覧をコピー</button>
-        <span id="sitemap-copy-feedback" class="copy-feedback" hidden></span>
-        <span id="sitemap-url-count" class="char-count"></span>
-      </div>
-
-      <!-- Phase 9.2：絞り込みエリア（URL検索・除外キーワード）— Phase 11.1 で非表示化 -->
-      <div class="sitemap-filter-area" hidden>
-        <p class="sitemap-filter-title">URL候補を絞り込む</p>
-
-        <div class="sitemap-filter-field">
-          <label class="sitemap-filter-fieldlabel" for="sitemap-include-input">検索キーワード</label>
-          <input
-            type="search"
-            id="sitemap-include-input"
-            class="sitemap-filter-input"
-            placeholder="例：料金 使い方 FAQ"
-            autocomplete="off"
-            autocorrect="off"
-            autocapitalize="off"
-            spellcheck="false"
-          >
-          <p class="sitemap-filter-hint">この言葉を含むURLを表示します</p>
-        </div>
-
-        <div class="sitemap-filter-field">
-          <label class="sitemap-filter-fieldlabel" for="sitemap-exclude-input">除外キーワード</label>
-          <input
-            type="search"
-            id="sitemap-exclude-input"
-            class="sitemap-filter-input sitemap-filter-input--exclude"
-            placeholder="例：お問い合わせ 利用規約 プライバシー"
-            autocomplete="off"
-            autocorrect="off"
-            autocapitalize="off"
-            spellcheck="false"
-          >
-          <p class="sitemap-filter-hint">この言葉を含むURLを表示しません</p>
-        </div>
-
-        <p class="sitemap-filter-delim-hint">スペース・カンマ・読点で複数指定できます</p>
-        <span id="sitemap-display-count" class="sitemap-display-count" hidden></span>
-      </div>
-
-      <!-- Phase 11：本文検索スコア（主導線 — Phase 11.1 で冒頭へ移動） -->
-      <div class="body-search-section">
-        <p class="section-heading">本文スコアで絞り込む</p>
-
-        <div class="body-search-fields">
-          <div class="body-search-field">
-            <label class="sitemap-filter-fieldlabel" for="body-search-include">本文検索キーワード</label>
-            <input
-              type="search"
-              id="body-search-include"
-              class="sitemap-filter-input"
-              placeholder="例：カルダモン シナモン クローブ"
-              autocomplete="off"
-              autocorrect="off"
-              autocapitalize="off"
-              spellcheck="false"
-            >
-          </div>
-          <div class="body-search-field">
-            <label class="sitemap-filter-fieldlabel" for="body-search-exclude">本文除外キーワード</label>
-            <input
-              type="search"
-              id="body-search-exclude"
-              class="sitemap-filter-input sitemap-filter-input--exclude"
-              placeholder="例：通販 商品一覧 カート"
-              autocomplete="off"
-              autocorrect="off"
-              autocapitalize="off"
-              spellcheck="false"
-            >
-          </div>
-          <p class="sitemap-filter-delim-hint body-search-or-hint">表記ゆれも複数入力できます（OR検索）：しょうゆ 醤油 しょう油</p>
-          <p class="sitemap-filter-delim-hint">スペース・カンマ・読点で区切り　最大10件まで取得します</p>
-        </div>
-
-        <div class="body-search-btn-bar">
-          <button type="button" id="body-search-page-btn" class="select-ctrl-btn">
-            🔍 現在ページを検索
-          </button>
-          <button type="button" id="body-search-checked-btn" class="select-ctrl-btn">
-            🔍 チェック済みを検索
-          </button>
-          <span id="body-search-status" class="fetch-titles-status"></span>
-        </div>
-
-        <!-- 本文検索 結果エリア -->
-        <div id="body-search-result-area" class="body-search-result-area" hidden>
-          <div class="body-search-result-header">
-            <span class="body-search-result-title">🔍 本文検索結果</span>
-            <button type="button" id="body-search-close-btn" class="preview-close-btn">✕ 閉じる</button>
-          </div>
-          <div id="body-search-result-list" class="body-search-result-list"></div>
-          <!-- Phase 11.4：本文検索結果フッター（資料パック反映ボタン） -->
-          <div class="body-search-result-footer">
-            <button type="button" id="body-search-to-pack-btn" class="fetch-btn body-search-to-pack-btn">
-              📤 チェック済みURLを資料パック欄へ反映
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Phase 9.4：大量候補時の案内（51件以上のとき表示） -->
-      <p id="sitemap-bulk-hint" class="sitemap-bulk-hint" hidden></p>
-
-      <!-- Phase 11.5：URL候補一覧 折りたたみセクション -->
-      <div class="url-list-section">
-        <button type="button" id="url-list-toggle-btn" class="url-list-toggle-btn">
-          <span id="url-list-toggle-icon" class="url-list-toggle-icon">▼</span>
-          URL候補一覧
-          <span id="url-list-toggle-summary" class="url-list-toggle-summary"></span>
+  <main>
+    <!-- 記事タブ -->
+    <section id="tab-articles" class="tab-panel" data-tab="articles">
+      <div class="url-fold-section">
+        <button type="button" id="url-fold-toggle" class="url-fold-toggle">
+          <span id="url-fold-arrow">▸</span> 取り込み済みURL <span id="url-fold-count">0</span>件
         </button>
+        <div id="url-fold-body" class="url-fold-body" hidden>
+          <ul id="url-list" class="url-list"></ul>
 
-        <div id="url-list-content" class="url-list-content">
-
-          <!-- 選択コントロールバー（全選択/全解除は現在ページのみに作用） -->
-          <div class="sitemap-select-bar">
-            <button type="button" id="sitemap-select-visible-btn"   class="select-ctrl-btn">現在ページを全選択</button>
-            <button type="button" id="sitemap-deselect-visible-btn" class="select-ctrl-btn">現在ページを全解除</button>
-            <span id="sitemap-select-count" class="select-count-text"></span>
-          </div>
-
-          <!-- タイトル一括取得バー -->
-          <div class="sitemap-title-fetch-bar">
-            <button type="button" id="fetch-titles-btn" class="select-ctrl-btn fetch-titles-btn">
-              🔍 現在ページのタイトルを取得
-            </button>
-            <span id="fetch-titles-status" class="fetch-titles-status"></span>
-          </div>
-
-          <!-- Phase 10：本文プレビュー ボタンバー -->
-          <div class="sitemap-preview-bar">
-            <button type="button" id="preview-visible-btn" class="select-ctrl-btn preview-btn">
-              📖 現在ページを立ち読み
-            </button>
-            <button type="button" id="preview-checked-btn" class="select-ctrl-btn preview-btn">
-              📖 チェック済みを立ち読み
-            </button>
-            <span id="preview-status" class="fetch-titles-status"></span>
-          </div>
-
-          <!-- URL チェックボックスリスト -->
-          <div id="sitemap-url-checkboxes" class="sitemap-checkbox-list"></div>
-
-          <!-- ページ情報 + ページボタン（Phase 9.2） -->
-          <div class="sitemap-pagination">
-            <p id="sitemap-page-info" class="sitemap-page-info"></p>
-            <div id="sitemap-page-btns" class="sitemap-page-btns"></div>
-          </div>
-
-          <!-- Phase 10.2：下側操作バー（Phase 11.3 で全選択/全解除のみに整理） -->
-          <div class="sitemap-bottom-bar">
-            <div class="sitemap-select-bar">
-              <button type="button" id="sitemap-select-visible-btn-bottom"   class="select-ctrl-btn">現在ページを全選択</button>
-              <button type="button" id="sitemap-deselect-visible-btn-bottom" class="select-ctrl-btn">現在ページを全解除</button>
-            </div>
-          </div>
-
-          <!-- Phase 10：本文プレビュー 結果エリア -->
-          <div id="preview-result-area" class="preview-result-area" hidden>
-            <div class="preview-result-header">
-              <span class="preview-result-title">📖 立ち読みプレビュー</span>
-              <button type="button" id="preview-close-btn" class="preview-close-btn">✕ 閉じる</button>
-            </div>
-            <div id="preview-result-list" class="preview-result-list"></div>
-            <!-- Phase 10.3：プレビュー結果フッター（Phase 11.3 で閉じるのみに整理） -->
-            <div class="preview-result-footer">
-              <button type="button" id="preview-close-bottom-btn" class="preview-close-btn">
-                ✕ 閉じる
-              </button>
-            </div>
-          </div>
-
-        </div><!-- /url-list-content -->
-      </div><!-- /url-list-section -->
-
-      <!-- 反映ボタン（フィルター済みかつチェック済みURLを資料パック欄へ） -->
-      <button type="button" id="to-pack-btn" class="fetch-btn sitemap-to-pack-btn">
-        📤 チェック済みURLを資料パック欄へ反映
-      </button>
-
-      <!-- Phase 9.3：分割反映 警告カード（51件以上のとき表示） -->
-      <div id="pack-warn-card" class="pack-warn-card" hidden>
-        <p class="pack-warn-header">
-          ⚠️ <span id="pack-warn-count"></span>件を選択中です
-        </p>
-        <p class="pack-warn-body">
-          このあと「パックを作成」を押すと、選択した URL の本文取得を行います。<br>
-          件数が多いため、50件ずつ分けることをおすすめします。
-        </p>
-        <div id="pack-warn-actions" class="pack-warn-actions"></div>
+          <label for="url-textarea">URLを貼り付け</label>
+          <textarea id="url-textarea" rows="3" placeholder="https://example.com/article&#10;（複数可・改行区切り）"></textarea>
+          <button type="button" id="import-btn" class="btn btn-primary">URLを取り込む</button>
+          <p id="import-status" class="status-text"></p>
+        </div>
       </div>
 
-      <p class="result-note" id="sitemap-result-note"></p>
+      <section id="failed-area" class="failed-area" hidden>
+        <h2>取得失敗 <span id="failed-count">0</span>件</h2>
+        <ul id="failed-list" class="failed-list"></ul>
+      </section>
+
+      <div id="category-bar-wrap" class="category-bar-wrap">
+        <div id="category-bar" class="category-bar"></div>
+        <div id="category-bar-add-form" class="category-bar-add-form" hidden>
+          <input type="text" id="category-bar-add-input" placeholder="新しいカテゴリ名">
+          <button type="button" id="category-bar-add-save-btn" class="btn btn-small btn-primary">作成</button>
+          <button type="button" id="category-bar-add-cancel-btn" class="btn btn-small">キャンセル</button>
+        </div>
+        <p id="category-bar-status" class="status-text"></p>
+      </div>
+
+      <div id="article-card-list"></div>
     </section>
 
+    <!-- カテゴリタブ -->
+    <section id="tab-categories" class="tab-panel" data-tab="categories" hidden>
+      <!-- カテゴリ一覧ビュー -->
+      <div id="category-list-view">
+        <h2>カテゴリ</h2>
+
+        <div class="category-add">
+          <label for="category-name-input">新しいカテゴリ名</label>
+          <input type="text" id="category-name-input" placeholder="例: 技術記事">
+          <button type="button" id="category-add-btn" class="btn btn-primary">追加</button>
+        </div>
+        <p id="category-status" class="status-text"></p>
+
+        <p id="category-empty-note" class="empty-note">まだカテゴリはありません。</p>
+        <ul id="category-list" class="category-list"></ul>
+
+        <h2>未分類</h2>
+        <ul id="uncategorized-list" class="category-list"></ul>
+      </div>
+
+      <!-- カテゴリ詳細ビュー -->
+      <div id="category-detail-view" hidden>
+        <button type="button" id="category-detail-back-btn" class="btn btn-small">← 一覧に戻る</button>
+        <h2 id="category-detail-title"></h2>
+        <button type="button" id="category-detail-export-btn" class="btn btn-primary">このカテゴリをMarkdownで書き出す</button>
+        <p id="category-detail-export-status" class="status-text"></p>
+        <p id="category-detail-empty" class="empty-note" hidden>このカテゴリにはまだ記事がありません</p>
+        <ul id="category-detail-list" class="category-detail-list"></ul>
+      </div>
+    </section>
   </main>
 
-  <script src="app.js?v=phase11-5"></script>
+  <nav class="tab-bar">
+    <button type="button" class="tab-btn tab-btn--active" data-tab="articles">記事</button>
+    <button type="button" class="tab-btn" data-tab="categories">カテゴリ</button>
+  </nav>
+
+  <!-- カテゴリ付けシート -->
+  <div id="category-sheet-overlay" class="category-sheet-overlay" hidden></div>
+  <div id="category-sheet" class="category-sheet" hidden>
+    <h2>カテゴリを選択</h2>
+    <ul id="category-sheet-list" class="category-sheet-list"></ul>
+
+    <div class="category-sheet-new">
+      <label for="category-sheet-new-input">＋ 新しいカテゴリを作る</label>
+      <input type="text" id="category-sheet-new-input" placeholder="新しいカテゴリ名">
+      <button type="button" id="category-sheet-create-btn" class="btn btn-primary">作成して設定</button>
+    </div>
+
+    <p id="category-sheet-status" class="status-text"></p>
+    <button type="button" id="category-sheet-close-btn" class="btn">閉じる</button>
+  </div>
+
+  <script type="module" src="js/main.js?v=2tab"></script>
 </body>
 </html>

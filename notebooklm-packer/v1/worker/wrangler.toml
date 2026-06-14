@@ -1,11 +1,8 @@
-# Cloudflare Worker 設定ファイル（v2: JSON応答仕様）
+# Cloudflare Worker 設定ファイル
 # Wrangler CLI でデプロイする場合に使用
 # ダッシュボードからデプロイする場合はこのファイルは不要
-#
-# 旧Worker（notebooklm-packer-worker, v1/worker/）とは別名でデプロイし、
-# 旧Workerは v1/ アプリ用にそのまま残す。
 
-name = "notebooklm-packer-worker-v2"
+name = "notebooklm-packer-worker"
 main = "index.js"
 compatibility_date = "2025-01-01"
 
