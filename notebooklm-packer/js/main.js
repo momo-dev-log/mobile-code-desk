@@ -74,6 +74,8 @@ const categorySheetStatus = document.getElementById('category-sheet-status');
 const categorySheetCloseBtn = document.getElementById('category-sheet-close-btn');
 
 const categoryBarEl = document.getElementById('category-bar');
+const categoryBarAddInput = document.getElementById('category-bar-add-input');
+const categoryBarAddSaveBtn = document.getElementById('category-bar-add-save-btn');
 const categoryBarStatus = document.getElementById('category-bar-status');
 
 // カテゴリ付けシートの対象記事ID（シートが閉じている時はnull）
@@ -98,6 +100,8 @@ async function init() {
   categorySheetCloseBtn.addEventListener('click', closeCategorySheet);
   categorySheetCreateBtn.addEventListener('click', handleCreateCategoryInSheet);
 
+  categoryBarAddSaveBtn.addEventListener('click', handleCreateCategoryFromBar);
+
   categoryDetailBackBtn.addEventListener('click', closeCategoryDetail);
   categoryDetailExportBtn.addEventListener('click', handleExportCategoryDetail);
 
@@ -120,7 +124,6 @@ function switchTab(tabName) {
   tabBtns.forEach((btn) => {
     btn.classList.toggle('tab-btn--active', btn.dataset.tab === tabName);
   });
-  document.body.classList.toggle('tab-articles-active', tabName === 'articles');
 }
 
 // -----------------------------------------------
@@ -471,6 +474,25 @@ async function handleSelectCategoryFilter(value) {
   currentCategoryFilter = value;
   await renderCategoryBar();
   await renderArticleList();
+}
+
+async function handleCreateCategoryFromBar() {
+  const name = categoryBarAddInput.value;
+
+  let category;
+  try {
+    category = await createCategory(db, name);
+  } catch (err) {
+    setCategoryBarStatus(err.message, 'error');
+    return;
+  }
+
+  currentCategoryFilter = category.id;
+  categoryBarAddInput.value = '';
+  setCategoryBarStatus('', '');
+  await renderCategoryBar();
+  await renderArticleList();
+  await renderCategoryList();
 }
 
 function setCategoryBarStatus(message, type) {

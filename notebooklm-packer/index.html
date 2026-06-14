@@ -6,7 +6,7 @@
   <title>notebooklm-packer</title>
   <link rel="stylesheet" href="style.css?v=2tab">
 </head>
-<body class="tab-articles-active">
+<body>
   <header class="app-header">
     <h1>notebooklm-packer</h1>
     <p class="app-subtitle">記事・カテゴリ</p>
@@ -39,6 +39,11 @@
 
         <div id="category-bar-wrap" class="category-bar-wrap">
           <div id="category-bar" class="category-bar"></div>
+          <div id="category-bar-add-form" class="category-bar-add-form">
+            <label for="category-bar-add-input">＋ 新しいカテゴリを作る</label>
+            <input type="text" id="category-bar-add-input" placeholder="新しいカテゴリ名">
+            <button type="button" id="category-bar-add-save-btn" class="btn btn-small btn-primary">作成</button>
+          </div>
           <p id="category-bar-status" class="status-text"></p>
         </div>
       </div>

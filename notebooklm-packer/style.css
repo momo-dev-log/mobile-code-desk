@@ -467,6 +467,27 @@ input[type="text"] {
   font-weight: 600;
 }
 
+.category-bar-add-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.category-bar-add-form label {
+  display: block;
+  width: 100%;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.category-bar-add-form input[type="text"] {
+  flex: 1;
+  min-width: 0;
+  margin-bottom: 0;
+}
+
 /* -----------------------------------------------
    記事カードのカテゴリ欄
    ----------------------------------------------- */
@@ -562,49 +583,16 @@ input[type="text"] {
 /* -----------------------------------------------
    記事タブ: 記事一覧のみ枠内スクロール
    ----------------------------------------------- */
-body.tab-articles-active {
-  height: 100vh;
-  height: 100dvh;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  padding-bottom: 0;
-}
-
-body.tab-articles-active .app-header {
-  flex: 0 0 auto;
-}
-
-body.tab-articles-active main {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-body.tab-articles-active #tab-articles {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-body.tab-articles-active .articles-toolbar {
-  flex: 0 0 auto;
-}
-
-.articles-scroll {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  padding-bottom: 56px;
-}
-
 #tab-articles {
   margin-bottom: 0;
   padding: 0;
   border: none;
   border-radius: 0;
+}
+
+.articles-scroll {
+  max-height: 65vh;
+  overflow-y: auto;
 }
 
 .articles-toolbar {
