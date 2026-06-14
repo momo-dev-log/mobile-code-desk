@@ -460,6 +460,8 @@ async function handleCreateCategoryFromBar() {
   }
 
   currentCategoryFilter = category.id;
+  categoryBarAddInput.value = '';
+  setCategoryBarStatus('', '');
   closeCategoryBarAddForm();
   await renderCategoryBar();
   await renderArticleList();
