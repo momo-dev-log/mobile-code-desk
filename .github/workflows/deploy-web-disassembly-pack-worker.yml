@@ -3,7 +3,7 @@ name: Deploy Web Disassembly Pack Worker
 on:
   push:
     branches:
-      - claude/web-disassembly-pack-design-bfs7ou
+      - main
     paths:
       - 'web-disassembly-pack/worker/**'
   workflow_dispatch:
