@@ -1,0 +1,23 @@
+name: Deploy Web Disassembly Pack Worker
+
+on:
+  push:
+    branches:
+      - claude/web-disassembly-pack-design-bfs7ou
+    paths:
+      - 'web-disassembly-pack/worker/**'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: web-disassembly-pack/worker
+          command: deploy

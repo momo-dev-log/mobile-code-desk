@@ -1,0 +1,353 @@
+import { fetchResource } from './fetch.js';
+import { parseHtml } from './parse.js';
+import { extractExcerpts, JS_KEYWORDS, CSS_KEYWORDS } from './excerpt.js';
+import { checkDangerousContent } from './danger-check.js';
+import { buildMarkdown } from './markdown.js';
+import { MAX_CSS_FILES, MAX_JS_FILES, MAX_RESOURCE_CHARS } from './constants.js';
+
+// -----------------------------------------------
+// DOM要素
+// -----------------------------------------------
+const urlInput = document.getElementById('url-input');
+const fetchBtn = document.getElementById('fetch-btn');
+const fetchStatus = document.getElementById('fetch-status');
+
+const stepStructure = document.getElementById('step-structure');
+const structureBtn = document.getElementById('structure-btn');
+const structureCards = document.getElementById('structure-cards');
+
+const stepDanger = document.getElementById('step-danger');
+const dangerResult = document.getElementById('danger-result');
+
+const stepMarkdown = document.getElementById('step-markdown');
+const markdownBtn = document.getElementById('markdown-btn');
+const markdownPreviewWrap = document.getElementById('markdown-preview-wrap');
+const markdownPreview = document.getElementById('markdown-preview');
+const copyBtn = document.getElementById('copy-btn');
+const saveBtn = document.getElementById('save-btn');
+const copyStatus = document.getElementById('copy-status');
+
+const resetBtn = document.getElementById('reset-btn');
+
+// -----------------------------------------------
+// 状態（1ページ分の解析結果。永続化はしない）
+// -----------------------------------------------
+let state = {};
+
+// -----------------------------------------------
+// イベント登録
+// -----------------------------------------------
+fetchBtn.addEventListener('click', handleFetch);
+structureBtn.addEventListener('click', handleStructure);
+markdownBtn.addEventListener('click', handleMarkdown);
+copyBtn.addEventListener('click', handleCopy);
+saveBtn.addEventListener('click', handleSave);
+resetBtn.addEventListener('click', handleReset);
+
+// -----------------------------------------------
+// 1. URLを取得
+// -----------------------------------------------
+async function handleFetch() {
+  const rawUrl = urlInput.value.trim();
+  if (!rawUrl) {
+    fetchStatus.textContent = 'URLを入力してください。';
+    return;
+  }
+
+  let normalizedUrl;
+  try {
+    normalizedUrl = new URL(rawUrl).href;
+  } catch {
+    fetchStatus.textContent = 'URLの形式が正しくありません。';
+    return;
+  }
+
+  fetchBtn.disabled = true;
+  fetchStatus.textContent = '取得中...';
+  hideStep(stepStructure);
+  hideStep(stepDanger);
+  hideStep(stepMarkdown);
+
+  const result = await fetchResource(normalizedUrl);
+
+  fetchBtn.disabled = false;
+
+  if (!result.ok) {
+    fetchStatus.textContent = `取得に失敗しました（${describeFailure(result)}）`;
+    return;
+  }
+
+  state = {
+    pageUrl: normalizedUrl,
+    finalUrl: result.finalUrl || normalizedUrl,
+    html: result.content,
+  };
+
+  fetchStatus.textContent = `取得しました（${result.content.length}文字）`;
+  showStep(stepStructure);
+}
+
+// -----------------------------------------------
+// 2. 構造を見る
+// -----------------------------------------------
+async function handleStructure() {
+  structureBtn.disabled = true;
+  structureBtn.textContent = '解析中...';
+
+  const parsed = parseHtml(state.html, state.pageUrl);
+  state.title = parsed.title;
+  state.structure = parsed.structure;
+
+  renderStructureCards(parsed.structure);
+
+  state.inlineStyles = parsed.inlineStyles.map((text) => buildInlineEntry(text, CSS_KEYWORDS));
+  state.inlineScripts = parsed.inlineScripts.map((text) => buildInlineEntry(text, JS_KEYWORDS));
+
+  state.cssResources = await buildResourceEntries(parsed.cssLinks, MAX_CSS_FILES, CSS_KEYWORDS);
+  state.jsResources = await buildResourceEntries(parsed.jsScripts, MAX_JS_FILES, JS_KEYWORDS);
+
+  state.dangerFindings = checkDangerousContent(collectDangerCheckSources());
+  renderDangerResult(state.dangerFindings);
+
+  structureBtn.disabled = false;
+  structureBtn.textContent = '構造を見る';
+
+  showStep(stepDanger);
+  showStep(stepMarkdown);
+}
+
+function collectDangerCheckSources() {
+  const sources = [{ label: 'HTML', text: state.html }];
+
+  state.inlineStyles.forEach((entry, i) => {
+    sources.push({ label: `インラインstyle #${i + 1}`, text: entry.rawText });
+  });
+  state.inlineScripts.forEach((entry, i) => {
+    sources.push({ label: `インラインscript #${i + 1}`, text: entry.rawText });
+  });
+  state.cssResources
+    .filter((entry) => entry.status === 'ok')
+    .forEach((entry) => sources.push({ label: entry.label, text: entry.rawText }));
+  state.jsResources
+    .filter((entry) => entry.status === 'ok')
+    .forEach((entry) => sources.push({ label: entry.label, text: entry.rawText }));
+
+  return sources;
+}
+
+/**
+ * 外部CSS/JSの一覧から、取得対象（同一オリジン・件数上限内）のみWorker経由で取得し、
+ * キーワード抜粋を作る。対象外・失敗のものはその旨を記録する。
+ */
+async function buildResourceEntries(links, maxCount, keywords) {
+  const entries = [];
+  let fetchedCount = 0;
+
+  for (const link of links) {
+    if (!link.sameOrigin) {
+      entries.push({ label: link.url, status: 'skipped_external' });
+      continue;
+    }
+
+    if (fetchedCount >= maxCount) {
+      entries.push({ label: link.url, status: 'skipped_limit' });
+      continue;
+    }
+
+    fetchedCount += 1;
+    const result = await fetchResource(link.url);
+
+    if (!result.ok) {
+      entries.push({ label: link.url, status: 'failed', reason: describeFailure(result) });
+      continue;
+    }
+
+    const text = result.content;
+    const truncated = text.length > MAX_RESOURCE_CHARS;
+    const processedText = truncated ? text.slice(0, MAX_RESOURCE_CHARS) : text;
+    const excerpts = extractExcerpts(processedText, keywords);
+
+    entries.push({
+      label: link.url,
+      status: 'ok',
+      size: text.length,
+      truncated,
+      rawText: processedText,
+      excerpts,
+      summary: excerpts.length === 0 ? buildSummary(text) : undefined,
+    });
+  }
+
+  return entries;
+}
+
+function buildInlineEntry(text, keywords) {
+  const truncated = text.length > MAX_RESOURCE_CHARS;
+  const processedText = truncated ? text.slice(0, MAX_RESOURCE_CHARS) : text;
+  const excerpts = extractExcerpts(processedText, keywords);
+
+  return {
+    size: text.length,
+    rawText: processedText,
+    excerpts,
+    summary: excerpts.length === 0 ? buildSummary(text) : undefined,
+  };
+}
+
+function buildSummary(text) {
+  const head = text.slice(0, 120).replace(/\s+/g, ' ').trim();
+  return `${text.length}文字 / 先頭: ${head}${text.length > 120 ? '...' : ''}`;
+}
+
+function describeFailure(result) {
+  switch (result.reason) {
+    case 'network':
+      return '通信エラー';
+    case 'too_large':
+      return 'サイズが大きすぎます';
+    case 'http_error':
+      return `HTTPエラー${result.httpStatus ? ' ' + result.httpStatus : ''}`;
+    default:
+      return '不明なエラー';
+  }
+}
+
+// -----------------------------------------------
+// 表示
+// -----------------------------------------------
+function renderStructureCards(structure) {
+  const items = [
+    ['canvas', structure.canvas],
+    ['button', structure.button],
+    ['audio', structure.audio],
+    ['video', structure.video],
+    ['svg', structure.svg],
+    ['script(インライン)', structure.inlineScriptCount],
+    ['script(外部)', structure.externalScriptCount],
+    ['style(インライン)', structure.inlineStyleCount],
+    ['stylesheet(外部)', structure.externalStylesheetCount],
+  ];
+
+  structureCards.innerHTML = '';
+  for (const [label, value] of items) {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `<div class="card-value">${value}</div><div class="card-label">${escapeHtml(label)}</div>`;
+    structureCards.appendChild(card);
+  }
+}
+
+function renderDangerResult(findings) {
+  dangerResult.innerHTML = '';
+
+  if (!findings || findings.length === 0) {
+    dangerResult.classList.remove('card-warning');
+    dangerResult.textContent = 'チェック対象のパターンは検出されませんでした。';
+    return;
+  }
+
+  dangerResult.classList.add('card-warning');
+
+  const list = document.createElement('ul');
+  for (const finding of findings) {
+    const li = document.createElement('li');
+    li.textContent = `[${finding.label}] ${finding.type}: ${finding.preview}`;
+    list.appendChild(li);
+  }
+  dangerResult.appendChild(list);
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+// -----------------------------------------------
+// 3. Markdownを作る / コピーする / .mdを保存
+// -----------------------------------------------
+function handleMarkdown() {
+  state.markdown = buildMarkdown({
+    pageUrl: state.pageUrl,
+    finalUrl: state.finalUrl,
+    title: state.title,
+    structure: state.structure,
+    cssResources: state.cssResources,
+    jsResources: state.jsResources,
+    inlineStyles: state.inlineStyles,
+    inlineScripts: state.inlineScripts,
+    dangerFindings: state.dangerFindings,
+  });
+
+  markdownPreview.value = state.markdown;
+  markdownPreviewWrap.hidden = false;
+  copyStatus.textContent = '';
+}
+
+async function handleCopy() {
+  try {
+    await navigator.clipboard.writeText(state.markdown || '');
+    copyStatus.textContent = 'コピーしました。';
+  } catch {
+    copyStatus.textContent = 'コピーに失敗しました。テキストを選択してコピーしてください。';
+    markdownPreview.focus();
+    markdownPreview.select();
+  }
+}
+
+function handleSave() {
+  const blob = new Blob([state.markdown || ''], { type: 'text/markdown;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = buildFileName(state.pageUrl);
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+
+  URL.revokeObjectURL(url);
+}
+
+function buildFileName(pageUrl) {
+  try {
+    const host = new URL(pageUrl).hostname.replace(/[^a-zA-Z0-9.-]/g, '_');
+    return `web-disassembly-pack-${host}.md`;
+  } catch {
+    return 'web-disassembly-pack.md';
+  }
+}
+
+// -----------------------------------------------
+// やり直す
+// -----------------------------------------------
+function handleReset() {
+  state = {};
+
+  urlInput.value = '';
+  fetchStatus.textContent = '';
+
+  structureCards.innerHTML = '';
+
+  dangerResult.innerHTML = '';
+  dangerResult.classList.remove('card-warning');
+
+  markdownPreview.value = '';
+  markdownPreviewWrap.hidden = true;
+  copyStatus.textContent = '';
+
+  hideStep(stepStructure);
+  hideStep(stepDanger);
+  hideStep(stepMarkdown);
+}
+
+// -----------------------------------------------
+// 共通
+// -----------------------------------------------
+function showStep(el) {
+  el.hidden = false;
+}
+
+function hideStep(el) {
+  el.hidden = true;
+}

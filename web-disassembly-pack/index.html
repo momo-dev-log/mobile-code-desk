@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Web解体パック</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="app-header">
+    <h1>Web解体パック</h1>
+    <p class="subtitle">AIに「このページどう作ってる？」と聞くためのMarkdown調査パックを作る道具です。</p>
+  </header>
+
+  <main>
+    <section class="step" id="step-url">
+      <h2>1. URLを入力</h2>
+      <label for="url-input" class="field-label">対象のWebページURL</label>
+      <input type="url" id="url-input" class="text-input" placeholder="https://example.com/page" autocomplete="off">
+      <button type="button" id="fetch-btn" class="btn btn-primary btn-block">URLを取得</button>
+      <p id="fetch-status" class="status-text"></p>
+    </section>
+
+    <section class="step" id="step-structure" hidden>
+      <h2>2. 構造を確認</h2>
+      <button type="button" id="structure-btn" class="btn btn-primary btn-block">構造を見る</button>
+      <div id="structure-cards" class="card-grid"></div>
+    </section>
+
+    <section class="step" id="step-danger" hidden>
+      <h2>3. 危険情報チェック</h2>
+      <p class="hint-text">共有前に、検出された内容を確認してください。</p>
+      <div id="danger-result" class="card danger-card"></div>
+    </section>
+
+    <section class="step" id="step-markdown" hidden>
+      <h2>4. Markdownを作成</h2>
+      <button type="button" id="markdown-btn" class="btn btn-primary btn-block">Markdownを作る</button>
+
+      <div id="markdown-preview-wrap" hidden>
+        <textarea id="markdown-preview" class="markdown-preview" readonly rows="10"></textarea>
+
+        <div class="action-row">
+          <button type="button" id="copy-btn" class="btn btn-primary btn-large btn-block">コピーする</button>
+        </div>
+        <div class="action-row">
+          <button type="button" id="save-btn" class="btn btn-secondary btn-block">.mdを保存</button>
+        </div>
+        <p id="copy-status" class="status-text"></p>
+      </div>
+    </section>
+
+    <section class="step">
+      <button type="button" id="reset-btn" class="btn btn-text btn-block">やり直す</button>
+    </section>
+  </main>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
