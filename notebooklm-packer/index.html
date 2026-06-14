@@ -3,7 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#2f6fed">
   <title>notebooklm-packer</title>
+  <link rel="manifest" href="manifest.json?v=warehouse">
   <link rel="stylesheet" href="style.css?v=2tab">
 </head>
 <body>
@@ -13,6 +15,15 @@
   </header>
 
   <main>
+    <!-- 共有URL倉庫タブ -->
+    <section id="tab-warehouse" class="tab-panel" data-tab="warehouse" hidden>
+      <h2>共有URL倉庫</h2>
+      <p class="app-subtitle">共有されたURLを一時保存します</p>
+
+      <p id="warehouse-empty-note" class="empty-note">共有されたURLはまだありません</p>
+      <ul id="warehouse-list" class="warehouse-list"></ul>
+    </section>
+
     <!-- 記事タブ -->
     <section id="tab-articles" class="tab-panel" data-tab="articles">
       <div id="articles-toolbar" class="articles-toolbar">
@@ -78,6 +89,7 @@
   </main>
 
   <nav class="tab-bar">
+    <button type="button" class="tab-btn" data-tab="warehouse">倉庫</button>
     <button type="button" class="tab-btn tab-btn--active" data-tab="articles">記事</button>
     <button type="button" class="tab-btn" data-tab="categories">資料化</button>
   </nav>
@@ -98,6 +110,6 @@
     <button type="button" id="category-sheet-close-btn" class="btn">閉じる</button>
   </div>
 
-  <script type="module" src="js/main.js?v=2tab"></script>
+  <script type="module" src="js/main.js?v=warehouse"></script>
 </body>
 </html>

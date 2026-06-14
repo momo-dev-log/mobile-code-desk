@@ -1,6 +1,7 @@
 import {
   openDb,
   getAllArticleMeta,
+  getArticleMeta,
   existsArticleMeta,
   saveSuccessArticle,
   saveFailedArticle,
@@ -13,6 +14,10 @@ import {
   assignCategory,
   getArticleBody,
   setExported,
+  getAllSharedUrls,
+  upsertSharedUrl,
+  updateSharedUrlStatus,
+  deleteSharedUrl,
 } from './db.js';
 import { normalizeUrl } from './normalize.js';
 import { fetchArticleHtml } from './fetch.js';
@@ -73,6 +78,9 @@ const categorySheetCreateBtn = document.getElementById('category-sheet-create-bt
 const categorySheetStatus = document.getElementById('category-sheet-status');
 const categorySheetCloseBtn = document.getElementById('category-sheet-close-btn');
 
+const warehouseListEl = document.getElementById('warehouse-list');
+const warehouseEmptyNote = document.getElementById('warehouse-empty-note');
+
 const categoryBarEl = document.getElementById('category-bar');
 const categoryBarAddInput = document.getElementById('category-bar-add-input');
 const categoryBarAddSaveBtn = document.getElementById('category-bar-add-save-btn');
@@ -85,6 +93,10 @@ init();
 
 async function init() {
   db = await openDb();
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
 
   setupTabs();
 
@@ -105,7 +117,63 @@ async function init() {
   categoryDetailBackBtn.addEventListener('click', closeCategoryDetail);
   categoryDetailExportBtn.addEventListener('click', handleExportCategoryDetail);
 
+  const sharedUrl = await consumeShareTarget();
+
   await renderAll();
+
+  if (sharedUrl) {
+    switchTab('warehouse');
+  }
+}
+
+// -----------------------------------------------
+// 共有URL倉庫: Web Share Targetの受け取り
+// -----------------------------------------------
+/**
+ * 共有シート経由でのURL（title/text/urlクエリパラメータ）を読み取り、
+ * 共有URL倉庫に保存する。受け取った場合はアドレスバーのクエリを取り除く。
+ * @returns {Promise<string|null>} 保存した正規化URL（受け取りが無ければnull）
+ */
+async function consumeShareTarget() {
+  const params = new URLSearchParams(location.search);
+  const title = params.get('title') || '';
+  const text = params.get('text') || '';
+  let url = params.get('url') || '';
+
+  if (!url) {
+    const source = `${text} ${title}`;
+    const match = source.match(/https?:\/\/\S+/);
+    if (match) {
+      url = match[0];
+    }
+  }
+
+  if (!params.has('title') && !params.has('text') && !params.has('url')) {
+    return null;
+  }
+
+  if (!url) {
+    return null;
+  }
+
+  let id;
+  try {
+    id = normalizeUrl(url);
+  } catch {
+    return null;
+  }
+
+  history.replaceState(null, '', location.pathname);
+
+  await upsertSharedUrl(db, {
+    id,
+    url,
+    title: title || text,
+    domain: getDomain(url),
+    savedAt: new Date().toISOString(),
+  });
+
+  return id;
 }
 
 // -----------------------------------------------
@@ -319,6 +387,110 @@ async function renderAll() {
   await renderCategoryBar();
   await renderArticleList();
   await renderCategoryList();
+  await renderWarehouseList();
+}
+
+// -----------------------------------------------
+// 共有URL倉庫タブ
+// -----------------------------------------------
+async function renderWarehouseList() {
+  const records = await getAllSharedUrls(db);
+  records.sort((a, b) => (b.savedAt || '').localeCompare(a.savedAt || ''));
+
+  warehouseListEl.innerHTML = '';
+  warehouseEmptyNote.hidden = records.length > 0;
+
+  for (const record of records) {
+    warehouseListEl.appendChild(buildWarehouseItem(record));
+  }
+}
+
+function buildWarehouseItem(record) {
+  const li = document.createElement('li');
+  li.className = 'warehouse-card';
+  li.dataset.sharedId = record.id;
+
+  const savedAtText = formatDateTime(record.savedAt);
+
+  let actionsHtml = '';
+  if (record.status === '取り込み済み') {
+    actionsHtml = `<button type="button" class="btn btn-small btn-warehouse-delete">削除</button>`;
+  } else if (record.status === '取り込み失敗') {
+    actionsHtml = `
+      <button type="button" class="btn btn-small btn-primary btn-warehouse-retry">もう一度取り込む</button>
+      <button type="button" class="btn btn-small btn-warehouse-delete">削除</button>
+    `;
+  } else {
+    actionsHtml = `
+      <button type="button" class="btn btn-small btn-primary btn-warehouse-import">URLを取り込む</button>
+      <button type="button" class="btn btn-small btn-warehouse-delete">削除</button>
+    `;
+  }
+
+  li.innerHTML = `
+    <p class="warehouse-card-title truncate">${escapeHtml(record.title || record.url)}</p>
+    <p class="warehouse-card-domain truncate">${escapeHtml(record.domain)}</p>
+    <p class="warehouse-card-meta">保存日時: ${escapeHtml(savedAtText)} ／ 状態: ${escapeHtml(record.status)}</p>
+    <p class="warehouse-card-url truncate">${escapeHtml(record.url)}</p>
+    <div class="warehouse-card-actions">${actionsHtml}</div>
+  `;
+
+  const importBtnEl = li.querySelector('.btn-warehouse-import');
+  if (importBtnEl) {
+    importBtnEl.addEventListener('click', () => handleWarehouseImport(record.id));
+  }
+  const retryBtnEl = li.querySelector('.btn-warehouse-retry');
+  if (retryBtnEl) {
+    retryBtnEl.addEventListener('click', () => handleWarehouseImport(record.id));
+  }
+  li.querySelector('.btn-warehouse-delete').addEventListener('click', () => handleWarehouseDelete(record.id));
+
+  return li;
+}
+
+function formatDateTime(isoString) {
+  if (!isoString) {
+    return '';
+  }
+  const date = new Date(isoString);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}/${pad(date.getMonth() + 1)}/${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+/**
+ * 倉庫カードの「URLを取り込む」「もう一度取り込む」を実行する。
+ * 既存のimportAndFetchをそのまま流用し、結果に応じてsharedUrlsのstatusを更新する。
+ * @param {string} id
+ */
+async function handleWarehouseImport(id) {
+  const record = await getAllSharedUrls(db).then((all) => all.find((r) => r.id === id));
+  if (!record) {
+    return;
+  }
+
+  await importAndFetch([record.url]);
+
+  const meta = await getArticleMeta(db, id);
+  if (meta?.status === 'success') {
+    await updateSharedUrlStatus(db, id, '取り込み済み');
+  } else if (meta?.status === 'failed') {
+    await updateSharedUrlStatus(db, id, '取り込み失敗');
+  }
+
+  await renderAll();
+}
+
+async function handleWarehouseDelete(id) {
+  const confirmed = window.confirm('この共有URLを削除しますか？');
+  if (!confirmed) {
+    return;
+  }
+
+  await deleteSharedUrl(db, id);
+  await renderAll();
 }
 
 // -----------------------------------------------

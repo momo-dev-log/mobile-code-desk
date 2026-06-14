@@ -2,21 +2,23 @@
  * IndexedDBラッパー
  * docs/notebooklm-tool-spec-v1.0-text.md 8章（データ構造）に準拠。
  *
- * オブジェクトストア（v3）:
+ * オブジェクトストア（v4）:
  * - articleMeta (keyPath: id ＝ 正規化URL。indexes: status, categoryId)
  * - articleBody (keyPath: id ＝ articleMetaと同じ正規化URL)
  * - category    (keyPath: id)
+ * - sharedUrls  (keyPath: id ＝ 正規化URL。indexes: status) 共有URL倉庫
  *
  * 注: "id" の値は正規化URLそのもの。仕様8.1の "normalizedUrl" は、
  * articleMeta内の同値フィールドとして併記する（keyPathはidのまま）。
  */
 
 export const DB_NAME = 'notebooklm-packer';
-export const DB_VERSION = 3;
+export const DB_VERSION = 4;
 
 export const STORE_ARTICLE_META = 'articleMeta';
 export const STORE_ARTICLE_BODY = 'articleBody';
 export const STORE_CATEGORY = 'category';
+export const STORE_SHARED_URLS = 'sharedUrls';
 
 /**
  * データベースを開く。
@@ -26,6 +28,8 @@ export const STORE_CATEGORY = 'category';
  * - oldVersion === 2:
  *   articleMeta/articleBody/categoryの既存データは保持したまま、
  *   不要になった fetchState/createdAt インデックスと pack ストアのみ削除する。
+ * - oldVersion < 4（共通）:
+ *   sharedUrls ストア（共有URL倉庫）が無ければ追加する。既存データには影響しない。
  * @returns {Promise<IDBDatabase>}
  */
 export function openDb() {
@@ -48,21 +52,26 @@ export function openDb() {
 
         db.createObjectStore(STORE_ARTICLE_BODY, { keyPath: 'id' });
         db.createObjectStore(STORE_CATEGORY, { keyPath: 'id' });
-        return;
+      } else {
+        // oldVersion === 2: 既存データを保持したまま不要な要素のみ削除する
+        const tx = event.target.transaction;
+        const metaStore = tx.objectStore(STORE_ARTICLE_META);
+
+        if (metaStore.indexNames.contains('fetchState')) {
+          metaStore.deleteIndex('fetchState');
+        }
+        if (metaStore.indexNames.contains('createdAt')) {
+          metaStore.deleteIndex('createdAt');
+        }
+        if (db.objectStoreNames.contains('pack')) {
+          db.deleteObjectStore('pack');
+        }
       }
 
-      // oldVersion === 2: 既存データを保持したまま不要な要素のみ削除する
-      const tx = event.target.transaction;
-      const metaStore = tx.objectStore(STORE_ARTICLE_META);
-
-      if (metaStore.indexNames.contains('fetchState')) {
-        metaStore.deleteIndex('fetchState');
-      }
-      if (metaStore.indexNames.contains('createdAt')) {
-        metaStore.deleteIndex('createdAt');
-      }
-      if (db.objectStoreNames.contains('pack')) {
-        db.deleteObjectStore('pack');
+      // oldVersion < 4: 共有URL倉庫用ストアを追加（既存データには影響しない）
+      if (!db.objectStoreNames.contains(STORE_SHARED_URLS)) {
+        const sharedStore = db.createObjectStore(STORE_SHARED_URLS, { keyPath: 'id' });
+        sharedStore.createIndex('status', 'status');
       }
     };
 
@@ -279,6 +288,107 @@ export function setExported(db, articleId) {
       meta.isExported = true;
       store.put(meta);
     };
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+// =================================================
+// 共有URL倉庫
+// =================================================
+
+/**
+ * 共有URL倉庫の一覧を取得する。
+ * @param {IDBDatabase} db
+ * @returns {Promise<object[]>}
+ */
+export function getAllSharedUrls(db) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_SHARED_URLS, 'readonly');
+    const request = tx.objectStore(STORE_SHARED_URLS).getAll();
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+/**
+ * 指定IDの共有URLを取得する。
+ * @param {IDBDatabase} db
+ * @param {string} id
+ * @returns {Promise<object|undefined>}
+ */
+export function getSharedUrl(db, id) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_SHARED_URLS, 'readonly');
+    const request = tx.objectStore(STORE_SHARED_URLS).get(id);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+/**
+ * 共有URLを保存する。
+ * 同じIDが既に存在する場合は、status等は変更せず保存日時(savedAt)だけ更新する。
+ * 存在しない場合は status: '未取り込み' で新規追加する。
+ * @param {IDBDatabase} db
+ * @param {{ id: string, url: string, title: string, domain: string, savedAt: string }} record
+ * @returns {Promise<void>}
+ */
+export function upsertSharedUrl(db, record) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_SHARED_URLS, 'readwrite');
+    const store = tx.objectStore(STORE_SHARED_URLS);
+    const request = store.get(record.id);
+    request.onsuccess = () => {
+      const existing = request.result;
+      if (existing) {
+        existing.savedAt = record.savedAt;
+        store.put(existing);
+      } else {
+        store.put({ ...record, status: '未取り込み' });
+      }
+    };
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+/**
+ * 共有URLのstatusを更新する。
+ * @param {IDBDatabase} db
+ * @param {string} id
+ * @param {string} status
+ * @returns {Promise<void>}
+ */
+export function updateSharedUrlStatus(db, id, status) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_SHARED_URLS, 'readwrite');
+    const store = tx.objectStore(STORE_SHARED_URLS);
+    const request = store.get(id);
+    request.onsuccess = () => {
+      const record = request.result;
+      if (!record) {
+        resolve();
+        return;
+      }
+      record.status = status;
+      store.put(record);
+    };
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+/**
+ * 共有URLを削除する。
+ * @param {IDBDatabase} db
+ * @param {string} id
+ * @returns {Promise<void>}
+ */
+export function deleteSharedUrl(db, id) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_SHARED_URLS, 'readwrite');
+    tx.objectStore(STORE_SHARED_URLS).delete(id);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });

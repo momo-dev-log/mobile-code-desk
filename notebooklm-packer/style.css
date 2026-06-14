@@ -367,6 +367,41 @@ input[type="text"] {
   border-top: 1px solid var(--border);
 }
 
+/* 共有URL倉庫 */
+.warehouse-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.warehouse-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(127, 127, 127, 0.08);
+  margin-bottom: 0.75rem;
+  padding: 0.75rem;
+}
+
+.warehouse-card-title {
+  font-weight: 600;
+  margin: 0 0 0.15rem;
+}
+
+.warehouse-card-domain,
+.warehouse-card-meta,
+.warehouse-card-url {
+  font-size: 0.85rem;
+  color: #888;
+  margin: 0 0 0.25rem;
+}
+
+.warehouse-card-actions {
+  display: flex;
+  gap: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border);
+}
+
 .category-rename-input {
   flex: 1;
   min-width: 0;
