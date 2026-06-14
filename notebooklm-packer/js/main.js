@@ -52,6 +52,17 @@ const categoryAddBtn = document.getElementById('category-add-btn');
 const categoryStatus = document.getElementById('category-status');
 const categoryEmptyNote = document.getElementById('category-empty-note');
 const categoryListEl = document.getElementById('category-list');
+const uncategorizedListEl = document.getElementById('uncategorized-list');
+
+const categoryListView = document.getElementById('category-list-view');
+const categoryDetailView = document.getElementById('category-detail-view');
+const categoryDetailBackBtn = document.getElementById('category-detail-back-btn');
+const categoryDetailTitle = document.getElementById('category-detail-title');
+const categoryDetailEmpty = document.getElementById('category-detail-empty');
+const categoryDetailListEl = document.getElementById('category-detail-list');
+
+// カテゴリ詳細ビューで表示中の対象: null（未表示） | 'unclassified' | カテゴリID
+let currentCategoryDetailTarget = null;
 
 const categorySheetOverlay = document.getElementById('category-sheet-overlay');
 const categorySheet = document.getElementById('category-sheet');
@@ -93,6 +104,8 @@ async function init() {
 
   categoryBarAddSaveBtn.addEventListener('click', handleCreateCategoryFromBar);
   categoryBarAddCancelBtn.addEventListener('click', closeCategoryBarAddForm);
+
+  categoryDetailBackBtn.addEventListener('click', closeCategoryDetail);
 
   await renderAll();
 }
@@ -484,29 +497,62 @@ async function renderCategoryList() {
   const categories = await getAllCategories(db);
   categories.sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
 
+  const metas = await getAllArticleMeta(db);
+  const successMetas = metas.filter(meta => meta.status === 'success');
+
   categoryEmptyNote.hidden = categories.length > 0;
   categoryListEl.innerHTML = '';
 
   for (const category of categories) {
-    categoryListEl.appendChild(buildCategoryItem(category));
+    const count = successMetas.filter(meta => meta.categoryId === category.id).length;
+    categoryListEl.appendChild(buildCategoryItem(category, count));
+  }
+
+  const uncategorizedCount = successMetas.filter(meta => !meta.categoryId).length;
+  uncategorizedListEl.innerHTML = '';
+  uncategorizedListEl.appendChild(buildUncategorizedItem(uncategorizedCount));
+
+  if (currentCategoryDetailTarget) {
+    await renderCategoryDetail(currentCategoryDetailTarget);
   }
 }
 
-function buildCategoryItem(category) {
+function buildCategoryItem(category, count) {
   const li = document.createElement('li');
-  li.className = 'category-list-item';
+  li.className = 'category-list-item category-list-item--clickable';
   li.dataset.categoryId = category.id;
 
   li.innerHTML = `
-    <span class="category-name truncate">${escapeHtml(category.name)}</span>
+    <span class="category-name truncate">${escapeHtml(category.name)} <span class="category-count">(${count})</span></span>
     <div class="category-actions">
       <button type="button" class="btn btn-small btn-rename-category">名前変更</button>
       <button type="button" class="btn btn-small btn-delete-category">削除</button>
     </div>
   `;
 
-  li.querySelector('.btn-rename-category').addEventListener('click', () => showCategoryRenameForm(li, category));
-  li.querySelector('.btn-delete-category').addEventListener('click', () => handleDeleteCategory(category.id));
+  li.addEventListener('click', () => renderCategoryDetail(category.id));
+
+  li.querySelector('.btn-rename-category').addEventListener('click', (e) => {
+    e.stopPropagation();
+    showCategoryRenameForm(li, category);
+  });
+  li.querySelector('.btn-delete-category').addEventListener('click', (e) => {
+    e.stopPropagation();
+    handleDeleteCategory(category.id);
+  });
+
+  return li;
+}
+
+function buildUncategorizedItem(count) {
+  const li = document.createElement('li');
+  li.className = 'category-list-item category-list-item--clickable';
+
+  li.innerHTML = `
+    <span class="category-name truncate">未分類 <span class="category-count">(${count})</span></span>
+  `;
+
+  li.addEventListener('click', () => renderCategoryDetail('unclassified'));
 
   return li;
 }
@@ -526,8 +572,10 @@ function showCategoryRenameForm(li, category) {
   `;
 
   const input = li.querySelector('.category-rename-input');
+  input.addEventListener('click', (e) => e.stopPropagation());
 
-  li.querySelector('.btn-save-category-rename').addEventListener('click', async () => {
+  li.querySelector('.btn-save-category-rename').addEventListener('click', async (e) => {
+    e.stopPropagation();
     try {
       await renameCategory(db, category.id, input.value);
     } catch (err) {
@@ -538,7 +586,8 @@ function showCategoryRenameForm(li, category) {
     await renderCategoryList();
   });
 
-  li.querySelector('.btn-cancel-category-rename').addEventListener('click', () => {
+  li.querySelector('.btn-cancel-category-rename').addEventListener('click', (e) => {
+    e.stopPropagation();
     renderCategoryList();
   });
 }
@@ -546,6 +595,77 @@ function showCategoryRenameForm(li, category) {
 function setCategoryStatus(message, type) {
   categoryStatus.textContent = message;
   categoryStatus.className = `status-text status-${type}`;
+}
+
+// -----------------------------------------------
+// カテゴリ詳細ビュー
+// -----------------------------------------------
+
+/**
+ * カテゴリ詳細ビューを表示する。
+ * @param {string} target - 'unclassified' または カテゴリID
+ */
+async function renderCategoryDetail(target) {
+  let title;
+  let categoryId;
+
+  if (target === 'unclassified') {
+    title = '未分類';
+    categoryId = '';
+  } else {
+    const categories = await getAllCategories(db);
+    const category = categories.find(c => c.id === target);
+    if (!category) {
+      // 削除済みカテゴリの詳細を開こうとした場合は安全に一覧へ戻す
+      closeCategoryDetail();
+      return;
+    }
+    title = category.name;
+    categoryId = category.id;
+  }
+
+  currentCategoryDetailTarget = target;
+  categoryDetailTitle.textContent = title;
+
+  const metas = await getAllArticleMeta(db);
+  const targetMetas = metas
+    .filter(meta => meta.status === 'success')
+    .filter(meta => (target === 'unclassified' ? !meta.categoryId : meta.categoryId === categoryId))
+    .sort((a, b) => (b.fetchedAt || '').localeCompare(a.fetchedAt || ''));
+
+  categoryDetailListEl.innerHTML = '';
+  categoryDetailEmpty.hidden = targetMetas.length > 0;
+
+  for (const meta of targetMetas) {
+    categoryDetailListEl.appendChild(buildCategoryDetailItem(meta));
+  }
+
+  categoryListView.hidden = true;
+  categoryDetailView.hidden = false;
+}
+
+function buildCategoryDetailItem(meta) {
+  const li = document.createElement('li');
+  li.className = 'category-detail-item';
+
+  const exportedBadge = meta.isExported
+    ? '<span class="category-detail-item-exported">出力済み</span>'
+    : '';
+
+  li.innerHTML = `
+    <p class="category-detail-item-title truncate">${escapeHtml(meta.title)}</p>
+    <p class="category-detail-item-domain truncate">${escapeHtml(meta.domain)}</p>
+    <p class="category-detail-item-url truncate">${escapeHtml(meta.originalUrl)}</p>
+    ${exportedBadge}
+  `;
+
+  return li;
+}
+
+function closeCategoryDetail() {
+  currentCategoryDetailTarget = null;
+  categoryDetailView.hidden = true;
+  categoryListView.hidden = false;
 }
 
 // -----------------------------------------------

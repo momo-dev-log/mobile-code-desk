@@ -49,17 +49,31 @@
 
     <!-- カテゴリタブ -->
     <section id="tab-categories" class="tab-panel" data-tab="categories" hidden>
-      <h2>カテゴリ</h2>
+      <!-- カテゴリ一覧ビュー -->
+      <div id="category-list-view">
+        <h2>カテゴリ</h2>
 
-      <div class="category-add">
-        <label for="category-name-input">新しいカテゴリ名</label>
-        <input type="text" id="category-name-input" placeholder="例: 技術記事">
-        <button type="button" id="category-add-btn" class="btn btn-primary">追加</button>
+        <div class="category-add">
+          <label for="category-name-input">新しいカテゴリ名</label>
+          <input type="text" id="category-name-input" placeholder="例: 技術記事">
+          <button type="button" id="category-add-btn" class="btn btn-primary">追加</button>
+        </div>
+        <p id="category-status" class="status-text"></p>
+
+        <p id="category-empty-note" class="empty-note">まだカテゴリはありません。</p>
+        <ul id="category-list" class="category-list"></ul>
+
+        <h2>未分類</h2>
+        <ul id="uncategorized-list" class="category-list"></ul>
       </div>
-      <p id="category-status" class="status-text"></p>
 
-      <p id="category-empty-note" class="empty-note">まだカテゴリはありません。</p>
-      <ul id="category-list" class="category-list"></ul>
+      <!-- カテゴリ詳細ビュー -->
+      <div id="category-detail-view" hidden>
+        <button type="button" id="category-detail-back-btn" class="btn btn-small">← 一覧に戻る</button>
+        <h2 id="category-detail-title"></h2>
+        <p id="category-detail-empty" class="empty-note" hidden>このカテゴリにはまだ記事がありません</p>
+        <ul id="category-detail-list" class="category-detail-list"></ul>
+      </div>
     </section>
   </main>
 

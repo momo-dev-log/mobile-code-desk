@@ -363,6 +363,56 @@ input[type="text"] {
 }
 
 /* -----------------------------------------------
+   カテゴリタブ: 一覧・詳細ビュー
+   ----------------------------------------------- */
+.category-list-item--clickable {
+  cursor: pointer;
+}
+
+.category-count {
+  color: #888;
+  font-weight: normal;
+}
+
+.category-detail-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.category-detail-item {
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.category-detail-item:last-child {
+  border-bottom: none;
+}
+
+.category-detail-item-title {
+  font-weight: 600;
+  margin: 0 0 0.15rem;
+}
+
+.category-detail-item-domain,
+.category-detail-item-url {
+  font-size: 0.8rem;
+  color: #888;
+  word-break: break-all;
+  margin: 0 0 0.15rem;
+}
+
+.category-detail-item-exported {
+  display: inline-block;
+  font-size: 0.75rem;
+  color: var(--success);
+  border: 1px solid var(--success);
+  border-radius: 999px;
+  padding: 0.05rem 0.5rem;
+  margin-top: 0.15rem;
+}
+
+/* -----------------------------------------------
    カテゴリバー
    ----------------------------------------------- */
 .category-bar-wrap {
