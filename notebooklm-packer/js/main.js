@@ -22,6 +22,9 @@ let db;
 // 取得中のURL（DBには保存しない、UI上の一時状態）
 let fetchingItems = [];
 
+// カテゴリバーの選択状態: 'all' | 'unclassified' | カテゴリID
+let currentCategoryFilter = 'all';
+
 // -----------------------------------------------
 // DOM要素
 // -----------------------------------------------
@@ -58,6 +61,13 @@ const categorySheetCreateBtn = document.getElementById('category-sheet-create-bt
 const categorySheetStatus = document.getElementById('category-sheet-status');
 const categorySheetCloseBtn = document.getElementById('category-sheet-close-btn');
 
+const categoryBarEl = document.getElementById('category-bar');
+const categoryBarAddFormEl = document.getElementById('category-bar-add-form');
+const categoryBarAddInput = document.getElementById('category-bar-add-input');
+const categoryBarAddSaveBtn = document.getElementById('category-bar-add-save-btn');
+const categoryBarAddCancelBtn = document.getElementById('category-bar-add-cancel-btn');
+const categoryBarStatus = document.getElementById('category-bar-status');
+
 // カテゴリ付けシートの対象記事ID（シートが閉じている時はnull）
 let categorySheetArticleId = null;
 
@@ -80,6 +90,9 @@ async function init() {
   categorySheetOverlay.addEventListener('click', closeCategorySheet);
   categorySheetCloseBtn.addEventListener('click', closeCategorySheet);
   categorySheetCreateBtn.addEventListener('click', handleCreateCategoryInSheet);
+
+  categoryBarAddSaveBtn.addEventListener('click', handleCreateCategoryFromBar);
+  categoryBarAddCancelBtn.addEventListener('click', closeCategoryBarAddForm);
 
   await renderAll();
 }
@@ -287,6 +300,7 @@ async function handleDeleteFailed(id) {
 async function renderAll() {
   await renderUrlFoldList();
   await renderFailedArea();
+  await renderCategoryBar();
   await renderArticleList();
   await renderCategoryList();
 }
@@ -360,6 +374,81 @@ function buildFailedItem(meta) {
   li.querySelector('.btn-delete-failed').addEventListener('click', () => handleDeleteFailed(meta.id));
 
   return li;
+}
+
+// -----------------------------------------------
+// カテゴリバー
+// -----------------------------------------------
+async function renderCategoryBar() {
+  const categories = await getAllCategories(db);
+  categories.sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
+
+  categoryBarEl.innerHTML = '';
+
+  categoryBarEl.appendChild(buildCategoryBarItem('すべて', 'all'));
+  categoryBarEl.appendChild(buildCategoryBarItem('未分類', 'unclassified'));
+
+  for (const category of categories) {
+    categoryBarEl.appendChild(buildCategoryBarItem(category.name, category.id));
+  }
+
+  const addBtn = document.createElement('button');
+  addBtn.type = 'button';
+  addBtn.className = 'category-bar-item';
+  addBtn.textContent = '＋';
+  addBtn.addEventListener('click', handleOpenCategoryBarAddForm);
+  categoryBarEl.appendChild(addBtn);
+}
+
+function buildCategoryBarItem(label, value) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'category-bar-item';
+  if (currentCategoryFilter === value) {
+    btn.classList.add('category-bar-item--active');
+  }
+  btn.textContent = label;
+  btn.addEventListener('click', () => handleSelectCategoryFilter(value));
+  return btn;
+}
+
+async function handleSelectCategoryFilter(value) {
+  currentCategoryFilter = value;
+  await renderCategoryBar();
+  await renderArticleList();
+}
+
+function handleOpenCategoryBarAddForm() {
+  categoryBarAddInput.value = '';
+  setCategoryBarStatus('', '');
+  categoryBarAddFormEl.hidden = false;
+}
+
+function closeCategoryBarAddForm() {
+  categoryBarAddFormEl.hidden = true;
+}
+
+async function handleCreateCategoryFromBar() {
+  const name = categoryBarAddInput.value;
+
+  let category;
+  try {
+    category = await createCategory(db, name);
+  } catch (err) {
+    setCategoryBarStatus(err.message, 'error');
+    return;
+  }
+
+  currentCategoryFilter = category.id;
+  closeCategoryBarAddForm();
+  await renderCategoryBar();
+  await renderArticleList();
+  await renderCategoryList();
+}
+
+function setCategoryBarStatus(message, type) {
+  categoryBarStatus.textContent = message;
+  categoryBarStatus.className = `status-text${type ? ` status-${type}` : ''}`;
 }
 
 // -----------------------------------------------
@@ -553,6 +642,16 @@ async function renderArticleList() {
     .filter(meta => meta.status === 'success')
     .sort((a, b) => (b.fetchedAt || '').localeCompare(a.fetchedAt || ''));
 
+  const filteredMetas = successMetas.filter((meta) => {
+    if (currentCategoryFilter === 'all') {
+      return true;
+    }
+    if (currentCategoryFilter === 'unclassified') {
+      return !meta.categoryId;
+    }
+    return meta.categoryId === currentCategoryFilter;
+  });
+
   const categories = await getAllCategories(db);
   const categoryMap = new Map(categories.map(c => [c.id, c.name]));
 
@@ -570,7 +669,15 @@ async function renderArticleList() {
     articleListEl.appendChild(buildFetchingCard(item));
   }
 
-  for (const meta of successMetas) {
+  if (filteredMetas.length === 0 && fetchingItems.length === 0) {
+    const p = document.createElement('p');
+    p.className = 'empty-note';
+    p.textContent = '該当する記事はありません';
+    articleListEl.appendChild(p);
+    return;
+  }
+
+  for (const meta of filteredMetas) {
     articleListEl.appendChild(buildArticleCard(meta, categoryMap));
   }
 }

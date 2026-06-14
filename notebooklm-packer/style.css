@@ -363,6 +363,55 @@ input[type="text"] {
 }
 
 /* -----------------------------------------------
+   カテゴリバー
+   ----------------------------------------------- */
+.category-bar-wrap {
+  margin-bottom: 1rem;
+}
+
+.category-bar {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.5rem;
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+  -webkit-overflow-scrolling: touch;
+}
+
+.category-bar-item {
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: #fff;
+  color: inherit;
+  font-size: 0.85rem;
+  padding: 0.35rem 0.9rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.category-bar-item--active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+.category-bar-add-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.category-bar-add-form input[type="text"] {
+  flex: 1;
+  min-width: 0;
+  margin-bottom: 0;
+}
+
+/* -----------------------------------------------
    記事カードのカテゴリ欄
    ----------------------------------------------- */
 .article-category-btn {
