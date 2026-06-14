@@ -10,6 +10,7 @@ import {
   createCategory,
   renameCategory,
   deleteCategory,
+  assignCategory,
 } from './db.js';
 import { normalizeUrl } from './normalize.js';
 import { fetchArticleHtml } from './fetch.js';
@@ -49,6 +50,17 @@ const categoryStatus = document.getElementById('category-status');
 const categoryEmptyNote = document.getElementById('category-empty-note');
 const categoryListEl = document.getElementById('category-list');
 
+const categorySheetOverlay = document.getElementById('category-sheet-overlay');
+const categorySheet = document.getElementById('category-sheet');
+const categorySheetListEl = document.getElementById('category-sheet-list');
+const categorySheetNewInput = document.getElementById('category-sheet-new-input');
+const categorySheetCreateBtn = document.getElementById('category-sheet-create-btn');
+const categorySheetStatus = document.getElementById('category-sheet-status');
+const categorySheetCloseBtn = document.getElementById('category-sheet-close-btn');
+
+// カテゴリ付けシートの対象記事ID（シートが閉じている時はnull）
+let categorySheetArticleId = null;
+
 init();
 
 async function init() {
@@ -64,6 +76,10 @@ async function init() {
 
   importBtn.addEventListener('click', handleImport);
   categoryAddBtn.addEventListener('click', handleAddCategory);
+
+  categorySheetOverlay.addEventListener('click', closeCategorySheet);
+  categorySheetCloseBtn.addEventListener('click', closeCategorySheet);
+  categorySheetCreateBtn.addEventListener('click', handleCreateCategoryInSheet);
 
   await renderAll();
 }
@@ -444,6 +460,91 @@ function setCategoryStatus(message, type) {
 }
 
 // -----------------------------------------------
+// カテゴリ付けシート
+// -----------------------------------------------
+async function openCategorySheet(articleId, currentCategoryId) {
+  categorySheetArticleId = articleId;
+  categorySheetNewInput.value = '';
+  setCategorySheetStatus('', '');
+
+  await renderCategorySheetList(currentCategoryId);
+
+  categorySheetOverlay.hidden = false;
+  categorySheet.hidden = false;
+}
+
+function closeCategorySheet() {
+  categorySheetArticleId = null;
+  categorySheetOverlay.hidden = true;
+  categorySheet.hidden = true;
+}
+
+async function renderCategorySheetList(currentCategoryId) {
+  const categories = await getAllCategories(db);
+  categories.sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
+
+  categorySheetListEl.innerHTML = '';
+
+  categorySheetListEl.appendChild(
+    buildCategorySheetItem('未分類に戻す', '', currentCategoryId === '' || !currentCategoryId)
+  );
+
+  for (const category of categories) {
+    categorySheetListEl.appendChild(
+      buildCategorySheetItem(category.name, category.id, category.id === currentCategoryId)
+    );
+  }
+}
+
+function buildCategorySheetItem(label, categoryId, isCurrent) {
+  const li = document.createElement('li');
+  li.className = 'category-sheet-item';
+
+  const optionClass = isCurrent ? 'category-sheet-option category-sheet-option--current' : 'category-sheet-option';
+  const suffix = isCurrent ? ' ✓' : '';
+
+  li.innerHTML = `<button type="button" class="${optionClass}">${escapeHtml(label)}${suffix}</button>`;
+  li.querySelector('button').addEventListener('click', () => handleSelectCategory(categoryId));
+
+  return li;
+}
+
+async function handleSelectCategory(categoryId) {
+  if (categorySheetArticleId === null) {
+    return;
+  }
+
+  await assignCategory(db, categorySheetArticleId, categoryId);
+  closeCategorySheet();
+  await renderAll();
+}
+
+async function handleCreateCategoryInSheet() {
+  if (categorySheetArticleId === null) {
+    return;
+  }
+
+  const name = categorySheetNewInput.value;
+
+  let category;
+  try {
+    category = await createCategory(db, name);
+  } catch (err) {
+    setCategorySheetStatus(err.message, 'error');
+    return;
+  }
+
+  await assignCategory(db, categorySheetArticleId, category.id);
+  closeCategorySheet();
+  await renderAll();
+}
+
+function setCategorySheetStatus(message, type) {
+  categorySheetStatus.textContent = message;
+  categorySheetStatus.className = `status-text${type ? ` status-${type}` : ''}`;
+}
+
+// -----------------------------------------------
 // 記事カード一覧
 // -----------------------------------------------
 async function renderArticleList() {
@@ -451,6 +552,9 @@ async function renderArticleList() {
   const successMetas = metas
     .filter(meta => meta.status === 'success')
     .sort((a, b) => (b.fetchedAt || '').localeCompare(a.fetchedAt || ''));
+
+  const categories = await getAllCategories(db);
+  const categoryMap = new Map(categories.map(c => [c.id, c.name]));
 
   articleListEl.innerHTML = '';
 
@@ -467,7 +571,7 @@ async function renderArticleList() {
   }
 
   for (const meta of successMetas) {
-    articleListEl.appendChild(buildArticleCard(meta));
+    articleListEl.appendChild(buildArticleCard(meta, categoryMap));
   }
 }
 
@@ -485,19 +589,38 @@ function buildFetchingCard(item) {
   return card;
 }
 
-function buildArticleCard(meta) {
+function buildArticleCard(meta, categoryMap) {
   const card = document.createElement('div');
   card.className = 'article-card article-card--success';
   card.dataset.articleId = meta.id;
+
+  const categoryLabel = resolveCategoryLabel(meta.categoryId, categoryMap);
 
   card.innerHTML = `
     <p class="article-source truncate">Source: ${escapeHtml(meta.originalUrl)}</p>
     <p class="article-title truncate">${escapeHtml(meta.title)}</p>
     <p class="article-domain truncate">${escapeHtml(meta.domain)}</p>
+    <button type="button" class="article-category-btn">${escapeHtml(categoryLabel)} ▾</button>
     <p class="article-state">約${(meta.charCount ?? 0).toLocaleString('ja-JP')}字</p>
   `;
 
+  card.querySelector('.article-category-btn').addEventListener('click', () => openCategorySheet(meta.id, meta.categoryId));
+
   return card;
+}
+
+/**
+ * categoryIdに対応するカテゴリ名を解決する。
+ * 未分類、または対応するカテゴリが見つからない場合は安全に「未分類」を返す。
+ * @param {string} categoryId
+ * @param {Map<string, string>} categoryMap
+ * @returns {string}
+ */
+function resolveCategoryLabel(categoryId, categoryMap) {
+  if (!categoryId) {
+    return '未分類';
+  }
+  return categoryMap.get(categoryId) ?? '未分類';
 }
 
 // UTF-8 BOM。Windows標準アプリ（メモ帳・Excel等）でUTF-8として

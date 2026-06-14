@@ -58,6 +58,22 @@
     <button type="button" class="tab-btn" data-tab="categories">カテゴリ</button>
   </nav>
 
+  <!-- カテゴリ付けシート -->
+  <div id="category-sheet-overlay" class="category-sheet-overlay" hidden></div>
+  <div id="category-sheet" class="category-sheet" hidden>
+    <h2>カテゴリを選択</h2>
+    <ul id="category-sheet-list" class="category-sheet-list"></ul>
+
+    <div class="category-sheet-new">
+      <label for="category-sheet-new-input">＋ 新しいカテゴリを作る</label>
+      <input type="text" id="category-sheet-new-input" placeholder="新しいカテゴリ名">
+      <button type="button" id="category-sheet-create-btn" class="btn btn-primary">作成して設定</button>
+    </div>
+
+    <p id="category-sheet-status" class="status-text"></p>
+    <button type="button" id="category-sheet-close-btn" class="btn">閉じる</button>
+  </div>
+
   <script type="module" src="js/main.js?v=2tab"></script>
 </body>
 </html>
