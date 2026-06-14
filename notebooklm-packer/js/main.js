@@ -49,12 +49,9 @@ const articleListEl = document.getElementById('article-card-list');
 const tabBtns = document.querySelectorAll('.tab-btn');
 const tabPanels = document.querySelectorAll('.tab-panel');
 
-const categoryNameInput = document.getElementById('category-name-input');
-const categoryAddBtn = document.getElementById('category-add-btn');
 const categoryStatus = document.getElementById('category-status');
 const categoryEmptyNote = document.getElementById('category-empty-note');
 const categoryListEl = document.getElementById('category-list');
-const uncategorizedListEl = document.getElementById('uncategorized-list');
 
 const categoryListView = document.getElementById('category-list-view');
 const categoryDetailView = document.getElementById('category-detail-view');
@@ -100,7 +97,6 @@ async function init() {
   });
 
   importBtn.addEventListener('click', handleImport);
-  categoryAddBtn.addEventListener('click', handleAddCategory);
 
   categorySheetOverlay.addEventListener('click', closeCategorySheet);
   categorySheetCloseBtn.addEventListener('click', closeCategorySheet);
@@ -291,6 +287,11 @@ function removeFetchingItem(id) {
 // URL一覧からの削除
 // -----------------------------------------------
 async function handleDeleteArticle(id) {
+  const confirmed = window.confirm('この記事を削除します。\n本文データも削除されます。\nよろしいですか？');
+  if (!confirmed) {
+    return;
+  }
+
   await deleteArticleRecord(db, id);
   await renderAll();
 }
@@ -465,28 +466,12 @@ async function handleCreateCategoryFromBar() {
 }
 
 function setCategoryBarStatus(message, type) {
-  categoryBarStatus.textContent = message;
-  categoryBarStatus.className = `status-text${type ? ` status-${type}` : ''}`;
+  setStatus(categoryBarStatus, message, type);
 }
 
 // -----------------------------------------------
 // カテゴリ
 // -----------------------------------------------
-async function handleAddCategory() {
-  const name = categoryNameInput.value;
-
-  try {
-    await createCategory(db, name);
-  } catch (err) {
-    setCategoryStatus(err.message, 'error');
-    return;
-  }
-
-  categoryNameInput.value = '';
-  setCategoryStatus('カテゴリを追加しました', 'success');
-  await renderCategoryList();
-}
-
 async function handleDeleteCategory(id) {
   const confirmed = window.confirm('このカテゴリを削除します。記事は削除されず、未分類に戻ります。よろしいですか？');
   if (!confirmed) {
@@ -510,32 +495,36 @@ async function renderCategoryList() {
 
   for (const category of categories) {
     const count = successMetas.filter(meta => meta.categoryId === category.id).length;
-    categoryListEl.appendChild(buildCategoryItem(category, count));
+    categoryListEl.appendChild(buildCategoryCard(category, count));
   }
 
   const uncategorizedCount = successMetas.filter(meta => !meta.categoryId).length;
-  uncategorizedListEl.innerHTML = '';
-  uncategorizedListEl.appendChild(buildUncategorizedItem(uncategorizedCount));
+  categoryListEl.appendChild(buildUncategorizedCard(uncategorizedCount));
 
   if (currentCategoryDetailTarget) {
     await renderCategoryDetail(currentCategoryDetailTarget);
   }
 }
 
-function buildCategoryItem(category, count) {
+function buildCategoryCard(category, count) {
   const li = document.createElement('li');
-  li.className = 'category-list-item category-list-item--clickable';
+  li.className = 'category-card';
   li.dataset.categoryId = category.id;
 
+  const metaText = count > 0 ? `${count}件 / Markdownファイルを作る` : '0件 / 記事がありません';
+
   li.innerHTML = `
-    <span class="category-name truncate">${escapeHtml(category.name)} <span class="category-count">(${count})</span></span>
-    <div class="category-actions">
+    <div class="category-card-main">
+      <p class="category-card-name truncate">${escapeHtml(category.name)}</p>
+      <p class="category-card-meta">${metaText}</p>
+    </div>
+    <div class="category-card-actions">
       <button type="button" class="btn btn-small btn-rename-category">名前変更</button>
       <button type="button" class="btn btn-small btn-delete-category">削除</button>
     </div>
   `;
 
-  li.addEventListener('click', () => {
+  li.querySelector('.category-card-main').addEventListener('click', () => {
     setCategoryDetailExportStatus('', '');
     renderCategoryDetail(category.id);
   });
@@ -552,15 +541,18 @@ function buildCategoryItem(category, count) {
   return li;
 }
 
-function buildUncategorizedItem(count) {
+function buildUncategorizedCard(count) {
   const li = document.createElement('li');
-  li.className = 'category-list-item category-list-item--clickable';
+  li.className = 'category-card';
 
   li.innerHTML = `
-    <span class="category-name truncate">未分類 <span class="category-count">(${count})</span></span>
+    <div class="category-card-main">
+      <p class="category-card-name">未分類</p>
+      <p class="category-card-meta">${count}件 / 確認のみ</p>
+    </div>
   `;
 
-  li.addEventListener('click', () => {
+  li.querySelector('.category-card-main').addEventListener('click', () => {
     setCategoryDetailExportStatus('', '');
     renderCategoryDetail('unclassified');
   });
@@ -569,24 +561,22 @@ function buildUncategorizedItem(count) {
 }
 
 /**
- * カテゴリ項目をインライン入力（名前変更フォーム）に切り替える。
+ * カテゴリカードをインライン入力（名前変更フォーム）に切り替える。
  * @param {HTMLElement} li
  * @param {{ id: string, name: string }} category
  */
 function showCategoryRenameForm(li, category) {
   li.innerHTML = `
-    <input type="text" class="category-rename-input" value="${escapeHtml(category.name)}">
-    <div class="category-actions">
+    <div class="category-card-actions">
+      <input type="text" class="category-rename-input" value="${escapeHtml(category.name)}">
       <button type="button" class="btn btn-small btn-save-category-rename">保存</button>
       <button type="button" class="btn btn-small btn-cancel-category-rename">キャンセル</button>
     </div>
   `;
 
   const input = li.querySelector('.category-rename-input');
-  input.addEventListener('click', (e) => e.stopPropagation());
 
-  li.querySelector('.btn-save-category-rename').addEventListener('click', async (e) => {
-    e.stopPropagation();
+  li.querySelector('.btn-save-category-rename').addEventListener('click', async () => {
     try {
       await renameCategory(db, category.id, input.value);
     } catch (err) {
@@ -597,15 +587,13 @@ function showCategoryRenameForm(li, category) {
     await renderCategoryList();
   });
 
-  li.querySelector('.btn-cancel-category-rename').addEventListener('click', (e) => {
-    e.stopPropagation();
+  li.querySelector('.btn-cancel-category-rename').addEventListener('click', () => {
     renderCategoryList();
   });
 }
 
 function setCategoryStatus(message, type) {
-  categoryStatus.textContent = message;
-  categoryStatus.className = `status-text status-${type}`;
+  setStatus(categoryStatus, message, type);
 }
 
 // -----------------------------------------------
@@ -802,8 +790,7 @@ function formatDateForFilename(date) {
 }
 
 function setCategoryDetailExportStatus(message, type) {
-  categoryDetailExportStatus.textContent = message;
-  categoryDetailExportStatus.className = `status-text${type ? ` status-${type}` : ''}`;
+  setStatus(categoryDetailExportStatus, message, type);
 }
 
 // -----------------------------------------------
@@ -887,8 +874,7 @@ async function handleCreateCategoryInSheet() {
 }
 
 function setCategorySheetStatus(message, type) {
-  categorySheetStatus.textContent = message;
-  categorySheetStatus.className = `status-text${type ? ` status-${type}` : ''}`;
+  setStatus(categorySheetStatus, message, type);
 }
 
 // -----------------------------------------------
@@ -1026,6 +1012,35 @@ function escapeHtml(str) {
 }
 
 function setImportStatus(message, type) {
-  importStatus.textContent = message;
-  importStatus.className = `status-text status-${type}`;
+  setStatus(importStatus, message, type);
+}
+
+// success メッセージの自動消去タイマーを要素ごとに管理する
+const statusAutoClearTimers = new WeakMap();
+
+/**
+ * ステータス表示用要素にメッセージを設定する。
+ * type === 'success' の場合は2.5秒後に自動でメッセージを消す。
+ * @param {HTMLElement} el
+ * @param {string} message
+ * @param {string} type
+ */
+function setStatus(el, message, type) {
+  const existingTimer = statusAutoClearTimers.get(el);
+  if (existingTimer) {
+    clearTimeout(existingTimer);
+    statusAutoClearTimers.delete(el);
+  }
+
+  el.textContent = message;
+  el.className = `status-text${type ? ` status-${type}` : ''}`;
+
+  if (type === 'success' && message) {
+    const timer = setTimeout(() => {
+      el.textContent = '';
+      el.className = 'status-text';
+      statusAutoClearTimers.delete(el);
+    }, 2500);
+    statusAutoClearTimers.set(el, timer);
+  }
 }

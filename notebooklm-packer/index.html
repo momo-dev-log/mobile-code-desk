@@ -15,17 +15,19 @@
   <main>
     <!-- 記事タブ -->
     <section id="tab-articles" class="tab-panel" data-tab="articles">
+      <section class="url-input-section">
+        <label for="url-textarea">URLを貼り付けて取り込む</label>
+        <textarea id="url-textarea" rows="3" placeholder="https://example.com/article&#10;（複数可・改行区切り）"></textarea>
+        <button type="button" id="import-btn" class="btn btn-primary">URLを取り込む</button>
+        <p id="import-status" class="status-text"></p>
+      </section>
+
       <div class="url-fold-section">
         <button type="button" id="url-fold-toggle" class="url-fold-toggle">
           <span id="url-fold-arrow">▸</span> 取り込み済みURL <span id="url-fold-count">0</span>件
         </button>
         <div id="url-fold-body" class="url-fold-body" hidden>
           <ul id="url-list" class="url-list"></ul>
-
-          <label for="url-textarea">URLを貼り付け</label>
-          <textarea id="url-textarea" rows="3" placeholder="https://example.com/article&#10;（複数可・改行区切り）"></textarea>
-          <button type="button" id="import-btn" class="btn btn-primary">URLを取り込む</button>
-          <p id="import-status" class="status-text"></p>
         </div>
       </div>
 
@@ -51,37 +53,29 @@
     <section id="tab-categories" class="tab-panel" data-tab="categories" hidden>
       <!-- カテゴリ一覧ビュー -->
       <div id="category-list-view">
-        <h2>カテゴリ</h2>
+        <h2>カテゴリごとに資料を作る</h2>
 
-        <div class="category-add">
-          <label for="category-name-input">新しいカテゴリ名</label>
-          <input type="text" id="category-name-input" placeholder="例: 技術記事">
-          <button type="button" id="category-add-btn" class="btn btn-primary">追加</button>
-        </div>
         <p id="category-status" class="status-text"></p>
 
         <p id="category-empty-note" class="empty-note">まだカテゴリはありません。</p>
         <ul id="category-list" class="category-list"></ul>
-
-        <h2>未分類</h2>
-        <ul id="uncategorized-list" class="category-list"></ul>
       </div>
 
       <!-- カテゴリ詳細ビュー -->
       <div id="category-detail-view" hidden>
-        <button type="button" id="category-detail-back-btn" class="btn btn-small">← 一覧に戻る</button>
         <h2 id="category-detail-title"></h2>
         <button type="button" id="category-detail-export-btn" class="btn btn-primary">このカテゴリをMarkdownで書き出す</button>
         <p id="category-detail-export-status" class="status-text"></p>
         <p id="category-detail-empty" class="empty-note" hidden>このカテゴリにはまだ記事がありません</p>
         <ul id="category-detail-list" class="category-detail-list"></ul>
+        <button type="button" id="category-detail-back-btn" class="btn-back-link">← 一覧に戻る</button>
       </div>
     </section>
   </main>
 
   <nav class="tab-bar">
     <button type="button" class="tab-btn tab-btn--active" data-tab="articles">記事</button>
-    <button type="button" class="tab-btn" data-tab="categories">カテゴリ</button>
+    <button type="button" class="tab-btn" data-tab="categories">資料化</button>
   </nav>
 
   <!-- カテゴリ付けシート -->
@@ -92,8 +86,8 @@
 
     <div class="category-sheet-new">
       <label for="category-sheet-new-input">＋ 新しいカテゴリを作る</label>
-      <input type="text" id="category-sheet-new-input" placeholder="新しいカテゴリ名">
-      <button type="button" id="category-sheet-create-btn" class="btn btn-primary">作成して設定</button>
+      <input type="text" id="category-sheet-new-input" placeholder="作成後、この記事を入れます">
+      <button type="button" id="category-sheet-create-btn" class="btn btn-primary">作成して入れる</button>
     </div>
 
     <p id="category-sheet-status" class="status-text"></p>
