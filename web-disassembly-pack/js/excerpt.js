@@ -112,3 +112,33 @@ function overlapsExisting(ranges, start, end) {
 function collapseWhitespace(text) {
   return text.replace(/\s+/g, ' ').trim();
 }
+
+/**
+ * JS本文に、Canvas/WebGL描画やポインター操作に関わる代表的なキーワードが
+ * 含まれているかどうかを判定する。
+ *
+ * HTMLに<canvas>タグが無くても、JavaScript側でCanvas/WebGLが
+ * 生成・操作されている場合があるため、HTML構造の判定とは別枠で確認する。
+ */
+export const JS_FEATURE_CHECKS = [
+  { key: 'canvas', label: 'canvas', pattern: /canvas/i },
+  { key: 'rendererDomElement', label: 'renderer.domElement', pattern: /renderer\.domElement/i },
+  { key: 'getContext', label: 'getContext', pattern: /getContext/i },
+  { key: 'requestAnimationFrame', label: 'requestAnimationFrame', pattern: /requestAnimationFrame/i },
+  { key: 'pointerOps', label: 'pointer操作（pointer/touch/mouse）', pattern: /pointer|touch|mousemove|mousedown|mouseup/i },
+  { key: 'three', label: 'THREE（Three.js）', pattern: /\bTHREE\b/ },
+  { key: 'webgl', label: 'WebGL', pattern: /webgl/i },
+];
+
+/**
+ * @param {string[]} texts JS本文（インライン/外部）の一覧
+ * @returns {Array<{ key: string, label: string, found: boolean }>}
+ */
+export function detectJsFeatures(texts) {
+  const combined = texts.join('\n');
+  return JS_FEATURE_CHECKS.map(({ key, label, pattern }) => ({
+    key,
+    label,
+    found: pattern.test(combined),
+  }));
+}

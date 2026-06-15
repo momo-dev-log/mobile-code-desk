@@ -24,7 +24,19 @@
     <section class="step" id="step-structure" hidden>
       <h2>2. 構造を確認</h2>
       <button type="button" id="structure-btn" class="btn btn-primary btn-block">構造を見る</button>
+      <p id="analyzed-url" class="status-text"></p>
+
+      <h3 class="section-subtitle">HTML構造（タグの有無・件数）</h3>
       <div id="structure-cards" class="card-grid"></div>
+
+      <h3 class="section-subtitle">JS内キーワード検出</h3>
+      <p class="hint-text">
+        HTMLに該当タグが無くても、JavaScript内でこれらが使われている場合、
+        実行時にCanvas/WebGL描画などが行われている可能性があります。
+      </p>
+      <ul id="js-feature-list" class="feature-list"></ul>
+
+      <p id="structure-next-hint" class="hint-text" hidden>確認できたら、次にMarkdownを作ってください。</p>
     </section>
 
     <section class="step" id="step-danger" hidden>
@@ -35,6 +47,7 @@
 
     <section class="step" id="step-markdown" hidden>
       <h2>4. Markdownを作成</h2>
+      <p class="hint-text">現在の解析結果からAI用Markdownを作成します。</p>
       <button type="button" id="markdown-btn" class="btn btn-primary btn-block">Markdownを作る</button>
 
       <div id="markdown-preview-wrap" hidden>
