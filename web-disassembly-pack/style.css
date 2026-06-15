@@ -175,6 +175,16 @@ main {
   color: var(--color-muted);
 }
 
+.feature-item-unclear {
+  color: var(--color-warning-border);
+  font-weight: 600;
+}
+
+.feature-item-unknown {
+  color: var(--color-muted);
+  font-style: italic;
+}
+
 .card {
   background: var(--color-bg);
   border: 1px solid var(--color-border);
