@@ -118,12 +118,13 @@ function buildEstimationNotes(structure, jsFeatures) {
 
   notes.push('HTMLにcanvasタグがなくても、JavaScriptでCanvas/WebGLが生成される場合があります。');
 
-  if (found('canvas') || found('getContext')) {
-    notes.push('このページではJS内に "canvas" や "getContext" があるため、実行時にCanvas描画を使っている可能性があります。');
-  }
+  const canvasKeywords = [];
+  if (found('canvas')) canvasKeywords.push('"canvas"');
+  if (found('getContext')) canvasKeywords.push('"getContext"');
+  if (found('rendererDomElement')) canvasKeywords.push('"renderer.domElement"');
 
-  if (found('rendererDomElement')) {
-    notes.push('JS内に "renderer.domElement" があるため、3D描画ライブラリがcanvas要素を生成して画面に追加している可能性があります。');
+  if (canvasKeywords.length > 0) {
+    notes.push(`このページではJS内に ${canvasKeywords.join(' や ')} があるため、実行時にCanvas/WebGL描画を使っている可能性があります。`);
   }
 
   if (found('three')) {
