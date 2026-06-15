@@ -1,6 +1,8 @@
 import { fetchResource } from './fetch.js';
 import { parseHtml } from './parse.js';
-import { extractExcerpts, detectJsFeatures, JS_KEYWORDS, CSS_KEYWORDS } from './excerpt.js';
+import { extractCategoryExcerpts, detectJsFeatures } from './excerpt.js';
+import { CSS_EXCERPT_CATEGORIES, JS_EXCERPT_CATEGORIES } from './keywords.js';
+import { detectLibraries } from './libraries.js';
 import { checkDangerousContent } from './danger-check.js';
 import { buildMarkdown } from './markdown.js';
 import { MAX_CSS_FILES, MAX_JS_FILES, MAX_RESOURCE_CHARS } from './constants.js';
@@ -16,6 +18,7 @@ const stepStructure = document.getElementById('step-structure');
 const structureBtn = document.getElementById('structure-btn');
 const analyzedUrlEl = document.getElementById('analyzed-url');
 const structureCards = document.getElementById('structure-cards');
+const libraryList = document.getElementById('library-list');
 const jsFeatureList = document.getElementById('js-feature-list');
 const structureNextHint = document.getElementById('structure-next-hint');
 
@@ -102,14 +105,23 @@ async function handleStructure() {
   analyzedUrlEl.textContent = `解析対象: ${state.pageUrl}`;
   renderStructureCards(parsed.structure);
 
-  state.inlineStyles = parsed.inlineStyles.map((text) => buildInlineEntry(text, CSS_KEYWORDS));
-  state.inlineScripts = parsed.inlineScripts.map((text) => buildInlineEntry(text, JS_KEYWORDS));
+  state.inlineStyles = parsed.inlineStyles.map((text) => buildInlineEntry(text));
+  state.inlineScripts = parsed.inlineScripts.map((text) => buildInlineEntry(text));
 
-  state.cssResources = await buildResourceEntries(parsed.cssLinks, MAX_CSS_FILES, CSS_KEYWORDS);
-  state.jsResources = await buildResourceEntries(parsed.jsScripts, MAX_JS_FILES, JS_KEYWORDS);
+  state.cssResources = await buildResourceEntries(parsed.cssLinks, MAX_CSS_FILES);
+  state.jsResources = await buildResourceEntries(parsed.jsScripts, MAX_JS_FILES);
 
-  state.jsFeatures = detectJsFeatures(collectJsTexts());
+  const jsTexts = collectJsTexts();
+  state.jsFeatures = detectJsFeatures(jsTexts);
+  state.libraries = detectLibraries({
+    scriptUrls: parsed.jsScripts.map((script) => script.url),
+    texts: jsTexts,
+  });
   renderJsFeatureList(state.jsFeatures);
+  renderLibraryList(state.libraries);
+
+  state.cssExcerpts = extractCategoryExcerpts(collectCssSources(), CSS_EXCERPT_CATEGORIES);
+  state.jsExcerpts = extractCategoryExcerpts(collectJsSourcesForExcerpts(), JS_EXCERPT_CATEGORIES);
 
   state.dangerFindings = checkDangerousContent(collectDangerCheckSources());
   renderDangerResult(state.dangerFindings);
@@ -128,6 +140,41 @@ function collectJsTexts() {
     .filter((entry) => entry.status === 'ok')
     .forEach((entry) => texts.push(entry.rawText));
   return texts;
+}
+
+function collectCssSources() {
+  const sources = state.inlineStyles.map((entry, i) => ({
+    label: `インラインstyle #${i + 1}`,
+    text: entry.rawText,
+  }));
+
+  state.cssResources
+    .filter((entry) => entry.status === 'ok')
+    .forEach((entry) => sources.push({ label: entry.label, text: entry.rawText }));
+
+  return sources;
+}
+
+/**
+ * JavaScript抜粋用のソース一覧を作る。
+ *
+ * インラインscript（ページ固有のコードである可能性が高い）を先頭に置き、
+ * 外部JSはサイズが小さいものから順に並べることで、巨大なライブラリ本体に
+ * 抜粋が埋め尽くされず、ページ本体の処理らしいscriptが優先されるようにする。
+ */
+function collectJsSourcesForExcerpts() {
+  const inline = state.inlineScripts.map((entry, i) => ({
+    label: `インラインscript #${i + 1}`,
+    text: entry.rawText,
+    size: entry.size,
+  }));
+
+  const external = state.jsResources
+    .filter((entry) => entry.status === 'ok')
+    .map((entry) => ({ label: entry.label, text: entry.rawText, size: entry.size }))
+    .sort((a, b) => a.size - b.size);
+
+  return [...inline, ...external];
 }
 
 function collectDangerCheckSources() {
@@ -150,10 +197,10 @@ function collectDangerCheckSources() {
 }
 
 /**
- * 外部CSS/JSの一覧から、取得対象（同一オリジン・件数上限内）のみWorker経由で取得し、
- * キーワード抜粋を作る。対象外・失敗のものはその旨を記録する。
+ * 外部CSS/JSの一覧から、取得対象（同一オリジン・件数上限内）のみWorker経由で取得する。
+ * 対象外・失敗のものはその旨を記録する（「取得対象外の記録」セクションに使う）。
  */
-async function buildResourceEntries(links, maxCount, keywords) {
+async function buildResourceEntries(links, maxCount) {
   const entries = [];
   let fetchedCount = 0;
 
@@ -179,7 +226,6 @@ async function buildResourceEntries(links, maxCount, keywords) {
     const text = result.content;
     const truncated = text.length > MAX_RESOURCE_CHARS;
     const processedText = truncated ? text.slice(0, MAX_RESOURCE_CHARS) : text;
-    const excerpts = extractExcerpts(processedText, keywords);
 
     entries.push({
       label: link.url,
@@ -187,30 +233,20 @@ async function buildResourceEntries(links, maxCount, keywords) {
       size: text.length,
       truncated,
       rawText: processedText,
-      excerpts,
-      summary: excerpts.length === 0 ? buildSummary(text) : undefined,
     });
   }
 
   return entries;
 }
 
-function buildInlineEntry(text, keywords) {
+function buildInlineEntry(text) {
   const truncated = text.length > MAX_RESOURCE_CHARS;
   const processedText = truncated ? text.slice(0, MAX_RESOURCE_CHARS) : text;
-  const excerpts = extractExcerpts(processedText, keywords);
 
   return {
     size: text.length,
     rawText: processedText,
-    excerpts,
-    summary: excerpts.length === 0 ? buildSummary(text) : undefined,
   };
-}
-
-function buildSummary(text) {
-  const head = text.slice(0, 120).replace(/\s+/g, ' ').trim();
-  return `${text.length}文字 / 先頭: ${head}${text.length > 120 ? '...' : ''}`;
 }
 
 function describeFailure(result) {
@@ -251,24 +287,39 @@ function renderStructureCards(structure) {
   }
 }
 
-function renderJsFeatureList(features) {
-  jsFeatureList.innerHTML = '';
+const VALUE_CLASS_MAP = {
+  'あり': 'feature-item-found',
+  'なし': 'feature-item-not-found',
+  '特定できず': 'feature-item-unclear',
+  '未確認': 'feature-item-unknown',
+};
 
-  for (const feature of features) {
+function renderFeatureList(listEl, items) {
+  listEl.innerHTML = '';
+
+  for (const item of items) {
     const li = document.createElement('li');
     li.className = 'feature-item';
 
     const labelSpan = document.createElement('span');
-    labelSpan.textContent = feature.label;
+    labelSpan.textContent = item.label;
 
     const valueSpan = document.createElement('span');
-    valueSpan.textContent = feature.found ? 'あり' : 'なし';
-    valueSpan.className = feature.found ? 'feature-item-found' : 'feature-item-not-found';
+    valueSpan.textContent = item.value;
+    valueSpan.className = VALUE_CLASS_MAP[item.value] || 'feature-item-unknown';
 
     li.appendChild(labelSpan);
     li.appendChild(valueSpan);
-    jsFeatureList.appendChild(li);
+    listEl.appendChild(li);
   }
+}
+
+function renderJsFeatureList(features) {
+  renderFeatureList(jsFeatureList, features);
+}
+
+function renderLibraryList(libraries) {
+  renderFeatureList(libraryList, libraries);
 }
 
 function renderDangerResult(findings) {
@@ -307,10 +358,11 @@ function handleMarkdown() {
     title: state.title,
     structure: state.structure,
     jsFeatures: state.jsFeatures,
+    libraries: state.libraries,
+    cssExcerpts: state.cssExcerpts,
+    jsExcerpts: state.jsExcerpts,
     cssResources: state.cssResources,
     jsResources: state.jsResources,
-    inlineStyles: state.inlineStyles,
-    inlineScripts: state.inlineScripts,
     dangerFindings: state.dangerFindings,
   });
 
@@ -372,6 +424,7 @@ function clearResults() {
 
   analyzedUrlEl.textContent = '';
   structureCards.innerHTML = '';
+  libraryList.innerHTML = '';
   jsFeatureList.innerHTML = '';
   structureNextHint.hidden = true;
 
