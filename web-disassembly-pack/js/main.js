@@ -1,6 +1,6 @@
 import { fetchResource } from './fetch.js';
 import { parseHtml } from './parse.js';
-import { extractExcerpts, JS_KEYWORDS, CSS_KEYWORDS } from './excerpt.js';
+import { extractExcerpts, detectJsFeatures, JS_KEYWORDS, CSS_KEYWORDS } from './excerpt.js';
 import { checkDangerousContent } from './danger-check.js';
 import { buildMarkdown } from './markdown.js';
 import { MAX_CSS_FILES, MAX_JS_FILES, MAX_RESOURCE_CHARS } from './constants.js';
@@ -14,7 +14,10 @@ const fetchStatus = document.getElementById('fetch-status');
 
 const stepStructure = document.getElementById('step-structure');
 const structureBtn = document.getElementById('structure-btn');
+const analyzedUrlEl = document.getElementById('analyzed-url');
 const structureCards = document.getElementById('structure-cards');
+const jsFeatureList = document.getElementById('js-feature-list');
+const structureNextHint = document.getElementById('structure-next-hint');
 
 const stepDanger = document.getElementById('step-danger');
 const dangerResult = document.getElementById('danger-result');
@@ -64,9 +67,7 @@ async function handleFetch() {
 
   fetchBtn.disabled = true;
   fetchStatus.textContent = '取得中...';
-  hideStep(stepStructure);
-  hideStep(stepDanger);
-  hideStep(stepMarkdown);
+  clearResults();
 
   const result = await fetchResource(normalizedUrl);
 
@@ -98,6 +99,7 @@ async function handleStructure() {
   state.title = parsed.title;
   state.structure = parsed.structure;
 
+  analyzedUrlEl.textContent = `解析対象: ${state.pageUrl}`;
   renderStructureCards(parsed.structure);
 
   state.inlineStyles = parsed.inlineStyles.map((text) => buildInlineEntry(text, CSS_KEYWORDS));
@@ -106,14 +108,26 @@ async function handleStructure() {
   state.cssResources = await buildResourceEntries(parsed.cssLinks, MAX_CSS_FILES, CSS_KEYWORDS);
   state.jsResources = await buildResourceEntries(parsed.jsScripts, MAX_JS_FILES, JS_KEYWORDS);
 
+  state.jsFeatures = detectJsFeatures(collectJsTexts());
+  renderJsFeatureList(state.jsFeatures);
+
   state.dangerFindings = checkDangerousContent(collectDangerCheckSources());
   renderDangerResult(state.dangerFindings);
 
   structureBtn.disabled = false;
   structureBtn.textContent = '構造を見る';
 
+  structureNextHint.hidden = false;
   showStep(stepDanger);
   showStep(stepMarkdown);
+}
+
+function collectJsTexts() {
+  const texts = state.inlineScripts.map((entry) => entry.rawText);
+  state.jsResources
+    .filter((entry) => entry.status === 'ok')
+    .forEach((entry) => texts.push(entry.rawText));
+  return texts;
 }
 
 function collectDangerCheckSources() {
@@ -237,6 +251,26 @@ function renderStructureCards(structure) {
   }
 }
 
+function renderJsFeatureList(features) {
+  jsFeatureList.innerHTML = '';
+
+  for (const feature of features) {
+    const li = document.createElement('li');
+    li.className = 'feature-item';
+
+    const labelSpan = document.createElement('span');
+    labelSpan.textContent = feature.label;
+
+    const valueSpan = document.createElement('span');
+    valueSpan.textContent = feature.found ? 'あり' : 'なし';
+    valueSpan.className = feature.found ? 'feature-item-found' : 'feature-item-not-found';
+
+    li.appendChild(labelSpan);
+    li.appendChild(valueSpan);
+    jsFeatureList.appendChild(li);
+  }
+}
+
 function renderDangerResult(findings) {
   dangerResult.innerHTML = '';
 
@@ -272,6 +306,7 @@ function handleMarkdown() {
     finalUrl: state.finalUrl,
     title: state.title,
     structure: state.structure,
+    jsFeatures: state.jsFeatures,
     cssResources: state.cssResources,
     jsResources: state.jsResources,
     inlineStyles: state.inlineStyles,
@@ -322,12 +357,23 @@ function buildFileName(pageUrl) {
 // やり直す
 // -----------------------------------------------
 function handleReset() {
-  state = {};
-
   urlInput.value = '';
   fetchStatus.textContent = '';
+  clearResults();
+}
 
+/**
+ * 構造解析・危険情報チェック・Markdownなど、URLごとの解析結果をすべて消去する。
+ * 新しいURLを取得したとき、および「やり直す」を押したときに呼ぶ。
+ * これにより、表示中の内容が必ず現在のURLに対応するようにする。
+ */
+function clearResults() {
+  state = {};
+
+  analyzedUrlEl.textContent = '';
   structureCards.innerHTML = '';
+  jsFeatureList.innerHTML = '';
+  structureNextHint.hidden = true;
 
   dangerResult.innerHTML = '';
   dangerResult.classList.remove('card-warning');

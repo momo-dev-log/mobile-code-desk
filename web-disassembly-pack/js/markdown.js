@@ -12,6 +12,7 @@
  * @param {string} data.finalUrl
  * @param {string} data.title
  * @param {object} data.structure
+ * @param {Array} data.jsFeatures
  * @param {Array} data.cssResources
  * @param {Array} data.jsResources
  * @param {Array} data.inlineStyles
@@ -25,6 +26,7 @@ export function buildMarkdown(data) {
     finalUrl,
     title,
     structure,
+    jsFeatures,
     cssResources,
     jsResources,
     inlineStyles,
@@ -45,9 +47,9 @@ export function buildMarkdown(data) {
   }
   lines.push('');
 
-  lines.push('## 構造の概要');
+  lines.push('## HTML構造（タグの有無・件数）');
   lines.push('');
-  lines.push(`- canvas: ${structure.canvas}件`);
+  lines.push(`- canvasタグ: ${structure.canvas}件`);
   lines.push(`- button: ${structure.button}件`);
   lines.push(`- audio: ${structure.audio}件`);
   lines.push(`- video: ${structure.video}件`);
@@ -55,6 +57,30 @@ export function buildMarkdown(data) {
   lines.push(`- script: インライン${structure.inlineScriptCount}件 / 外部参照${structure.externalScriptCount}件`);
   lines.push(`- stylesheet: インライン${structure.inlineStyleCount}件 / 外部参照${structure.externalStylesheetCount}件`);
   lines.push('');
+
+  lines.push('## JS内キーワード検出');
+  lines.push('');
+  lines.push('HTMLにcanvasタグ等が無くても、JavaScript内でこれらが使われていれば、');
+  lines.push('実行時にCanvas/WebGL描画などが行われている可能性があります。');
+  lines.push('');
+  if (jsFeatures && jsFeatures.length > 0) {
+    for (const feature of jsFeatures) {
+      lines.push(`- ${feature.label}: ${feature.found ? 'あり' : 'なし'}`);
+    }
+  } else {
+    lines.push('（検出対象のJSがありませんでした）');
+  }
+  lines.push('');
+
+  const estimationNotes = buildEstimationNotes(structure, jsFeatures);
+  if (estimationNotes.length > 0) {
+    lines.push('## 推定メモ');
+    lines.push('');
+    for (const note of estimationNotes) {
+      lines.push(`- ${note}`);
+    }
+    lines.push('');
+  }
 
   lines.push('## 危険情報チェック結果');
   lines.push('');
@@ -80,6 +106,47 @@ export function buildMarkdown(data) {
   appendResourceSection(lines, jsResources);
 
   return lines.join('\n');
+}
+
+/**
+ * HTML構造とJS内キーワード検出の結果から、初心者にも分かる推定メモを作る。
+ * あくまで「可能性がある」という推定であり、断定はしない。
+ */
+function buildEstimationNotes(structure, jsFeatures) {
+  const notes = [];
+  const found = (key) => (jsFeatures || []).some((f) => f.key === key && f.found);
+
+  notes.push('HTMLにcanvasタグがなくても、JavaScriptでCanvas/WebGLが生成される場合があります。');
+
+  if (found('canvas') || found('getContext')) {
+    notes.push('このページではJS内に "canvas" や "getContext" があるため、実行時にCanvas描画を使っている可能性があります。');
+  }
+
+  if (found('rendererDomElement')) {
+    notes.push('JS内に "renderer.domElement" があるため、3D描画ライブラリがcanvas要素を生成して画面に追加している可能性があります。');
+  }
+
+  if (found('three')) {
+    notes.push('Three.jsを読み込んでいる場合、WebGL描画の可能性があります。');
+  }
+
+  if (found('webgl')) {
+    notes.push('JS内に "WebGL" があるため、WebGLコンテキストを使った描画を行っている可能性があります。');
+  }
+
+  if (found('pointerOps')) {
+    notes.push('JS内にpointer/touch/mouse操作の処理があるため、画面上での描画・操作（お絵描き等）に対応している可能性があります。');
+  }
+
+  if (found('requestAnimationFrame')) {
+    notes.push('JS内に "requestAnimationFrame" があるため、アニメーションや継続的な描画ループを行っている可能性があります。');
+  }
+
+  if (structure.canvas === 0 && (found('canvas') || found('webgl') || found('three'))) {
+    notes.push('HTML側のcanvasタグは0件ですが、JS側の検出結果から、ページ表示後にcanvasが動的に生成される可能性があります。');
+  }
+
+  return notes;
 }
 
 function appendInlineSection(lines, entries, labelPrefix) {
