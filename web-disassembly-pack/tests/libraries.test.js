@@ -58,3 +58,35 @@ test('minify済みで判別できない場合は「特定できず」を返す',
   assert.equal(findLib(result, 'three').value, '特定できず');
   assert.equal(findLib(result, 'react').value, '特定できず');
 });
+
+test('一部のライブラリが検出できた場合、他の未検出ライブラリはminify済みでも「なし」を返す', () => {
+  const minifiedBundle = 'a'.repeat(20000);
+  const result = detectLibraries({
+    scriptUrls: [],
+    texts: [
+      'const scene = new THREE.Scene(); const el = react.createElement("div");',
+      minifiedBundle,
+    ],
+  });
+
+  assert.equal(findLib(result, 'three').value, 'あり');
+  assert.equal(findLib(result, 'react').value, 'あり');
+  assert.equal(findLib(result, 'p5').value, 'なし');
+  assert.equal(findLib(result, 'pixi').value, 'なし');
+  assert.equal(findLib(result, 'regl').value, 'なし');
+  assert.equal(findLib(result, 'gsap').value, 'なし');
+  assert.equal(findLib(result, 'anime').value, 'なし');
+  assert.equal(findLib(result, 'matter').value, 'なし');
+  assert.equal(findLib(result, 'vue').value, 'なし');
+  assert.equal(findLib(result, 'svelte').value, 'なし');
+});
+
+test('取得できたコードが1件も無い場合は、script srcにも痕跡が無いライブラリは「未確認」を返す', () => {
+  const result = detectLibraries({
+    scriptUrls: ['https://cdn.example.com/app.bundle.js'],
+    texts: [],
+  });
+
+  assert.equal(findLib(result, 'three').value, '未確認');
+  assert.equal(findLib(result, 'vue').value, '未確認');
+});
