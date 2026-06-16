@@ -1,4 +1,5 @@
 import { JS_FEATURE_SUMMARY_MAP } from './keywords.js';
+import { APP_VERSION } from './constants.js';
 
 /**
  * 解析結果からAI向けのMarkdown調査パックを組み立てる（v0.2）。
@@ -52,6 +53,7 @@ export function buildMarkdown(data) {
   if (title) {
     lines.push(`- ページタイトル: ${title}`);
   }
+  lines.push(`- Web解体パック版: ${APP_VERSION}`);
   lines.push('');
 
   // 2. サマリ行

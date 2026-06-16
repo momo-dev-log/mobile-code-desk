@@ -5,10 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Web解体パック</title>
   <link rel="stylesheet" href="style.css">
+  <link rel="manifest" href="manifest.json">
 </head>
 <body>
   <header class="app-header">
-    <h1>Web解体パック</h1>
+    <h1>Web解体パック <span class="app-version" data-app-version></span></h1>
     <p class="subtitle">AIに「このページどう作ってる？」と聞くためのMarkdown調査パックを作る道具です。</p>
   </header>
 
@@ -75,5 +76,10 @@
   </main>
 
   <script type="module" src="js/main.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js');
+    }
+  </script>
 </body>
 </html>
