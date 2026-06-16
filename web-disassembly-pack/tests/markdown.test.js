@@ -307,8 +307,8 @@ test('メタ情報にWeb解体パック版が出る', () => {
   assert.match(markdown, /- Web解体パック版: v\d+\.\d+\.\d+/);
 });
 
-test('APP_VERSIONはv0.3.0', () => {
-  assert.equal(APP_VERSION, 'v0.3.0');
+test('APP_VERSIONはv0.3.1', () => {
+  assert.equal(APP_VERSION, 'v0.3.1');
 });
 
 test('バージョン追加後も見出し順と既存summary行が壊れていない', () => {

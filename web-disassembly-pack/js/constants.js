@@ -3,7 +3,7 @@
  * notebooklm-packerの定数とは独立して管理する。
  */
 
-export const APP_VERSION = 'v0.3.0';
+export const APP_VERSION = 'v0.3.1';
 
 // 専用Worker（worker/index.js）のエンドポイント
 export const WORKER_URL = 'https://web-disassembly-pack-worker.momo19830831.workers.dev';
