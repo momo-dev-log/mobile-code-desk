@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { buildMarkdown } from '../js/markdown.js';
 import { JS_FEATURE_CHECKS, CSS_EXCERPT_CATEGORIES, JS_EXCERPT_CATEGORIES } from '../js/keywords.js';
 import { LIBRARY_CHECKS } from '../js/libraries.js';
+import { APP_VERSION } from '../js/constants.js';
 
 function baseStructure(overrides = {}) {
   return {
@@ -297,6 +298,31 @@ test('取得対象外・取得失敗が無い場合はその旨を出す', () =>
   const markdown = buildMarkdown(baseData());
   const section = markdown.split('## 取得対象外の記録')[1];
   assert.match(section, /（取得対象外・取得失敗のリソースはありません）/);
+});
+
+test('メタ情報にWeb解体パック版が出る', () => {
+  const markdown = buildMarkdown(baseData());
+
+  assert.match(markdown, new RegExp(`- Web解体パック版: ${escapeRegExp(APP_VERSION)}`));
+  assert.match(markdown, /- Web解体パック版: v\d+\.\d+\.\d+/);
+});
+
+test('APP_VERSIONはv0.3.0', () => {
+  assert.equal(APP_VERSION, 'v0.3.0');
+});
+
+test('バージョン追加後も見出し順と既存summary行が壊れていない', () => {
+  const markdown = buildMarkdown(baseData());
+
+  // バージョン行はメタ情報内、summaryより前にある
+  const versionIndex = markdown.indexOf(`- Web解体パック版: ${APP_VERSION}`);
+  const summaryIndex = markdown.indexOf('summary:');
+  const htmlStructureIndex = markdown.indexOf('## HTML構造');
+
+  assert.ok(versionIndex !== -1, 'バージョン行が見つかりません');
+  assert.ok(summaryIndex !== -1, 'summary行が見つかりません');
+  assert.ok(versionIndex < summaryIndex, 'バージョン行はsummaryより前にある');
+  assert.ok(summaryIndex < htmlStructureIndex, 'summary行はHTML構造より前にある');
 });
 
 function escapeRegExp(text) {

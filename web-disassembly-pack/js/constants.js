@@ -1,7 +1,9 @@
 /**
- * Web解体パック v0.1 の定数。
+ * Web解体パック の定数。
  * notebooklm-packerの定数とは独立して管理する。
  */
+
+export const APP_VERSION = 'v0.3.0';
 
 // 専用Worker（worker/index.js）のエンドポイント
 export const WORKER_URL = 'https://web-disassembly-pack-worker.momo19830831.workers.dev';

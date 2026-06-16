@@ -5,7 +5,7 @@ import { CSS_EXCERPT_CATEGORIES, JS_EXCERPT_CATEGORIES } from './keywords.js';
 import { detectLibraries } from './libraries.js';
 import { checkDangerousContent } from './danger-check.js';
 import { buildMarkdown } from './markdown.js';
-import { MAX_CSS_FILES, MAX_JS_FILES, MAX_RESOURCE_CHARS } from './constants.js';
+import { MAX_CSS_FILES, MAX_JS_FILES, MAX_RESOURCE_CHARS, APP_VERSION } from './constants.js';
 
 // -----------------------------------------------
 // DOM要素
@@ -49,6 +49,33 @@ markdownBtn.addEventListener('click', handleMarkdown);
 copyBtn.addEventListener('click', handleCopy);
 saveBtn.addEventListener('click', handleSave);
 resetBtn.addEventListener('click', handleReset);
+
+// URLパラメータ対応: ?url= または ?text= でURLが渡された場合、入力欄に反映する。
+// 共有ターゲット経由では text パラメータにURLが入る場合もあるため、
+// url が無ければ text の中からURLらしき文字列を探す。
+(function applySharedUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const urlParam = params.get('url') || '';
+  const textParam = params.get('text') || '';
+
+  let candidate = urlParam.trim();
+
+  if (!candidate && textParam) {
+    const urlInText = textParam.match(/https?:\/\/[^\s]+/);
+    if (urlInText) {
+      candidate = urlInText[0];
+    }
+  }
+
+  if (candidate) {
+    urlInput.value = candidate;
+  }
+}());
+
+// バージョン表示（定数から読み取り）
+document.querySelectorAll('[data-app-version]').forEach((el) => {
+  el.textContent = APP_VERSION;
+});
 
 // -----------------------------------------------
 // 1. URLを取得
