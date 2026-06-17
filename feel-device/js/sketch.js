@@ -42,12 +42,31 @@
  *     真っ黒な塊になりすぎないよう、押し始めからの経過時間でstrengthに
  *     掛ける倍率を徐々に下げるようにした（pressStrengthDecayMs/
  *     pressStrengthMinScale。詳細はemitInkAlongPath）。
- *   - 指を離した瞬間にピタッと止めず、離す直前の方向と速度を少しだけ
- *     受け継いで弱く流れてから消える「余韻(release tail)」を追加した
- *     （tailDurationMs等。詳細はupdateReleaseTail）。速度・濃さ・移動量は
- *     時間とともに減衰し、移動距離にも上限を設けて勝手に伸びすぎないようにした。
- *     tailの粒も通常のストロークと同じ距離ベースの発生処理(emitAlongDistance)
- *     を共用しており、同じ場所に粒が溜まらないようになっている。
+ *   - 指を離した瞬間にピタッと止めず、少し余韻を残してから消えるようにする
+ *     ため、離す直前の方向へ線がまっすぐ伸びる「release tail」を追加した。
+ *     （後の6回目の調整で、この直線的なtailはafter-bloomに置き換えられた）
+ *
+ * 校正メモ（6回目の調整: release tail → after-bloom）:
+ *   - 実機で確認した結果、release tailは「線が指から離れた方向へ
+ *     ピューッと伸びる」ように見え、狙っていた「ふわっと膨らんでほどける」
+ *     印象とは違っていた。そのため直線的に移動するtailの仕組みを廃止し、
+ *     離した位置の付近で柔らかく膨らんで溶ける「after-bloom」に置き換えた
+ *     （詳細はupdateAfterBloom/spawnBloomParticle）。
+ *   - after-bloomは中心位置をほとんど動かさず（離す直前の方向へ
+ *     bloomForwardOffsetMaxまでだけ少し進めた位置を中心にする）、その周りに
+ *     bloomParticleCount個の粒を放射状に置く。各粒の角度は直前の移動方向を
+ *     基準にbloomAngleSpreadDegの範囲でランダムに広げるため、一直線ではなく
+ *     扇状〜放射状に広がる。
+ *   - 粒はbloomBurstMsの間に少しずつ（段階的に）発生させ、後から生まれる粒
+ *     ほど中心からの距離が大きくなりやすいようにして「徐々に膨らんでいく」
+ *     見え方にした。外側の粒ほどstrengthを下げ（bloomOuterStrengthScale）、
+ *     輪郭が硬くならないようにしている。
+ *   - bloomの粒は通常のストロークより短い専用の寿命(bloomLifetimeMs)を持つ
+ *     ようにaddInkPointへlifetimeMsを渡せるようにした。これにより、bloomは
+ *     通常の線が消えるより先にほどけて消え、残骸として居座らない。
+ *   - tail専用の距離ベース発生処理だったemitAlongDistanceは呼び出し元が
+ *     emitInkAlongPathだけになったため、emitInkAlongPathに戻した
+ *     （bloomは経路に沿った発生ではなく、放射状に直接addInkPointする）。
  *
  * 方針メモ:
  *   - p5 は instance mode
@@ -113,14 +132,19 @@ const PARAMS = {
   pressStrengthDecayMs: 500,  // この時間で倍率がpressStrengthMinScaleまで下がる
   pressStrengthMinScale: 0.35, // 長押しを続けた時の最小倍率（0〜1）
 
-  // ── リリース後の余韻（release tail）──
-  // 指を離した瞬間にピタッと止めず、離す直前の方向と速度を少しだけ受け継いで、
-  // 弱く流れてから消える「ふわっと感」を出す（updateReleaseTailで使用）。
-  tailDurationMs: 280,      // 余韻が続く時間(ms)。200〜350で調整
-  tailDecayExponent: 2,     // 余韻の減速カーブ。大きいほど序盤で急に弱まる
-  tailMoveScale: 1,         // 余韻の移動量の倍率（離す直前の速度に対する係数）
-  tailStrength: 0.5,        // 余韻の粒の濃さの基準値（離した瞬間の最大値）
-  tailMaxDist: 40,          // 余韻が進める最大距離(px)。勝手に長く伸びすぎないための保険
+  // ── リリース後の余韻（after-bloom）──
+  // 指を離した瞬間にピタッと止めず、離した位置の付近で柔らかく膨らんで
+  // ほどける「滲み」を出す（updateAfterBloom/spawnBloomParticleで使用）。
+  // 直線的に伸びるtailとは違い、中心位置はほとんど動かさず、周囲へ放射状に
+  // 粒を広げるだけにする。
+  bloomBurstMs: 220,           // 粒が段階的に発生し終わるまでの時間(ms)
+  bloomLifetimeMs: 900,        // bloomの粒だけに使う専用の寿命(ms)。通常のlifetimeMsより短め
+  bloomMaxRadius: 32,          // 中心からの最大距離(px)。粒はこの範囲内にランダムに置かれる
+  bloomForwardOffsetMax: 9,    // 中心位置を離す直前の方向へ進める距離の上限(px)
+  bloomAngleSpreadDeg: 85,     // 直前の移動方向を基準に、左右何度まで粒の角度を散らすか
+  bloomParticleCount: 14,      // 1回のbloomで発生させる粒の総数
+  bloomStrength: 0.4,          // bloomの粒の濃さの基準値（通常ストロークより薄め）
+  bloomOuterStrengthScale: 0.4, // 中心から最も遠い粒のstrengthが基準値の何倍まで下がるか
 
   // ── 追従ラグ（墨は指にぴったり付かず、少し遅れて追いかける）──
   // 墨の描画位置は指の現在位置（target）ではなく、それを追いかける
@@ -146,13 +170,12 @@ const sketch = (p) => {
   let pressStartTime = 0; // 押し始めの時刻（長押しのstrength上限の計算に使う）
   let lastFollowVelX = 0, lastFollowVelY = 0; // 直前フレームのfollow移動量（離した瞬間の余韻の初速に使う）
 
-  // リリース後の余韻（release tail）の状態
-  let tailActive = false;
-  let tailX = 0, tailY = 0;
-  let tailVelX = 0, tailVelY = 0;
-  let tailStartTime = 0;
-  let tailLastEmitX = 0, tailLastEmitY = 0;
-  let tailDistTraveled = 0;
+  // リリース後の余韻（after-bloom）の状態
+  let bloomActive = false;
+  let bloomCenterX = 0, bloomCenterY = 0; // 粒を散らす中心位置（ほとんど動かさない）
+  let bloomBaseAngle = 0;                 // 離す直前の移動方向（粒の角度のばらつきの基準）
+  let bloomStartTime = 0;
+  let bloomSpawned = 0;                   // すでに発生させた粒の数
 
   // drift 用の noise 時間軸（フレームごとに進める）
   let driftT = 0;
@@ -203,39 +226,19 @@ const sketch = (p) => {
       const frameScale = Math.max(p.deltaTime, 1) / (1000 / 60);
       const speed = moveDist / frameScale;
 
-      // 離した瞬間の余韻(tail)の初速として使うため、直前フレームの移動量を覚えておく
+      // 離した瞬間のafter-bloomの向き・中心位置の計算に使うため、直前フレームの移動量を覚えておく
       lastFollowVelX = followX - prevFollowX;
       lastFollowVelY = followY - prevFollowY;
 
       emitInkAlongPath(speed);
     }
 
-    updateReleaseTail();
+    updateAfterBloom();
 
     renderAliveInkPoints();
 
     driftT += PARAMS.driftSpeed;
   };
-
-  // fromX/Yからtoまでの距離がstepSpacing分進むごとに、新しい粒を1つ置く。
-  // 通常のストロークと離した後の余韻(tail)の両方で使う共通処理。
-  // 戻り値のx/yは実際に粒を置いた最後の位置（emittedがfalseなら未使用）。
-  // 呼び出し側はそれぞれの「直前に粒を置いた位置」をこの戻り値で更新する。
-  function emitAlongDistance(fromX, fromY, toX, toY, strength) {
-    const segLen = p.dist(fromX, fromY, toX, toY);
-    if (segLen < PARAMS.stepSpacing) return { x: fromX, y: fromY, emitted: false };
-
-    const steps = Math.floor(segLen / PARAMS.stepSpacing);
-    let lastX = fromX;
-    let lastY = fromY;
-    for (let i = 1; i <= steps; i++) {
-      const t = (i * PARAMS.stepSpacing) / segLen;
-      lastX = p.lerp(fromX, toX, t);
-      lastY = p.lerp(fromY, toY, t);
-      addInkPoint(lastX, lastY, strength);
-    }
-    return { x: lastX, y: lastY, emitted: true };
-  }
 
   // 直前に粒を置いた位置(lastEmitX/Y)から現在のfollow位置までの距離が
   // stepSpacing分進むごとに、新しい粒を1つ置く。フレーム数や経過時間とは
@@ -250,48 +253,67 @@ const sketch = (p) => {
     const strength = p.constrain(
       speed / PARAMS.fullStrengthSpeed, PARAMS.minStrength, 1) * holdScale;
 
-    const result = emitAlongDistance(lastEmitX, lastEmitY, followX, followY, strength);
-    if (result.emitted) {
-      // 最後に置いた粒の位置を起点に更新する。stepSpacing未満の余りの距離は
-      // そのまま次フレーム以降の距離計算に持ち越される。
-      lastEmitX = result.x;
-      lastEmitY = result.y;
+    const segLen = p.dist(lastEmitX, lastEmitY, followX, followY);
+    if (segLen < PARAMS.stepSpacing) return;
+
+    const steps = Math.floor(segLen / PARAMS.stepSpacing);
+    let lastX = lastEmitX;
+    let lastY = lastEmitY;
+    for (let i = 1; i <= steps; i++) {
+      const t = (i * PARAMS.stepSpacing) / segLen;
+      lastX = p.lerp(lastEmitX, followX, t);
+      lastY = p.lerp(lastEmitY, followY, t);
+      addInkPoint(lastX, lastY, strength);
     }
+    // 最後に置いた粒の位置を起点に更新する。stepSpacing未満の余りの距離は
+    // そのまま次フレーム以降の距離計算に持ち越される。
+    lastEmitX = lastX;
+    lastEmitY = lastY;
   }
 
-  // 指を離した後、最後の方向と速度を少しだけ受け継いで弱く流れてから消える
-  // 「余韻(release tail)」。速度・濃さ・移動量はtailDurationMsにわたって
-  // 減衰し、moveDist/strengthが0に近づいたら消える。移動距離にも上限
-  // (tailMaxDist)を設け、勝手に長く伸びすぎないようにしている。
-  function updateReleaseTail() {
-    if (!tailActive) return;
+  // 指を離した後、離した位置の付近で柔らかく膨らんでほどける「after-bloom」。
+  // 直線的に移動するのではなく、ほぼ固定した中心(bloomCenterX/Y)の周りへ
+  // 放射状に粒を散らす。粒はbloomBurstMsの間に段階的に発生させ、後から
+  // 生まれる粒ほど中心からの距離が広がりやすくして「徐々に膨らむ」見せ方にする。
+  function updateAfterBloom() {
+    if (!bloomActive) return;
 
-    const t = p.millis() - tailStartTime;
-    if (t >= PARAMS.tailDurationMs || tailDistTraveled >= PARAMS.tailMaxDist) {
-      tailActive = false;
+    const t = p.millis() - bloomStartTime;
+    if (t >= PARAMS.bloomBurstMs) {
+      for (let i = bloomSpawned; i < PARAMS.bloomParticleCount; i++) spawnBloomParticle(i);
+      bloomActive = false;
       return;
     }
 
-    const lifeRatio = t / PARAMS.tailDurationMs; // 0(離した直後)→1(余韻の終わり)
-    const decay = Math.pow(1 - lifeRatio, PARAMS.tailDecayExponent); // 勢いと濃さがこれに比例して弱まる
-
-    const frameScale = Math.max(p.deltaTime, 1) / (1000 / 60);
-    const stepX = tailVelX * decay * PARAMS.tailMoveScale * frameScale;
-    const stepY = tailVelY * decay * PARAMS.tailMoveScale * frameScale;
-    tailX += stepX;
-    tailY += stepY;
-    tailDistTraveled += Math.hypot(stepX, stepY);
-
-    const strength = PARAMS.tailStrength * decay;
-    const result = emitAlongDistance(tailLastEmitX, tailLastEmitY, tailX, tailY, strength);
-    if (result.emitted) {
-      tailLastEmitX = result.x;
-      tailLastEmitY = result.y;
+    const targetSpawned = Math.floor((t / PARAMS.bloomBurstMs) * PARAMS.bloomParticleCount);
+    while (bloomSpawned < targetSpawned) {
+      spawnBloomParticle(bloomSpawned);
+      bloomSpawned++;
     }
   }
 
-  function addInkPoint(x, y, strength) {
-    inkPoints.push({ x, y, bornAt: p.millis(), strength });
+  // index番目の粒を1つ発生させる。indexが大きいほど（後から生まれるほど）
+  // 中心からの距離が広がりやすく、外側の粒ほどstrengthを下げる。
+  function spawnBloomParticle(index) {
+    const progress = index / Math.max(PARAMS.bloomParticleCount - 1, 1); // 0(最初)→1(最後)
+    const radius = p.random(
+      PARAMS.bloomMaxRadius * 0.15,
+      PARAMS.bloomMaxRadius * (0.4 + 0.6 * progress));
+
+    const angleOffsetDeg = p.random(-PARAMS.bloomAngleSpreadDeg, PARAMS.bloomAngleSpreadDeg);
+    const angle = bloomBaseAngle + p.radians(angleOffsetDeg);
+
+    const x = bloomCenterX + Math.cos(angle) * radius;
+    const y = bloomCenterY + Math.sin(angle) * radius;
+
+    const radiusRatio = radius / PARAMS.bloomMaxRadius;
+    const strength = PARAMS.bloomStrength * p.lerp(1, PARAMS.bloomOuterStrengthScale, radiusRatio);
+
+    addInkPoint(x, y, strength, PARAMS.bloomLifetimeMs);
+  }
+
+  function addInkPoint(x, y, strength, lifetimeMs = PARAMS.lifetimeMs) {
+    inkPoints.push({ x, y, bornAt: p.millis(), strength, lifetimeMs });
     // 上限を超えたら古い点から間引く（負荷対策。どうせ寿命も近い）
     if (inkPoints.length > PARAMS.maxInkPoints) {
       inkPoints.splice(0, inkPoints.length - PARAMS.maxInkPoints);
@@ -306,9 +328,9 @@ const sketch = (p) => {
     const alive = [];
     for (const pt of inkPoints) {
       const age = now - pt.bornAt;
-      if (age >= PARAMS.lifetimeMs) continue; // 寿命切れは描かずに捨てる
+      if (age >= pt.lifetimeMs) continue; // 寿命切れは描かずに捨てる
 
-      const ageRatio = age / PARAMS.lifetimeMs; // 0(生まれた直後)〜1(寿命)
+      const ageRatio = age / pt.lifetimeMs; // 0(生まれた直後)〜1(寿命)
       const fadeScale = Math.pow(1 - ageRatio, PARAMS.fadeCurveExponent);
       const effectiveAlpha = PARAMS.inkLayerAlpha * pt.strength * fadeScale;
       // 見た目上ほぼ消えている点は、寿命前でも配列から外す
@@ -357,7 +379,7 @@ const sketch = (p) => {
       if (activePointerId !== null) return; // すでに1本追跡中なら無視
       activePointerId = e.pointerId;
       isDown = true;
-      tailActive = false; // 新しいタッチが始まったら前の余韻は打ち切る
+      bloomActive = false; // 新しいタッチが始まったら前の余韻は打ち切る
       pressStartTime = p.millis();
       // 触れた瞬間はラグなしで指の位置に一致させる（ラグはなぞっている間だけ効く）
       targetX = followX = e.offsetX;
@@ -389,19 +411,19 @@ const sketch = (p) => {
       isDown = false;
       activePointerId = null;
 
-      // 離す直前に動いていた場合だけ、最後の方向と速度を少しだけ受け継いで
-      // 弱く流れてから消える余韻(tail)を始める（止まっていた場合は始めない）
+      // 離す直前に動いていた場合だけ、その場で柔らかく膨らむafter-bloomを
+      // 始める（止まっていた場合は始めない）。中心は離した位置から、直前の
+      // 方向へbloomForwardOffsetMaxまでだけ少し進めた位置にする。
       const speedAtRelease = Math.hypot(lastFollowVelX, lastFollowVelY);
       if (speedAtRelease > 0.0001) {
-        tailActive = true;
-        tailX = followX;
-        tailY = followY;
-        tailVelX = lastFollowVelX;
-        tailVelY = lastFollowVelY;
-        tailStartTime = p.millis();
-        tailLastEmitX = followX;
-        tailLastEmitY = followY;
-        tailDistTraveled = 0;
+        const dirAngle = Math.atan2(lastFollowVelY, lastFollowVelX);
+        const forwardOffset = Math.min(speedAtRelease, PARAMS.bloomForwardOffsetMax);
+        bloomCenterX = followX + Math.cos(dirAngle) * forwardOffset;
+        bloomCenterY = followY + Math.sin(dirAngle) * forwardOffset;
+        bloomBaseAngle = dirAngle;
+        bloomActive = true;
+        bloomStartTime = p.millis();
+        bloomSpawned = 0;
       }
       e.preventDefault();
     };
