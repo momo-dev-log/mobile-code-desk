@@ -22,7 +22,20 @@
  *     (3) 動きが遅い区間の点は最初からインクを薄くし（孤立した濃い点を防ぐ）、
  *     (4) 見えなくなる手前の点は早めに配列から外し、
  *     (5) 点は年齢とともに半径も縮む、ようにした。
- *     「線が薄くほどける」見え方を狙った調整（詳細は addStrokeSegment / strength / radiusScale）。
+ *     「線が薄くほどける」見え方を狙った調整（詳細は strength / radiusScale 関連の処理）。
+ *     （この時点での点の発生処理 addStrokeSegment は、後の4回目の調整で
+ *       distance-baseな emitInkAlongPath に置き換えられた）
+ *
+ * 校正メモ（4回目のスマホ確認後の調整）:
+ *   - ゆっくりなぞると同じ場所付近に粒が重なって濃くなる問題があった。
+ *     原因は、粒の発生が「フレームごと」になっていたこと
+ *     （1フレームの移動距離が小さくても、最低1粒は置いていた）。
+ *     そのため低速時は粒の密度が上がり、結果的に黒い塊に見えていた。
+ *   - 粒の発生を「フレーム」ではなく「直前に粒を置いた位置からの移動距離」
+ *     基準に変更した（emitInkAlongPath）。stepSpacing分進むごとに1粒、
+ *     という発生になり、速度に関わらず単位距離あたりの粒の数が一定になる。
+ *     指が止まっていれば距離が貯まらないので、何フレーム経っても粒は増えない
+ *     （minMoveDistによるフレーム単位のゲートは不要になったため削除した）。
  *
  * 方針メモ:
  *   - p5 は instance mode
@@ -66,18 +79,20 @@ const PARAMS = {
   driftScale:  0.012,  // 空間方向のnoiseスケール（小さいほど大きくうねる）
   driftSpeed:  0.01,   // 時間方向のnoise進行（大きいほど速く揺れる）
 
-  // ── 描画の連続性 ──
-  // 指を速く動かしても点が途切れないよう、前回位置との間を補間する。
-  stepSpacing: 3,        // 補間する点の間隔(px)。小さいほど線が密になり滑らかに見える
-  minMoveDist: 1.2,      // この距離未満しか動いていない時は新しい点を増やさない
-                         // （ほぼ止まっている間に同じ場所へ点を量産し、孤立した
-                         //   濃い点が残ることを防ぐ）
+  // ── 描画の連続性（距離ベースの粒の発生）──
+  // 墨は「時間（フレーム）」ではなく「移動距離」を基準に置く。直前に粒を
+  // 置いた位置から stepSpacing 分だけ進むごとに、新しい粒を1つ置く
+  // （emitInkAlongPath参照）。ゆっくりなぞって何フレームかけて進んでも、
+  // 速くなぞって1フレームで進んでも、同じ距離なら同じ数の粒になる。
+  // 指が止まっていれば距離が貯まらないので、その場に粒が量産されることもない。
+  stepSpacing: 3,  // 何px進むごとに1粒置くか。小さいほど線が密になり滑らかに見える
 
   // ── 速度に応じたインクの濃さ ──
-  // 動きが速いほど点を濃く、遅い/止まりかけ（ストロークの終端など）ほど薄くする。
-  // 終端付近に濃い点が居座って「孤立した粒」に見える問題を抑える。
-  fullStrengthSpeed: 5,  // この速さ(px/フレーム)以上でインクが最大濃度になる
-  minStrength: 0.35,     // 動きが遅くてもこれより下げない最小濃度（0〜1）
+  // 粒の「数」は移動距離だけで決まるが、粒1つあたりの濃さ(strength)は
+  // 指の速さでも変える。速いほど濃く、遅い/止まりかけほど薄くする。
+  fullStrengthSpeed: 5,  // この速さ(60fps相当のpx/フレーム)以上で最大濃度になる
+  minStrength: 0.22,     // 動きが遅くてもこれより下げない最小濃度（0〜1）
+                         // 低速時に粒が濃く見える問題を抑えるため0.35から下げた
 
   // ── 追従ラグ（墨は指にぴったり付かず、少し遅れて追いかける）──
   // 墨の描画位置は指の現在位置（target）ではなく、それを追いかける
@@ -99,6 +114,7 @@ const sketch = (p) => {
   let isDown = false;
   let targetX = 0, targetY = 0; // 指の現在位置（入力そのもの）
   let followX = 0, followY = 0; // 墨が実際に描かれる位置（targetを遅れて追う）
+  let lastEmitX = 0, lastEmitY = 0; // 直前に粒を置いた位置（距離ベースの発生に使う）
 
   // drift 用の noise 時間軸（フレームごとに進める）
   let driftT = 0;
@@ -144,10 +160,12 @@ const sketch = (p) => {
         moveDist = PARAMS.followMaxSpeed;
       }
 
-      // ほぼ動いていない時は新しい点を増やさない（同じ場所への量産を防ぐ）
-      if (moveDist >= PARAMS.minMoveDist) {
-        addStrokeSegment(prevFollowX, prevFollowY, followX, followY, moveDist);
-      }
+      // 指の速さ（フレームレートに依存しないよう60fps相当のpx/フレームへ
+      // 正規化）。粒を置くかどうかの判断には使わない。strength（濃さ）だけに使う。
+      const frameScale = Math.max(p.deltaTime, 1) / (1000 / 60);
+      const speed = moveDist / frameScale;
+
+      emitInkAlongPath(speed);
     }
 
     renderAliveInkPoints();
@@ -155,16 +173,29 @@ const sketch = (p) => {
     driftT += PARAMS.driftSpeed;
   };
 
-  // 前回位置→現在位置を一定間隔で補間しながら、墨の点を連ねて追加する。
-  // 動きが速いほど濃く(strength→1)、遅いほど薄く(strength→minStrength)。
-  function addStrokeSegment(x0, y0, x1, y1, moveDist) {
+  // 直前に粒を置いた位置(lastEmitX/Y)から現在のfollow位置までの距離が
+  // stepSpacing分進むごとに、新しい粒を1つ置く。フレーム数や経過時間とは
+  // 無関係に、移動距離だけで粒の数が決まる。
+  function emitInkAlongPath(speed) {
+    const segLen = p.dist(lastEmitX, lastEmitY, followX, followY);
+    if (segLen < PARAMS.stepSpacing) return; // まだ十分に進んでいない
+
     const strength = p.constrain(
-      moveDist / PARAMS.fullStrengthSpeed, PARAMS.minStrength, 1);
-    const steps = Math.max(1, Math.floor(moveDist / PARAMS.stepSpacing));
+      speed / PARAMS.fullStrengthSpeed, PARAMS.minStrength, 1);
+
+    const steps = Math.floor(segLen / PARAMS.stepSpacing);
+    let lastX = lastEmitX;
+    let lastY = lastEmitY;
     for (let i = 1; i <= steps; i++) {
-      const t = i / steps;
-      addInkPoint(p.lerp(x0, x1, t), p.lerp(y0, y1, t), strength);
+      const t = (i * PARAMS.stepSpacing) / segLen;
+      lastX = p.lerp(lastEmitX, followX, t);
+      lastY = p.lerp(lastEmitY, followY, t);
+      addInkPoint(lastX, lastY, strength);
     }
+    // 最後に置いた粒の位置を起点に更新する。stepSpacing未満の余りの距離は
+    // そのまま次フレーム以降の距離計算に持ち越される。
+    lastEmitX = lastX;
+    lastEmitY = lastY;
   }
 
   function addInkPoint(x, y, strength) {
@@ -237,6 +268,8 @@ const sketch = (p) => {
       // 触れた瞬間はラグなしで指の位置に一致させる（ラグはなぞっている間だけ効く）
       targetX = followX = e.offsetX;
       targetY = followY = e.offsetY;
+      lastEmitX = followX; // 距離ベースの粒発生の起点もここにリセット
+      lastEmitY = followY;
       // 指が画面端に動いても move を取り続けられるよう capture
       if (el.setPointerCapture) {
         try { el.setPointerCapture(e.pointerId); } catch (_) {}
