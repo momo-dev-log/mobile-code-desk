@@ -15,6 +15,15 @@
  *     消えない残骸として居座る問題があったため、persistenceの仕組み自体を
  *     寿命ベースの粒子描画に変更した（詳細は inkPoints 関連の処理を参照）。
  *
+ * 校正メモ（3回目のスマホ確認後の調整）:
+ *   - なぞった線が「粒の連なり」に見え、孤立した点も残っていたため、
+ *     (1) 点の間隔を詰めて補間を密にし、
+ *     (2) 指がほぼ止まっている間は新しい点を増やさず、
+ *     (3) 動きが遅い区間の点は最初からインクを薄くし（孤立した濃い点を防ぐ）、
+ *     (4) 見えなくなる手前の点は早めに配列から外し、
+ *     (5) 点は年齢とともに半径も縮む、ようにした。
+ *     「線が薄くほどける」見え方を狙った調整（詳細は addStrokeSegment / strength / radiusScale）。
+ *
  * 方針メモ:
  *   - p5 は instance mode
  *   - v0.1 は 1本指のみ（マルチタッチの下準備はしない）
@@ -37,6 +46,11 @@ const PARAMS = {
   lifetimeMs: 4000,        // 1点が生きている時間(ms)。3000〜5000で調整
   fadeCurveExponent: 1.6,  // alphaScale = (1 - age/lifetime)^exponent
                            // 1なら線形。大きいほど序盤は濃く残り、終盤に急に消える
+  minVisibleAlpha: 2,      // 実効alpha（0〜255）がこれを下回ったら、寿命前でも
+                           // 見えなくなったとみなして配列から外す
+  endRadiusScale: 0.4,     // 寿命を迎える頃の半径は元の何倍まで縮むか（0〜1）
+                           // ageに応じてalphaだけでなくradiusも縮め、丸い点が
+                           // そのまま残るのではなく小さくほどけるようにする
 
   // ── diffusion（滲み）──
   // 半透明の同心円を内側から外側へ重ねて、輪郭をぼかす。
@@ -54,7 +68,16 @@ const PARAMS = {
 
   // ── 描画の連続性 ──
   // 指を速く動かしても点が途切れないよう、前回位置との間を補間する。
-  stepSpacing: 4,      // 補間する点の間隔(px)
+  stepSpacing: 3,        // 補間する点の間隔(px)。小さいほど線が密になり滑らかに見える
+  minMoveDist: 1.2,      // この距離未満しか動いていない時は新しい点を増やさない
+                         // （ほぼ止まっている間に同じ場所へ点を量産し、孤立した
+                         //   濃い点が残ることを防ぐ）
+
+  // ── 速度に応じたインクの濃さ ──
+  // 動きが速いほど点を濃く、遅い/止まりかけ（ストロークの終端など）ほど薄くする。
+  // 終端付近に濃い点が居座って「孤立した粒」に見える問題を抑える。
+  fullStrengthSpeed: 5,  // この速さ(px/フレーム)以上でインクが最大濃度になる
+  minStrength: 0.35,     // 動きが遅くてもこれより下げない最小濃度（0〜1）
 
   // ── 追従ラグ（墨は指にぴったり付かず、少し遅れて追いかける）──
   // 墨の描画位置は指の現在位置（target）ではなく、それを追いかける
@@ -113,14 +136,18 @@ const sketch = (p) => {
 
       // 1フレームで進む距離に上限を設け、速い指の動きにも墨が
       // 同じ速さでは追従しない（置いていかれる）ようにする
-      const moveDist = p.dist(prevFollowX, prevFollowY, followX, followY);
+      let moveDist = p.dist(prevFollowX, prevFollowY, followX, followY);
       if (moveDist > PARAMS.followMaxSpeed) {
         const scale = PARAMS.followMaxSpeed / moveDist;
         followX = prevFollowX + (followX - prevFollowX) * scale;
         followY = prevFollowY + (followY - prevFollowY) * scale;
+        moveDist = PARAMS.followMaxSpeed;
       }
 
-      addStrokeSegment(prevFollowX, prevFollowY, followX, followY);
+      // ほぼ動いていない時は新しい点を増やさない（同じ場所への量産を防ぐ）
+      if (moveDist >= PARAMS.minMoveDist) {
+        addStrokeSegment(prevFollowX, prevFollowY, followX, followY, moveDist);
+      }
     }
 
     renderAliveInkPoints();
@@ -128,18 +155,20 @@ const sketch = (p) => {
     driftT += PARAMS.driftSpeed;
   };
 
-  // 前回位置→現在位置を一定間隔で補間しながら、墨の点を連ねて追加する
-  function addStrokeSegment(x0, y0, x1, y1) {
-    const dist = p.dist(x0, y0, x1, y1);
-    const steps = Math.max(1, Math.floor(dist / PARAMS.stepSpacing));
+  // 前回位置→現在位置を一定間隔で補間しながら、墨の点を連ねて追加する。
+  // 動きが速いほど濃く(strength→1)、遅いほど薄く(strength→minStrength)。
+  function addStrokeSegment(x0, y0, x1, y1, moveDist) {
+    const strength = p.constrain(
+      moveDist / PARAMS.fullStrengthSpeed, PARAMS.minStrength, 1);
+    const steps = Math.max(1, Math.floor(moveDist / PARAMS.stepSpacing));
     for (let i = 1; i <= steps; i++) {
       const t = i / steps;
-      addInkPoint(p.lerp(x0, x1, t), p.lerp(y0, y1, t));
+      addInkPoint(p.lerp(x0, x1, t), p.lerp(y0, y1, t), strength);
     }
   }
 
-  function addInkPoint(x, y) {
-    inkPoints.push({ x, y, bornAt: p.millis() });
+  function addInkPoint(x, y, strength) {
+    inkPoints.push({ x, y, bornAt: p.millis(), strength });
     // 上限を超えたら古い点から間引く（負荷対策。どうせ寿命も近い）
     if (inkPoints.length > PARAMS.maxInkPoints) {
       inkPoints.splice(0, inkPoints.length - PARAMS.maxInkPoints);
@@ -156,15 +185,21 @@ const sketch = (p) => {
       const age = now - pt.bornAt;
       if (age >= PARAMS.lifetimeMs) continue; // 寿命切れは描かずに捨てる
 
-      alive.push(pt);
       const ageRatio = age / PARAMS.lifetimeMs; // 0(生まれた直後)〜1(寿命)
-      const alphaScale = Math.pow(1 - ageRatio, PARAMS.fadeCurveExponent);
-      renderInkPoint(pt, alphaScale);
+      const fadeScale = Math.pow(1 - ageRatio, PARAMS.fadeCurveExponent);
+      const effectiveAlpha = PARAMS.inkLayerAlpha * pt.strength * fadeScale;
+      // 見た目上ほぼ消えている点は、寿命前でも配列から外す
+      // （孤立した薄い点がだらだら残り続けるのを防ぐ）
+      if (effectiveAlpha < PARAMS.minVisibleAlpha) continue;
+
+      alive.push(pt);
+      const radiusScale = p.lerp(1, PARAMS.endRadiusScale, ageRatio);
+      renderInkPoint(pt, effectiveAlpha, radiusScale);
     }
     inkPoints = alive;
   }
 
-  function renderInkPoint(pt, alphaScale) {
+  function renderInkPoint(pt, alpha, radiusScale) {
     // drift: 元のx/yから、現在のdriftTで滑らかにずらした位置に描く
     // （寿命の間、毎フレーム計算し直すので生きている間ずっと揺れ続ける）
     const ox = p.map(p.noise(pt.x * PARAMS.driftScale, driftT), 0, 1,
@@ -175,15 +210,16 @@ const sketch = (p) => {
     const dy = pt.y + oy;
 
     const ink = p.color(PARAMS.inkColor);
-    ink.setAlpha(PARAMS.inkLayerAlpha * alphaScale);
+    ink.setAlpha(alpha);
     p.fill(ink);
     p.noStroke();
 
     // 外側の薄い円 → 内側の濃い芯、の順で重ねる
+    // age が進むほど radiusScale が縮み、点が小さくほどけていく
     for (let i = PARAMS.diffusionLayers; i >= 1; i--) {
       const tt = i / PARAMS.diffusionLayers; // 1(外)→ ~0(内)
       const r = p.lerp(PARAMS.diffusionCoreRadius,
-                       PARAMS.diffusionMaxRadius, tt);
+                       PARAMS.diffusionMaxRadius, tt) * radiusScale;
       p.circle(dx, dy, r * 2);
     }
   }
@@ -205,8 +241,8 @@ const sketch = (p) => {
       if (el.setPointerCapture) {
         try { el.setPointerCapture(e.pointerId); } catch (_) {}
       }
-      // 最初の接地点にも一点置く
-      addInkPoint(followX, followY);
+      // 最初の接地点にも一点置く（タップそのものなので濃さは最大）
+      addInkPoint(followX, followY, 1);
       e.preventDefault();
     }, { passive: false });
 
