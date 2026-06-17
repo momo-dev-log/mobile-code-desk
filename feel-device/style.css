@@ -1,0 +1,28 @@
+/* 感触装置 v0.1 検証版 / フルスクリーン canvas */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;          /* スクロールさせない */
+  background: #f7f7f5;       /* 背景色（sketch側の背景と揃える） */
+  overscroll-behavior: none; /* 引っ張りリロード等を抑止 */
+}
+
+#canvas-holder {
+  width: 100%;
+  height: 100%;
+  /* 指の操作をすべて canvas の描画に使う（スクロール/ズームに奪われない） */
+  touch-action: none;
+}
+
+/* p5 が生成する canvas を画面いっぱいに */
+#canvas-holder canvas {
+  display: block;
+  touch-action: none;
+}
