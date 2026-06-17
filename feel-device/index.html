@@ -13,6 +13,8 @@
 <body>
   <!-- p5 instance mode の canvas はここにぶら下げる -->
   <div id="canvas-holder"></div>
-  <script src="js/sketch.js"></script>
+  <!-- スマホ側でjs/sketch.jsが古いままキャッシュされる問題への対策。
+       校正のたびにこのクエリ値を上げて、確実に最新コードを読み込ませる。 -->
+  <script src="js/sketch.js?v=80"></script>
 </body>
 </html>
