@@ -68,6 +68,19 @@
  *     emitInkAlongPathだけになったため、emitInkAlongPathに戻した
  *     （bloomは経路に沿った発生ではなく、放射状に直接addInkPointする）。
  *
+ * 校正メモ（7回目の調整: after-bloomをデフォルトオフに）:
+ *   - after-bloom実装後の実機確認で、「柔らかくほどける」ではなく
+ *     「点や短い線が増えた」ように見えるという判断になった。線本体には
+ *     persistence（寿命ベースのfade）による余韻がもともと出ており、問題は
+ *     余韻が足りないことではなく、after-bloomが粒を追加したこと自体だった。
+ *   - そのため、余韻は「足す」のではなく既存の墨が薄まる・広がる・遅れる
+ *     方向（persistence/diffusion/followラグ）で作る方針に戻すことにした。
+ *   - after-bloomのコード（PARAMS・状態変数・updateAfterBloom/
+ *     spawnBloomParticle）は比較用に残しつつ、bloomEnabled: false により
+ *     リリース時にbloomが一切起動しないようにした。bloomEnabledがfalseの間は
+ *     PR #77以前と同じ、線本体（persistence + diffusion + drift +
+ *     followラグ）だけの挙動になる。
+ *
  * 方針メモ:
  *   - p5 は instance mode
  *   - v0.1 は 1本指のみ（マルチタッチの下準備はしない）
@@ -137,6 +150,9 @@ const PARAMS = {
   // ほどける「滲み」を出す（updateAfterBloom/spawnBloomParticleで使用）。
   // 直線的に伸びるtailとは違い、中心位置はほとんど動かさず、周囲へ放射状に
   // 粒を広げるだけにする。
+  // 7回目の調整で「点や短い線が増えて見える」と判断し、デフォルトでは
+  // 起動しないようにした（bloomEnabled: false）。コードは比較用に残している。
+  bloomEnabled: false,         // falseの間はリリース時にbloomが一切起動しない
   bloomBurstMs: 220,           // 粒が段階的に発生し終わるまでの時間(ms)
   bloomLifetimeMs: 900,        // bloomの粒だけに使う専用の寿命(ms)。通常のlifetimeMsより短め
   bloomMaxRadius: 32,          // 中心からの最大距離(px)。粒はこの範囲内にランダムに置かれる
@@ -411,11 +427,12 @@ const sketch = (p) => {
       isDown = false;
       activePointerId = null;
 
-      // 離す直前に動いていた場合だけ、その場で柔らかく膨らむafter-bloomを
-      // 始める（止まっていた場合は始めない）。中心は離した位置から、直前の
-      // 方向へbloomForwardOffsetMaxまでだけ少し進めた位置にする。
+      // bloomEnabledがfalseの間は何もしない（線本体だけの挙動になる）。
+      // trueの場合のみ、離す直前に動いていたときだけその場で柔らかく膨らむ
+      // after-bloomを始める。中心は離した位置から、直前の方向へ
+      // bloomForwardOffsetMaxまでだけ少し進めた位置にする。
       const speedAtRelease = Math.hypot(lastFollowVelX, lastFollowVelY);
-      if (speedAtRelease > 0.0001) {
+      if (PARAMS.bloomEnabled && speedAtRelease > 0.0001) {
         const dirAngle = Math.atan2(lastFollowVelY, lastFollowVelX);
         const forwardOffset = Math.min(speedAtRelease, PARAMS.bloomForwardOffsetMax);
         bloomCenterX = followX + Math.cos(dirAngle) * forwardOffset;
