@@ -7,13 +7,13 @@
  *   - スマホで重くないか見る
  *
  * 段階1: p5を起動し、スマホ縦持ちで表示、指でなぞると点が出る
- * 段階2: persistenceで前フレームを薄く残し、墨の消え方を見る
+ * 段階2: persistenceで墨の消え方を見る
  * 段階3: diffusion（半透明の同心円の重ね）で滲み、driftでnoiseベースの揺らぎ
  *
- * 校正メモ（1回目のスマホ確認後の調整）:
- *   - persistenceが強すぎたためfadeAlpha等を上げ、消える方向を強めた
- *   - 墨が指に完全追従していたため、followLerp/followMaxSpeedで
- *     指の位置(target)に遅れて追いつくfollow位置を導入した
+ * 校正メモ（2回目のスマホ確認後の調整）:
+ *   - 「背景を半透明で重ねて薄める」方式は、画面に薄い灰色が
+ *     消えない残骸として居座る問題があったため、persistenceの仕組み自体を
+ *     寿命ベースの粒子描画に変更した（詳細は inkPoints 関連の処理を参照）。
  *
  * 方針メモ:
  *   - p5 は instance mode
@@ -30,20 +30,24 @@ const PARAMS = {
   bgColor:  '#f7f7f5',   // 背景
   inkColor: '#1a1a1a',   // 墨
 
-  // ── persistence（残像の消え方）──
-  // 毎フレーム、背景色を薄く重ねて前フレームを少しずつ消す。
-  // 値が大きいほど速く消える / 小さいほど長く残る（0〜255）。
-  fadeAlpha: 16,
+  // ── persistence（寿命ベース）──
+  // 「跡を背景で薄めて重ねる」方式はやめ、墨の点ごとに寿命(lifetime)を持たせる。
+  // 毎フレーム背景は通常クリアし、生きている点だけを age に応じた alpha で
+  // 描き直す。寿命を過ぎた点は配列から削除するので、最後は必ず背景に戻る。
+  lifetimeMs: 4000,        // 1点が生きている時間(ms)。3000〜5000で調整
+  fadeCurveExponent: 1.6,  // alphaScale = (1 - age/lifetime)^exponent
+                           // 1なら線形。大きいほど序盤は濃く残り、終盤に急に消える
 
   // ── diffusion（滲み）──
   // 半透明の同心円を内側から外側へ重ねて、輪郭をぼかす。
   diffusionLayers:     4,   // 重ねる円の枚数（多いほど重い）
   diffusionMaxRadius:  11,  // 一番外側の円の半径(px)
   diffusionCoreRadius: 3,   // 中心の最も濃い円の半径(px)
-  inkLayerAlpha:       28,  // 1枚あたりの墨の不透明度（0〜255）
+  inkLayerAlpha:       28,  // 生まれた直後（age=0）の1枚あたりの不透明度（0〜255）
 
   // ── drift（揺らぎ）──
   // 完全ランダムではなく noise() の滑らかな揺らぎで描画位置をずらす。
+  // 寿命の間も毎フレーム現在の driftT で計算するので、生きている間ずっと揺れ続ける。
   driftAmount: 6,      // 揺らぎの最大ずれ幅(px)
   driftScale:  0.012,  // 空間方向のnoiseスケール（小さいほど大きくうねる）
   driftSpeed:  0.01,   // 時間方向のnoise進行（大きいほど速く揺れる）
@@ -58,6 +62,11 @@ const PARAMS = {
   followLerp:     0.16, // 1フレームで詰める残り距離の割合（0〜1）
   followMaxSpeed: 16,   // followが1フレームで進める最大距離(px)。
                         // 指を速く振っても墨はこれより速く動かない。
+
+  // ── 負荷対策 ──
+  // 生存中の点の数に上限を設け、速い連続入力でも描画コストが
+  // 無制限に増えないようにする（上限を超えたら古い点から捨てる）。
+  maxInkPoints: 400,
 };
 
 const sketch = (p) => {
@@ -71,6 +80,9 @@ const sketch = (p) => {
   // drift 用の noise 時間軸（フレームごとに進める）
   let driftT = 0;
 
+  // 寿命ベースの墨の点。各要素は { x, y, bornAt }
+  let inkPoints = [];
+
   p.setup = () => {
     const c = p.createCanvas(p.windowWidth, p.windowHeight);
     c.parent('canvas-holder');
@@ -82,19 +94,13 @@ const sketch = (p) => {
   };
 
   p.windowResized = () => {
-    // リサイズ時はキャンバスを作り直す（残像は消えるが検証では許容）
     p.resizeCanvas(p.windowWidth, p.windowHeight);
-    p.background(PARAMS.bgColor);
   };
 
   p.draw = () => {
-    // ── 段階2: persistence ──
-    // 背景色を薄く重ねて、前フレームの墨を少しずつ消していく。
-    p.noStroke();
-    const bg = p.color(PARAMS.bgColor);
-    bg.setAlpha(PARAMS.fadeAlpha);
-    p.fill(bg);
-    p.rect(0, 0, p.width, p.height);
+    // 毎フレーム背景は通常クリア。残像は「重ねて薄める」のではなく、
+    // 生きている点だけを描き直すことで表現する（後述 renderAliveInkPoints）。
+    p.background(PARAMS.bgColor);
 
     // 指が触れている間だけ墨を置く
     if (isDown) {
@@ -114,38 +120,62 @@ const sketch = (p) => {
         followY = prevFollowY + (followY - prevFollowY) * scale;
       }
 
-      drawStrokeSegment(prevFollowX, prevFollowY, followX, followY);
+      addStrokeSegment(prevFollowX, prevFollowY, followX, followY);
     }
+
+    renderAliveInkPoints();
 
     driftT += PARAMS.driftSpeed;
   };
 
-  // 前回位置→現在位置を一定間隔で補間しながら、滲んだ点を連ねる
-  function drawStrokeSegment(x0, y0, x1, y1) {
+  // 前回位置→現在位置を一定間隔で補間しながら、墨の点を連ねて追加する
+  function addStrokeSegment(x0, y0, x1, y1) {
     const dist = p.dist(x0, y0, x1, y1);
     const steps = Math.max(1, Math.floor(dist / PARAMS.stepSpacing));
     for (let i = 1; i <= steps; i++) {
       const t = i / steps;
-      const x = p.lerp(x0, x1, t);
-      const y = p.lerp(y0, y1, t);
-      drawInkBlob(x, y);
+      addInkPoint(p.lerp(x0, x1, t), p.lerp(y0, y1, t));
     }
   }
 
-  // ── 段階3: diffusion + drift ──
-  // 同心円を内→外でalphaを保ちつつ重ねて滲みを作り、
-  // 描画位置は noise() による滑らかなdriftでずらす。
-  function drawInkBlob(x, y) {
-    // drift: x/y で別々の noise を引いて、滑らかな揺らぎオフセットを得る
-    const ox = p.map(p.noise(x * PARAMS.driftScale, driftT), 0, 1,
+  function addInkPoint(x, y) {
+    inkPoints.push({ x, y, bornAt: p.millis() });
+    // 上限を超えたら古い点から間引く（負荷対策。どうせ寿命も近い）
+    if (inkPoints.length > PARAMS.maxInkPoints) {
+      inkPoints.splice(0, inkPoints.length - PARAMS.maxInkPoints);
+    }
+  }
+
+  // ── persistence（寿命） + 段階3: diffusion + drift ──
+  // 生きている点だけ age に応じた alpha で再描画し、寿命切れの点は配列から外す。
+  // これにより、跡は必ずいつか完全に背景へ戻る。
+  function renderAliveInkPoints() {
+    const now = p.millis();
+    const alive = [];
+    for (const pt of inkPoints) {
+      const age = now - pt.bornAt;
+      if (age >= PARAMS.lifetimeMs) continue; // 寿命切れは描かずに捨てる
+
+      alive.push(pt);
+      const ageRatio = age / PARAMS.lifetimeMs; // 0(生まれた直後)〜1(寿命)
+      const alphaScale = Math.pow(1 - ageRatio, PARAMS.fadeCurveExponent);
+      renderInkPoint(pt, alphaScale);
+    }
+    inkPoints = alive;
+  }
+
+  function renderInkPoint(pt, alphaScale) {
+    // drift: 元のx/yから、現在のdriftTで滑らかにずらした位置に描く
+    // （寿命の間、毎フレーム計算し直すので生きている間ずっと揺れ続ける）
+    const ox = p.map(p.noise(pt.x * PARAMS.driftScale, driftT), 0, 1,
                      -PARAMS.driftAmount, PARAMS.driftAmount);
-    const oy = p.map(p.noise(y * PARAMS.driftScale, driftT + 100), 0, 1,
+    const oy = p.map(p.noise(pt.y * PARAMS.driftScale, driftT + 100), 0, 1,
                      -PARAMS.driftAmount, PARAMS.driftAmount);
-    const dx = x + ox;
-    const dy = y + oy;
+    const dx = pt.x + ox;
+    const dy = pt.y + oy;
 
     const ink = p.color(PARAMS.inkColor);
-    ink.setAlpha(PARAMS.inkLayerAlpha);
+    ink.setAlpha(PARAMS.inkLayerAlpha * alphaScale);
     p.fill(ink);
     p.noStroke();
 
@@ -176,7 +206,7 @@ const sketch = (p) => {
         try { el.setPointerCapture(e.pointerId); } catch (_) {}
       }
       // 最初の接地点にも一点置く
-      drawInkBlob(followX, followY);
+      addInkPoint(followX, followY);
       e.preventDefault();
     }, { passive: false });
 
