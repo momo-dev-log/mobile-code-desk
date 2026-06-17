@@ -10,6 +10,11 @@
  * 段階2: persistenceで前フレームを薄く残し、墨の消え方を見る
  * 段階3: diffusion（半透明の同心円の重ね）で滲み、driftでnoiseベースの揺らぎ
  *
+ * 校正メモ（1回目のスマホ確認後の調整）:
+ *   - persistenceが強すぎたためfadeAlpha等を上げ、消える方向を強めた
+ *   - 墨が指に完全追従していたため、followLerp/followMaxSpeedで
+ *     指の位置(target)に遅れて追いつくfollow位置を導入した
+ *
  * 方針メモ:
  *   - p5 は instance mode
  *   - v0.1 は 1本指のみ（マルチタッチの下準備はしない）
@@ -28,14 +33,14 @@ const PARAMS = {
   // ── persistence（残像の消え方）──
   // 毎フレーム、背景色を薄く重ねて前フレームを少しずつ消す。
   // 値が大きいほど速く消える / 小さいほど長く残る（0〜255）。
-  fadeAlpha: 6,
+  fadeAlpha: 16,
 
   // ── diffusion（滲み）──
   // 半透明の同心円を内側から外側へ重ねて、輪郭をぼかす。
-  diffusionLayers:     5,   // 重ねる円の枚数（多いほど重い）
-  diffusionMaxRadius:  14,  // 一番外側の円の半径(px)
+  diffusionLayers:     4,   // 重ねる円の枚数（多いほど重い）
+  diffusionMaxRadius:  11,  // 一番外側の円の半径(px)
   diffusionCoreRadius: 3,   // 中心の最も濃い円の半径(px)
-  inkLayerAlpha:       40,  // 1枚あたりの墨の不透明度（0〜255）
+  inkLayerAlpha:       28,  // 1枚あたりの墨の不透明度（0〜255）
 
   // ── drift（揺らぎ）──
   // 完全ランダムではなく noise() の滑らかな揺らぎで描画位置をずらす。
@@ -46,6 +51,13 @@ const PARAMS = {
   // ── 描画の連続性 ──
   // 指を速く動かしても点が途切れないよう、前回位置との間を補間する。
   stepSpacing: 4,      // 補間する点の間隔(px)
+
+  // ── 追従ラグ（墨は指にぴったり付かず、少し遅れて追いかける）──
+  // 墨の描画位置は指の現在位置（target）ではなく、それを追いかける
+  // follow位置を使う。followLerpが小さいほど遅れが大きい。
+  followLerp:     0.16, // 1フレームで詰める残り距離の割合（0〜1）
+  followMaxSpeed: 16,   // followが1フレームで進める最大距離(px)。
+                        // 指を速く振っても墨はこれより速く動かない。
 };
 
 const sketch = (p) => {
@@ -53,8 +65,8 @@ const sketch = (p) => {
   // 1本指のみ追跡する。Pointer Events で現在アクティブな pointerId を保持。
   let activePointerId = null;
   let isDown = false;
-  let curX = 0, curY = 0;     // 現在のポインタ位置
-  let prevX = 0, prevY = 0;   // 直前に描画した位置
+  let targetX = 0, targetY = 0; // 指の現在位置（入力そのもの）
+  let followX = 0, followY = 0; // 墨が実際に描かれる位置（targetを遅れて追う）
 
   // drift 用の noise 時間軸（フレームごとに進める）
   let driftT = 0;
@@ -86,9 +98,23 @@ const sketch = (p) => {
 
     // 指が触れている間だけ墨を置く
     if (isDown) {
-      drawStrokeSegment(prevX, prevY, curX, curY);
-      prevX = curX;
-      prevY = curY;
+      const prevFollowX = followX;
+      const prevFollowY = followY;
+
+      // followを指の位置(target)へ少しだけ近づける＝遅れて追いかける
+      followX += (targetX - followX) * PARAMS.followLerp;
+      followY += (targetY - followY) * PARAMS.followLerp;
+
+      // 1フレームで進む距離に上限を設け、速い指の動きにも墨が
+      // 同じ速さでは追従しない（置いていかれる）ようにする
+      const moveDist = p.dist(prevFollowX, prevFollowY, followX, followY);
+      if (moveDist > PARAMS.followMaxSpeed) {
+        const scale = PARAMS.followMaxSpeed / moveDist;
+        followX = prevFollowX + (followX - prevFollowX) * scale;
+        followY = prevFollowY + (followY - prevFollowY) * scale;
+      }
+
+      drawStrokeSegment(prevFollowX, prevFollowY, followX, followY);
     }
 
     driftT += PARAMS.driftSpeed;
@@ -142,21 +168,24 @@ const sketch = (p) => {
       if (activePointerId !== null) return; // すでに1本追跡中なら無視
       activePointerId = e.pointerId;
       isDown = true;
-      curX = prevX = e.offsetX;
-      curY = prevY = e.offsetY;
+      // 触れた瞬間はラグなしで指の位置に一致させる（ラグはなぞっている間だけ効く）
+      targetX = followX = e.offsetX;
+      targetY = followY = e.offsetY;
       // 指が画面端に動いても move を取り続けられるよう capture
       if (el.setPointerCapture) {
         try { el.setPointerCapture(e.pointerId); } catch (_) {}
       }
       // 最初の接地点にも一点置く
-      drawInkBlob(curX, curY);
+      drawInkBlob(followX, followY);
       e.preventDefault();
     }, { passive: false });
 
     el.addEventListener('pointermove', (e) => {
       if (e.pointerId !== activePointerId) return;
-      curX = e.offsetX;
-      curY = e.offsetY;
+      // ここでは目標位置だけ更新する。実際の描画位置(follow)は
+      // draw() 側で毎フレーム遅れて追いつかせる。
+      targetX = e.offsetX;
+      targetY = e.offsetY;
       e.preventDefault();
     }, { passive: false });
 
