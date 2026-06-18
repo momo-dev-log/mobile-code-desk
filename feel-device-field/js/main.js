@@ -23,6 +23,10 @@ const TAG = '[feel-device-field]';
 const log = (...args) => console.log(TAG, ...args);
 const logError = (...args) => console.error(TAG, ...args);
 
+// コードを変えるたびに、このBUILDとindex.html側の?v=Nを必ずセットで上げる。
+// 画面のHUDに出る番号と読み込んでいる番号が一致して初めて「反映された」と確信できる。
+const BUILD = 'v4';
+
 // 校正用の最低限の数値。美しさはまだ調整しない。
 const PARAMS = {
   splatRadius: 0.045,   // splatの広がり（uv空間、0〜1）
@@ -97,6 +101,11 @@ const linearUsable = renderer.capabilities.isWebGL2
   ? true // WebGL2のhalf floatはlinearがコアで使える
   : !!gl.getExtension('OES_texture_half_float_linear');
 log('[7] linear filter usable?', linearUsable, '/ USE_LINEAR =', USE_LINEAR);
+
+// Erudaを開かずに反映状況を確認できるよう、画面左下のHUDに状態を出す。
+const hud = document.getElementById('hud');
+hud.textContent =
+  `${BUILD} | ${renderer.capabilities.isWebGL2 ? 'WebGL2' : 'WebGL1'} | linear:${(USE_LINEAR && linearUsable) ? 'ON' : 'OFF'}`;
 
 // ── 表示用シーン: フルスクリーン1枚のPlaneにdyeをそのまま映す ──
 const scene = new THREE.Scene();
