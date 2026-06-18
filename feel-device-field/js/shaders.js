@@ -12,8 +12,11 @@ export const DYE_RESOLUTION = 128;
 // 2) dissipationで毎フレーム少し薄める
 // 3) 指が触れていれば、現在のpointer位置にガウス状のsplatを加える
 //    （前回位置との補間は行わない。線ではなくsplatとして入れる）
+//
+// 注意: "uniform sampler2D textureDye;" はここで宣言してはいけない。
+// GPUComputationRendererがdependency名(="textureDye")から自動で
+// 同名のuniformを注入するため、手動宣言すると redefinition エラーになる。
 export const dyeComputeShader = /* glsl */ `
-  uniform sampler2D textureDye;
   uniform vec2 uPointer;
   uniform float uPointerActive;
   uniform float uRadius;
@@ -49,12 +52,12 @@ export const displayVertexShader = /* glsl */ `
 
 export const displayFragmentShader = /* glsl */ `
   varying vec2 vUv;
-  uniform sampler2D uDye;
+  uniform sampler2D uDyeTexture;
   uniform vec3 uBgColor;
   uniform vec3 uInkColor;
 
   void main() {
-    float dye = texture2D( uDye, vUv ).r;
+    float dye = texture2D( uDyeTexture, vUv ).r;
     vec3 color = mix( uBgColor, uInkColor, clamp( dye, 0.0, 1.0 ) );
     gl_FragColor = vec4( color, 1.0 );
   }

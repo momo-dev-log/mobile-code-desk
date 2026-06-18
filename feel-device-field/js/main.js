@@ -17,7 +17,7 @@ import {
   dyeComputeShader,
   displayVertexShader,
   displayFragmentShader,
-} from './shaders.js?v=1';
+} from './shaders.js?v=2';
 
 const TAG = '[feel-device-field]';
 const log = (...args) => console.log(TAG, ...args);
@@ -85,7 +85,7 @@ const displayMaterial = new THREE.ShaderMaterial({
   vertexShader: displayVertexShader,
   fragmentShader: displayFragmentShader,
   uniforms: {
-    uDye: { value: null },
+    uDyeTexture: { value: null },
     uBgColor: { value: new THREE.Vector3(0.97, 0.97, 0.95) },
     uInkColor: { value: new THREE.Vector3(0.1, 0.1, 0.1) },
   },
@@ -136,7 +136,7 @@ function animate() {
   requestAnimationFrame(animate);
 
   gpuCompute.compute();
-  displayMaterial.uniforms.uDye.value = gpuCompute.getCurrentRenderTarget(dyeVariable).texture;
+  displayMaterial.uniforms.uDyeTexture.value = gpuCompute.getCurrentRenderTarget(dyeVariable).texture;
   renderer.render(scene, camera);
 
   frameCount += 1;
