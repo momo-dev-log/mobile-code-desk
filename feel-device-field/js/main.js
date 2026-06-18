@@ -78,6 +78,26 @@ if (initError !== null) {
   log('GPUComputationRenderer.init() OK');
 }
 
+// PR-A.1: NEAREST → Linear。128x128を画面サイズへ拡大表示するときの
+// ブロック状の階段を補間で滑らかにする（入る/残る/薄まるの挙動は変えない）。
+// half float + linearはWebGL2ならコアで使えるが、WebGL1ではOES_texture_half_float_linear
+// 拡張が無いと効かずテクスチャがincompleteになり黒画面になる。USE_LINEARを
+// falseに戻すだけでNEARESTへ復帰できるようにしておく。
+const USE_LINEAR = true; // 黒画面になったらfalseに戻す（NEARESTへ）
+const dyeFilter = USE_LINEAR ? THREE.LinearFilter : THREE.NearestFilter;
+// dye variable（前フレームを引き継ぐcompute変数）のping-pong用ターゲット2枚に設定する。
+// displayパスは同じテクスチャを参照しているので、表示側にも自動で効く。
+dyeVariable.renderTargets.forEach((rt) => {
+  rt.texture.minFilter = dyeFilter;
+  rt.texture.magFilter = dyeFilter;
+});
+
+const gl = renderer.getContext();
+const linearUsable = renderer.capabilities.isWebGL2
+  ? true // WebGL2のhalf floatはlinearがコアで使える
+  : !!gl.getExtension('OES_texture_half_float_linear');
+log('[7] linear filter usable?', linearUsable, '/ USE_LINEAR =', USE_LINEAR);
+
 // ── 表示用シーン: フルスクリーン1枚のPlaneにdyeをそのまま映す ──
 const scene = new THREE.Scene();
 const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
