@@ -40,8 +40,13 @@
 </head>
 <body>
   <canvas id="gl"></canvas>
+  <!-- バージョンHUD: Erudaを開かなくても画面上で反映状況(BUILD/WebGL版/linear状態)を
+       確認できるようにする。右下はErudaボタンと被るため左下に置く。 -->
+  <div id="hud" style="position:fixed;left:8px;bottom:8px;z-index:9999;
+    font:12px monospace;color:#888;background:rgba(255,255,255,0.6);
+    padding:2px 6px;border-radius:4px;pointer-events:none;"></div>
   <!-- スマホ側でjsが古いままキャッシュされる問題への対策。
        校正のたびにこのクエリ値を上げて、確実に最新コードを読み込ませる。 -->
-  <script type="module" src="js/main.js?v=2"></script>
+  <script type="module" src="js/main.js?v=4"></script>
 </body>
 </html>
