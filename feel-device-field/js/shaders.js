@@ -1,125 +1,77 @@
 /* =========================================================================
- * 感触装置 v0.1.2 PR-A (field検証) — シェーダー定義
+ * 感触装置 — scalar core gate test v1
  *
- * dye field（濃さの場）だけを持つ最小構成。
- * velocity / advection / pressure / curl はまだ扱わない。
+ * 検証する一点だけ: 「入力が去った後も、既存の場だけが自律的に伝播して
+ * 収まる」こと。媒質の見た目(墨/水/煙等)は今回の検証対象ではない。
+ *
+ * fieldはRチャンネルのscalar disturbanceだけを持つ。G/B/Aは常に0。
+ * 入力はpointerdownの1回だけのcompact tapで、pointermove/pointerup後の
+ * 追加入力は一切ない。毎フレーム、既存のRに対してdiffusion→dissipationだけを
+ * 適用する。
  * ========================================================================= */
 
-export const DYE_RESOLUTION = 128;
+export const FIELD_RESOLUTION = 128;
 
-// dye fieldの1ステップ分の更新。
-// 1) 前フレームのdye(textureDye)を読む
-// 2) dissipationで毎フレーム少し薄める
-// 3) 指が触れていれば、現在のpointer位置にガウス状のsplatを加える
-//    （前回位置との補間は行わない。線ではなくsplatとして入れる）
+// fieldの1ステップ分の更新。
+// 1) 前フレームのR(textureField)を読む
+// 2) diffusion: 中心と上下左右4近傍の平均へ、dt補正した係数でだけ寄せる
+// 3) dissipation: 全体をdt補正した倍率で減衰する
+// 4) pointerdown直後の1フレームだけ、uPointerActive=1でtapを加える
 //
-// 注意: "uniform sampler2D textureDye;" はここで宣言してはいけない。
-// GPUComputationRendererがdependency名(="textureDye")から自動で
+// 注意: "uniform sampler2D textureField;" はここで宣言してはいけない。
+// GPUComputationRendererがdependency名(="textureField")から自動で
 // 同名のuniformを注入するため、手動宣言すると redefinition エラーになる。
-export const dyeComputeShader = /* glsl */ `
+export const fieldComputeShader = /* glsl */ `
   uniform vec2 uPointer;
-  uniform float uPointerActive;
-  uniform float uRadius;
-  uniform float uStrength;
-  uniform float uDissipation;
-  uniform float uTime;
+  uniform float uPointerActive; // pointerdown直後の1フレームだけ1。それ以外は常に0
+  uniform float uTapRadius;
+  uniform float uTapStrength;
+  uniform float uDiffusionStrength;
+  uniform float uDecay;
   uniform float uDt;
-  uniform float uDriftStrength;
-  uniform float uSoftenStrength;
-
-  // PR-F.1: 速いstrokeだけ、pointerup後に始点→終点の順で少し遅れて解放する補助。
-  // uReleaseEpoch=0は「解放中のstrokeなし」を意味する（B channelは1始まりのため衝突しない）。
-  uniform float uReleaseEpoch;
-  uniform float uReleaseFront;
-  uniform float uReleaseAssist;
-  uniform float uHoldDissipationStrong;
-  uniform float uStrokeEpoch;
-  uniform float uStrokeDistance;
-
-  // PR-C.1: 乱数を使わない決定的な2D流れ。x/yで周波数・位相をずらし、
-  // 中心からの距離(atan2等)に依存させないことで、単一の渦や中心への
-  // 吸い込みに見えないようにする。空間的に粗く、時間変化も遅い。
-  // PR-D.1ではuDriftStrength=0で無効化するが、形自体は削除しない。
-  vec2 driftField( vec2 uv, float t ) {
-    float dx = sin( uv.y * 6.283185 * 1.3 + t * 0.07 )
-             + 0.5 * sin( uv.x * 6.283185 * 0.8 - t * 0.05 );
-    float dy = cos( uv.x * 6.283185 * 1.1 - t * 0.06 )
-             + 0.5 * cos( uv.y * 6.283185 * 1.6 + t * 0.04 );
-    return vec2( dx, dy );
-  }
 
   void main() {
     vec2 uv = gl_FragCoord.xy / resolution.xy;
     vec2 texel = 1.0 / resolution.xy;
 
-    // PR-C.1: 前フレームdyeを読むサンプリング位置だけを、上記の流れでbacktrace
-    // する（dissipation/splatより前。dissipation→splatという既存の順序は変えない）。
-    // uDriftStrength=0のときはdriftOffsetが常にゼロになり、実質無効化される。
-    vec2 driftOffset = driftField( uv, uTime ) * uDriftStrength * uDt;
-    vec2 sampleUv = uv - driftOffset;
-
-    // PR-D.1: 位置はほぼ変えず、輪郭だけを静かにほどく。中心と上下左右4近傍を
-    // 読み、その平均へごく少量だけ寄せる（diffusion / edge relaxation）。
-    // テクスチャはClampToEdgeWrapping前提のため、境界では折り返しが起きず、
-    // 方向性のある流れも生まれない。
-    // PR-F.1: G/Bはstrokeのorder/epoch記録用のため、ここでは近傍mixの対象にしない
-    // （Rだけsoftenする）。
-    vec4 centerColor = texture2D( textureDye, sampleUv );
-    float left   = texture2D( textureDye, sampleUv - vec2( texel.x, 0.0 ) ).r;
-    float right  = texture2D( textureDye, sampleUv + vec2( texel.x, 0.0 ) ).r;
-    float up     = texture2D( textureDye, sampleUv + vec2( 0.0, texel.y ) ).r;
-    float down   = texture2D( textureDye, sampleUv - vec2( 0.0, texel.y ) ).r;
+    float center = texture2D( textureField, uv ).r;
+    float left   = texture2D( textureField, uv - vec2( texel.x, 0.0 ) ).r;
+    float right  = texture2D( textureField, uv + vec2( texel.x, 0.0 ) ).r;
+    float up     = texture2D( textureField, uv + vec2( 0.0, texel.y ) ).r;
+    float down   = texture2D( textureField, uv - vec2( 0.0, texel.y ) ).r;
     float neighborAvg = ( left + right + up + down ) * 0.25;
 
-    // uSoftenStrengthは60fps基準の係数。dtベースの係数に変換し、
-    // 120Hz等でも実時間あたりの混ざり量がほぼ変わらないようにする
-    // （PR-B.1のlag追従と同じdt補正の考え方）。
-    float softenFactor = 1.0 - pow( 1.0 - uSoftenStrength, uDt * 60.0 );
-    float dye = mix( centerColor.r, neighborAvg, softenFactor );
+    // diffusion: uDiffusionStrengthは60fps基準の混合係数(0〜1)。
+    // dtベースの係数へ変換することで、120Hz等でも実時間あたりの伝播量が
+    // ほぼ変わらないようにする。center/neighborAvgの凸結合なので、
+    // dtがどれだけ大きくても発散しない。
+    float diffusionFactor = 1.0 - pow( 1.0 - uDiffusionStrength, uDt * 60.0 );
+    float r = mix( center, neighborAvg, diffusionFactor );
 
-    // PR-F.1: 直近1本のstrokeだけ、pointerup後にrelease front(uReleaseFront)が
-    // 始点(distance=0)→終点へ進む間、front未到達部分(strokeDistance > uReleaseFront)
-    // だけ強めに保持する。uReleaseAssist=0のときはuDissipationと完全に同じ値になり、
-    // 遅いstrokeの挙動は今までどおりになる。
-    float strokeEpochAtTexel = centerColor.b;
-    float strokeDistanceAtTexel = centerColor.g;
-    bool isReleaseTarget = ( uReleaseEpoch > 0.5 ) && ( abs( strokeEpochAtTexel - uReleaseEpoch ) < 0.5 );
-    bool notYetReleased = strokeDistanceAtTexel > uReleaseFront;
-    float dissipationFactor = ( isReleaseTarget && notYetReleased )
-      ? mix( uDissipation, uHoldDissipationStrong, uReleaseAssist )
-      : uDissipation;
+    // dissipation: uDecayは60fps基準の1フレームあたりの倍率。
+    // dt*60乗にスケールすることで、120Hz等でも実時間あたりの減衰率が
+    // ほぼ変わらないようにする(soften/dissipationと同じdt補正の考え方)。
+    float dissipationFactor = pow( uDecay, uDt * 60.0 );
+    r *= dissipationFactor;
 
-    dye *= dissipationFactor;
-
-    // G/Bはdissipation/softenの影響を受けず、意味のある墨が注がれない範囲では
-    // 前フレームの値をそのまま保持する。
-    float outG = centerColor.g;
-    float outB = centerColor.b;
-
+    // pointerdown直後の1フレームだけ、コンパクトなscalar disturbanceを加える。
+    // pointermove/pointerup後はuPointerActiveが常に0になるため、ここを通らない。
     if ( uPointerActive > 0.5 ) {
       float d = distance( uv, uPointer );
-      float falloff = exp( -( d * d ) / ( uRadius * uRadius ) );
-      float inkAmount = uStrength * falloff;
-      dye += inkAmount;
-
-      // PR-F.1: 「splatの中心付近だけ」ではなく、Rへ実際に意味のある量の墨が
-      // 注がれているtexelに対応してG/Bを上書きする。閾値はfalloff比ではなく
-      // 実際の注入量(uStrength*falloff)で判定するため、uStrengthが変わっても
-      // 「意味のある墨」の絶対量基準は変わらず、Rの墨とepoch/orderのずれが
-      // 大きくならない。0.02は1フレームの加算として視認できる下限の目安。
-      if ( inkAmount > 0.02 ) {
-        outG = uStrokeDistance;
-        outB = uStrokeEpoch;
-      }
+      float falloff = exp( -( d * d ) / ( uTapRadius * uTapRadius ) );
+      r += uTapStrength * falloff;
     }
 
-    dye = clamp( dye, 0.0, 1.0 );
-    gl_FragColor = vec4( dye, outG, outB, 1.0 );
+    r = clamp( r, 0.0, 1.0 );
+    gl_FragColor = vec4( r, 0.0, 0.0, 0.0 );
   }
 `;
 
-// dye fieldをそのまま画面全体に映すだけの最小表示シェーダー。
-// 背景色とインク色を、dyeの濃度で線形補間するだけ（美しさはまだ調整しない）。
+// fieldをそのまま画面全体に映すだけの中立な診断表示。
+// 墨/紙/水/煙を想起させない配色(無彩色)にし、低い値も視認できるよう
+// sqrt(平方根)のトーンカーブだけを掛ける。これは値の大小を見やすくする
+// 表示上のガンマ補正であり、fieldが非ゼロな空間的範囲そのものは変えない
+// (広がっているように錯覚させるための閾値・演出ではない)。
 export const displayVertexShader = /* glsl */ `
   varying vec2 vUv;
   void main() {
@@ -130,13 +82,14 @@ export const displayVertexShader = /* glsl */ `
 
 export const displayFragmentShader = /* glsl */ `
   varying vec2 vUv;
-  uniform sampler2D uDyeTexture;
+  uniform sampler2D uFieldTexture;
   uniform vec3 uBgColor;
-  uniform vec3 uInkColor;
+  uniform vec3 uFgColor;
 
   void main() {
-    float dye = texture2D( uDyeTexture, vUv ).r;
-    vec3 color = mix( uBgColor, uInkColor, clamp( dye, 0.0, 1.0 ) );
+    float r = clamp( texture2D( uFieldTexture, vUv ).r, 0.0, 1.0 );
+    float visible = sqrt( r );
+    vec3 color = mix( uBgColor, uFgColor, visible );
     gl_FragColor = vec4( color, 1.0 );
   }
 `;
