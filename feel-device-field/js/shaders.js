@@ -22,10 +22,28 @@ export const dyeComputeShader = /* glsl */ `
   uniform float uRadius;
   uniform float uStrength;
   uniform float uDissipation;
+  uniform float uTime;
+  uniform float uDt;
+  uniform float uDriftStrength;
+
+  // PR-C.1: 乱数を使わない決定的な2D流れ。x/yで周波数・位相をずらし、
+  // 中心からの距離(atan2等)に依存させないことで、単一の渦や中心への
+  // 吸い込みに見えないようにする。空間的に粗く、時間変化も遅い。
+  vec2 driftField( vec2 uv, float t ) {
+    float dx = sin( uv.y * 6.283185 * 1.3 + t * 0.07 )
+             + 0.5 * sin( uv.x * 6.283185 * 0.8 - t * 0.05 );
+    float dy = cos( uv.x * 6.283185 * 1.1 - t * 0.06 )
+             + 0.5 * cos( uv.y * 6.283185 * 1.6 + t * 0.04 );
+    return vec2( dx, dy );
+  }
 
   void main() {
     vec2 uv = gl_FragCoord.xy / resolution.xy;
-    float dye = texture2D( textureDye, uv ).r;
+
+    // PR-C.1: 前フレームdyeを読むサンプリング位置だけを、上記の流れでbacktrace
+    // する（dissipation/splatより前。dissipation→splatという既存の順序は変えない）。
+    vec2 driftOffset = driftField( uv, uTime ) * uDriftStrength * uDt;
+    float dye = texture2D( textureDye, uv - driftOffset ).r;
 
     dye *= uDissipation;
 
