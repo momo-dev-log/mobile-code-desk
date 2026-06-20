@@ -27,6 +27,15 @@ export const dyeComputeShader = /* glsl */ `
   uniform float uDriftStrength;
   uniform float uSoftenStrength;
 
+  // PR-seq: 速いstrokeだけ、pointerup後に始点→終点の順で少し遅れて解放する補助。
+  // uReleaseEpoch=0は「解放中のstrokeなし」を意味する（B channelは1始まりのため衝突しない）。
+  uniform float uReleaseEpoch;
+  uniform float uReleaseFront;
+  uniform float uReleaseAssist;
+  uniform float uHoldDissipationStrong;
+  uniform float uStrokeEpoch;
+  uniform float uStrokeDistance;
+
   // PR-C.1: 乱数を使わない決定的な2D流れ。x/yで周波数・位相をずらし、
   // 中心からの距離(atan2等)に依存させないことで、単一の渦や中心への
   // 吸い込みに見えないようにする。空間的に粗く、時間変化も遅い。
@@ -53,7 +62,9 @@ export const dyeComputeShader = /* glsl */ `
     // 読み、その平均へごく少量だけ寄せる（diffusion / edge relaxation）。
     // テクスチャはClampToEdgeWrapping前提のため、境界では折り返しが起きず、
     // 方向性のある流れも生まれない。
-    float center = texture2D( textureDye, sampleUv ).r;
+    // PR-seq: G/Bはstrokeのorder/epoch記録用のため、ここでは近傍mixの対象にしない
+    // （Rだけsoftenする）。
+    vec4 centerColor = texture2D( textureDye, sampleUv );
     float left   = texture2D( textureDye, sampleUv - vec2( texel.x, 0.0 ) ).r;
     float right  = texture2D( textureDye, sampleUv + vec2( texel.x, 0.0 ) ).r;
     float up     = texture2D( textureDye, sampleUv + vec2( 0.0, texel.y ) ).r;
@@ -64,18 +75,40 @@ export const dyeComputeShader = /* glsl */ `
     // 120Hz等でも実時間あたりの混ざり量がほぼ変わらないようにする
     // （PR-B.1のlag追従と同じdt補正の考え方）。
     float softenFactor = 1.0 - pow( 1.0 - uSoftenStrength, uDt * 60.0 );
-    float dye = mix( center, neighborAvg, softenFactor );
+    float dye = mix( centerColor.r, neighborAvg, softenFactor );
 
-    dye *= uDissipation;
+    // PR-seq: 直近1本のstrokeだけ、pointerup後にrelease front(uReleaseFront)が
+    // 始点(distance=0)→終点へ進む間、front未到達部分(strokeDistance > uReleaseFront)
+    // だけ強めに保持する。uReleaseAssist=0のときはuDissipationと完全に同じ値になり、
+    // 遅いstrokeの挙動は今までどおりになる。
+    float strokeEpochAtTexel = centerColor.b;
+    float strokeDistanceAtTexel = centerColor.g;
+    bool isReleaseTarget = ( uReleaseEpoch > 0.5 ) && ( abs( strokeEpochAtTexel - uReleaseEpoch ) < 0.5 );
+    bool notYetReleased = strokeDistanceAtTexel > uReleaseFront;
+    float dissipationFactor = ( isReleaseTarget && notYetReleased )
+      ? mix( uDissipation, uHoldDissipationStrong, uReleaseAssist )
+      : uDissipation;
+
+    dye *= dissipationFactor;
+
+    // G/Bはdissipation/softenの影響を受けず、splat範囲外では前フレームの値をそのまま保持する。
+    float outG = centerColor.g;
+    float outB = centerColor.b;
 
     if ( uPointerActive > 0.5 ) {
       float d = distance( uv, uPointer );
       float falloff = exp( -( d * d ) / ( uRadius * uRadius ) );
       dye += uStrength * falloff;
+
+      // splat範囲内(falloffが十分大きいtexel)だけ、現在のstrokeのepoch/距離を記録する。
+      if ( falloff > 0.5 ) {
+        outG = uStrokeDistance;
+        outB = uStrokeEpoch;
+      }
     }
 
     dye = clamp( dye, 0.0, 1.0 );
-    gl_FragColor = vec4( dye, 0.0, 0.0, 1.0 );
+    gl_FragColor = vec4( dye, outG, outB, 1.0 );
   }
 `;
 
