@@ -43,9 +43,10 @@ const LAG_PARAMS = {
   minMoveUv: 0.0015, // lagPosが前回splat位置からこの距離(uv空間)以上動いた時だけ新規splatを入れる
 };
 
-// PR-C.1: 微弱なノイズ流れ（drift）用の最低限の数値。美しさはまだ調整しない。
+// PR-C.1a: 見た目として成立するか確認するため、drift強度のみ調整。
+// driftFieldの形/空間スケール/時間変化量は変更しない。
 const DRIFT_PARAMS = {
-  strength: 0.008, // UV/秒。dyeのサンプリング位置をdissipation/splatより前にずらす強さ
+  strength: 0.04, // UV/秒。dyeのサンプリング位置をdissipation/splatより前にずらす強さ
 };
 
 const canvas = document.getElementById('gl');
