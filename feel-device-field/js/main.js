@@ -43,10 +43,16 @@ const LAG_PARAMS = {
   minMoveUv: 0.0015, // lagPosが前回splat位置からこの距離(uv空間)以上動いた時だけ新規splatを入れる
 };
 
-// PR-C.1a: 見た目として成立するか確認するため、drift強度のみ調整。
-// driftFieldの形/空間スケール/時間変化量は変更しない。
+// PR-D.1: C.1のdriftはOFFにする。driftField自体は削除せず、
+// uDriftStrength=0で無効化するだけにとどめる（uDt倍されるためdriftOffsetは常にゼロになる）。
 const DRIFT_PARAMS = {
-  strength: 0.04, // UV/秒。dyeのサンプリング位置をdissipation/splatより前にずらす強さ
+  strength: 0,
+};
+
+// PR-D.1: diffusion / edge relaxation用の最低限の数値。
+// 中心と上下左右4近傍の平均を、この係数でごく少量だけmixする。60fps基準。
+const SOFTEN_PARAMS = {
+  strength: 0.03,
 };
 
 const canvas = document.getElementById('gl');
@@ -91,6 +97,7 @@ dyeVariable.material.uniforms.uDissipation = { value: PARAMS.dissipation };
 dyeVariable.material.uniforms.uTime = { value: 0 };
 dyeVariable.material.uniforms.uDt = { value: 0 };
 dyeVariable.material.uniforms.uDriftStrength = { value: DRIFT_PARAMS.strength };
+dyeVariable.material.uniforms.uSoftenStrength = { value: SOFTEN_PARAMS.strength };
 log('dye variable 作成OK. filter=NEAREST');
 
 const initError = gpuCompute.init();
@@ -123,7 +130,7 @@ log('[7] linear filter usable?', linearUsable, '/ USE_LINEAR =', USE_LINEAR);
 // Erudaを開かずに反映状況を確認できるよう、画面左下のHUDに状態を出す。
 const hud = document.getElementById('hud');
 hud.textContent =
-  `${BUILD} | ${renderer.capabilities.isWebGL2 ? 'WebGL2' : 'WebGL1'} | linear:${(USE_LINEAR && linearUsable) ? 'ON' : 'OFF'} | lag:${LAG_PARAMS.k} | drift:${DRIFT_PARAMS.strength}`;
+  `${BUILD} | ${renderer.capabilities.isWebGL2 ? 'WebGL2' : 'WebGL1'} | linear:${(USE_LINEAR && linearUsable) ? 'ON' : 'OFF'} | lag:${LAG_PARAMS.k} | drift:OFF | soften:${SOFTEN_PARAMS.strength}`;
 
 // ── 表示用シーン: フルスクリーン1枚のPlaneにdyeをそのまま映す ──
 const scene = new THREE.Scene();

@@ -25,10 +25,12 @@ export const dyeComputeShader = /* glsl */ `
   uniform float uTime;
   uniform float uDt;
   uniform float uDriftStrength;
+  uniform float uSoftenStrength;
 
   // PR-C.1: 乱数を使わない決定的な2D流れ。x/yで周波数・位相をずらし、
   // 中心からの距離(atan2等)に依存させないことで、単一の渦や中心への
   // 吸い込みに見えないようにする。空間的に粗く、時間変化も遅い。
+  // PR-D.1ではuDriftStrength=0で無効化するが、形自体は削除しない。
   vec2 driftField( vec2 uv, float t ) {
     float dx = sin( uv.y * 6.283185 * 1.3 + t * 0.07 )
              + 0.5 * sin( uv.x * 6.283185 * 0.8 - t * 0.05 );
@@ -39,11 +41,30 @@ export const dyeComputeShader = /* glsl */ `
 
   void main() {
     vec2 uv = gl_FragCoord.xy / resolution.xy;
+    vec2 texel = 1.0 / resolution.xy;
 
     // PR-C.1: 前フレームdyeを読むサンプリング位置だけを、上記の流れでbacktrace
     // する（dissipation/splatより前。dissipation→splatという既存の順序は変えない）。
+    // uDriftStrength=0のときはdriftOffsetが常にゼロになり、実質無効化される。
     vec2 driftOffset = driftField( uv, uTime ) * uDriftStrength * uDt;
-    float dye = texture2D( textureDye, uv - driftOffset ).r;
+    vec2 sampleUv = uv - driftOffset;
+
+    // PR-D.1: 位置はほぼ変えず、輪郭だけを静かにほどく。中心と上下左右4近傍を
+    // 読み、その平均へごく少量だけ寄せる（diffusion / edge relaxation）。
+    // テクスチャはClampToEdgeWrapping前提のため、境界では折り返しが起きず、
+    // 方向性のある流れも生まれない。
+    float center = texture2D( textureDye, sampleUv ).r;
+    float left   = texture2D( textureDye, sampleUv - vec2( texel.x, 0.0 ) ).r;
+    float right  = texture2D( textureDye, sampleUv + vec2( texel.x, 0.0 ) ).r;
+    float up     = texture2D( textureDye, sampleUv + vec2( 0.0, texel.y ) ).r;
+    float down   = texture2D( textureDye, sampleUv - vec2( 0.0, texel.y ) ).r;
+    float neighborAvg = ( left + right + up + down ) * 0.25;
+
+    // uSoftenStrengthは60fps基準の係数。dtベースの係数に変換し、
+    // 120Hz等でも実時間あたりの混ざり量がほぼ変わらないようにする
+    // （PR-B.1のlag追従と同じdt補正の考え方）。
+    float softenFactor = 1.0 - pow( 1.0 - uSoftenStrength, uDt * 60.0 );
+    float dye = mix( center, neighborAvg, softenFactor );
 
     dye *= uDissipation;
 
