@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <!-- スマホ縦持ち前提。ピンチズーム/ダブルタップズームを抑止 -->
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>感触装置 fluid v1(独立ページ)</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;          /* スクロールさせない */
+      background: #1a1a1a;
+      overscroll-behavior: none; /* 引っ張りリロード等を抑止 */
+    }
+    #gl {
+      display: block;
+      width: 100%;
+      height: 100%;
+      touch-action: none; /* 指の操作をすべて描画に使う（スクロール/ズームに奪われない） */
+    }
+    #reset {
+      position: fixed;
+      right: 8px;
+      top: 8px;
+      z-index: 9999;
+      font: 12px monospace;
+      color: #ddd;
+      background: rgba(0, 0, 0, 0.5);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 4px;
+      padding: 6px 10px;
+    }
+  </style>
+  <!-- Erudaはスマホ実機でWebGL黒画面の原因を画面上で確認するためのデバッグ用。
+       検証専用ページなので、確認が終わったら外す想定。 -->
+  <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+  <script>eruda.init();</script>
+  <!-- raw WebGL実装のため three.js / importmap は使わない -->
+</head>
+<body>
+  <canvas id="gl"></canvas>
+  <button id="reset" type="button">Reset</button>
+  <!-- バージョンHUD: Erudaを開かなくても画面上で反映状況(BUILD/solver状態)を
+       確認できるようにする。右下はResetボタン、右上もResetと被るため左下に置く。 -->
+  <div id="hud" style="position:fixed;left:8px;bottom:8px;z-index:9999;
+    font:12px monospace;color:#aaa;background:rgba(0,0,0,0.4);
+    padding:2px 6px;border-radius:4px;pointer-events:none;"></div>
+  <!-- スマホ側でjsが古いままキャッシュされる問題への対策。
+       ?v=unbuilt は .github/workflows/deploy-pages.yml がstaging artifact内
+       だけでGITHUB_SHAの短縮値に書き換える置き換え対象。手で書き換えない。 -->
+  <script type="module" src="js/main.js?v=unbuilt"></script>
+</body>
+</html>
