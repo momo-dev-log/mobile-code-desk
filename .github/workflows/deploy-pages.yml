@@ -5,10 +5,10 @@ name: Deploy GitHub Pages
 # feel-device-field/、notebooklm-packer/、web-disassembly-pack/ 等）を
 # そのままstaging出力ディレクトリへコピーし、artifactとして配信する。
 #
-# feel-device-field/ と feel-device-field-scalar-gate/ のHUD用BUILD値と
-# キャッシュ回避クエリ(?v=)だけ、staging側のコピーの中だけで実際の
-# GITHUB_SHAの短縮値に書き換える。リポジトリのソースファイル自体
-# （main.js, index.html）は書き換えない。
+# feel-device-field/ と feel-device-field-scalar-gate/ と
+# feel-device-field-fluid-v1/ のHUD用BUILD値とキャッシュ回避クエリ(?v=)だけ、
+# staging側のコピーの中だけで実際のGITHUB_SHAの短縮値に書き換える。
+# リポジトリのソースファイル自体（main.js, index.html）は書き換えない。
 
 on:
   push:
@@ -56,6 +56,15 @@ jobs:
           SHORT_SHA="${GITHUB_SHA::7}"
           MAIN_JS="$STAGING_DIR/feel-device-field-scalar-gate/js/main.js"
           INDEX_HTML="$STAGING_DIR/feel-device-field-scalar-gate/index.html"
+          sed -i "s/const BUILD = 'build:unbuilt';/const BUILD = 'build:${SHORT_SHA}';/" "$MAIN_JS"
+          sed -i "s/shaders\.js?v=unbuilt/shaders.js?v=${SHORT_SHA}/" "$MAIN_JS"
+          sed -i "s/main\.js?v=unbuilt/main.js?v=${SHORT_SHA}/" "$INDEX_HTML"
+
+      - name: Inject build SHA into feel-device-field-fluid-v1 HUD (staging artifact only)
+        run: |
+          SHORT_SHA="${GITHUB_SHA::7}"
+          MAIN_JS="$STAGING_DIR/feel-device-field-fluid-v1/js/main.js"
+          INDEX_HTML="$STAGING_DIR/feel-device-field-fluid-v1/index.html"
           sed -i "s/const BUILD = 'build:unbuilt';/const BUILD = 'build:${SHORT_SHA}';/" "$MAIN_JS"
           sed -i "s/shaders\.js?v=unbuilt/shaders.js?v=${SHORT_SHA}/" "$MAIN_JS"
           sed -i "s/main\.js?v=unbuilt/main.js?v=${SHORT_SHA}/" "$INDEX_HTML"
