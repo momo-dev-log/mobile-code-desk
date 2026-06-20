@@ -37,6 +37,12 @@ const PARAMS = {
   dissipation: 0.985,   // 毎フレームdyeに掛ける減衰率（小さいほど早く薄まる）
 };
 
+// PR-B.1: 遅延splat（lag injection）用の最低限の数値。美しさはまだ調整しない。
+const LAG_PARAMS = {
+  k: 0.08,          // 60fps基準の追従量（1フレームで残り距離を詰める割合）
+  minMoveUv: 0.0015, // lagPosが前回splat位置からこの距離(uv空間)以上動いた時だけ新規splatを入れる
+};
+
 const canvas = document.getElementById('gl');
 
 let renderer;
@@ -108,7 +114,7 @@ log('[7] linear filter usable?', linearUsable, '/ USE_LINEAR =', USE_LINEAR);
 // Erudaを開かずに反映状況を確認できるよう、画面左下のHUDに状態を出す。
 const hud = document.getElementById('hud');
 hud.textContent =
-  `${BUILD} | ${renderer.capabilities.isWebGL2 ? 'WebGL2' : 'WebGL1'} | linear:${(USE_LINEAR && linearUsable) ? 'ON' : 'OFF'}`;
+  `${BUILD} | ${renderer.capabilities.isWebGL2 ? 'WebGL2' : 'WebGL1'} | linear:${(USE_LINEAR && linearUsable) ? 'ON' : 'OFF'} | lag:${LAG_PARAMS.k}`;
 
 // ── 表示用シーン: フルスクリーン1枚のPlaneにdyeをそのまま映す ──
 const scene = new THREE.Scene();
@@ -125,20 +131,36 @@ const displayMaterial = new THREE.ShaderMaterial({
 scene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), displayMaterial));
 
 // ── pointer / touch 入力 ──
-// 1本指のみ追跡。前回位置との補間はせず、現在位置をそのままsplat中心に使う。
+// PR-B.1: 指の実位置(fingerUv)とは別に、遅れて追従する位置(lagUv)を持つ。
+// splatはfingerUvではなくlagUvに対して入れる。「ついてこない/遅れる/
+// 引きずる」をfield方式で確認するための最小実装。
+// 1本指のみ追跡。
 let activePointerId = null;
+const fingerUv = new THREE.Vector2(0.5, 0.5);
+const lagUv = new THREE.Vector2(0.5, 0.5);
+const lastInjectedUv = new THREE.Vector2(0.5, 0.5);
+let pendingInitialSplat = false; // pointerdown直後の1回だけ、しきい値判定を素通りさせる
+let lastLagTime = null;
 
-function setPointerUv(clientX, clientY) {
-  const uv = dyeVariable.material.uniforms.uPointer.value;
-  uv.x = clientX / window.innerWidth;
-  uv.y = 1 - clientY / window.innerHeight; // gl_FragCoord/vUvはy=0が下のため反転
+function clientToUv(clientX, clientY) {
+  return new THREE.Vector2(
+    clientX / window.innerWidth,
+    1 - clientY / window.innerHeight, // gl_FragCoord/vUvはy=0が下のため反転
+  );
+}
+
+function setSplatUv(uv) {
+  const target = dyeVariable.material.uniforms.uPointer.value;
+  target.x = uv.x;
+  target.y = uv.y;
 }
 
 canvas.addEventListener('pointerdown', (e) => {
   if (activePointerId !== null) return;
   activePointerId = e.pointerId;
-  setPointerUv(e.clientX, e.clientY);
-  dyeVariable.material.uniforms.uPointerActive.value = 1;
+  fingerUv.copy(clientToUv(e.clientX, e.clientY));
+  pendingInitialSplat = true; // fingerUv/lagUvの初期化とその場への1回splatはRAF側で行う
+  lastLagTime = null;
   if (canvas.setPointerCapture) {
     try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
   }
@@ -148,24 +170,66 @@ canvas.addEventListener('pointerdown', (e) => {
 
 canvas.addEventListener('pointermove', (e) => {
   if (e.pointerId !== activePointerId) return;
-  setPointerUv(e.clientX, e.clientY);
+  // fingerUvのみ更新する。ここでは直接splatしない（lagUvがRAF側で追従する）。
+  fingerUv.copy(clientToUv(e.clientX, e.clientY));
   e.preventDefault();
 }, { passive: false });
 
 function release(e) {
   if (e.pointerId !== activePointerId) return;
   activePointerId = null;
-  dyeVariable.material.uniforms.uPointerActive.value = 0;
+  pendingInitialSplat = false;
+  dyeVariable.material.uniforms.uPointerActive.value = 0; // 注入を即停止する
   log('pointerup/cancel', e.pointerType);
   e.preventDefault();
 }
 canvas.addEventListener('pointerup', release, { passive: false });
 canvas.addEventListener('pointercancel', release, { passive: false });
 
+// 指を押している間だけ呼ばれる。lagUvをfingerUvへフレームレート非依存で
+// 追従させ、前回splat位置から十分動いた時だけ新規splatを入れる。
+function updateLagAndSplat(time) {
+  if (activePointerId === null) {
+    dyeVariable.material.uniforms.uPointerActive.value = 0;
+    return;
+  }
+
+  if (pendingInitialSplat) {
+    lagUv.copy(fingerUv);
+    lastInjectedUv.copy(fingerUv);
+    setSplatUv(fingerUv);
+    dyeVariable.material.uniforms.uPointerActive.value = 1;
+    pendingInitialSplat = false;
+    lastLagTime = time;
+    return;
+  }
+
+  const dt = lastLagTime !== null ? (time - lastLagTime) / 1000 : 0;
+  lastLagTime = time;
+
+  if (dt > 0) {
+    // k=0.08は60fps基準。dtベースの減衰係数に変換し、120Hz等でも
+    // 実時間あたりの追従速度がほぼ変わらないようにする。
+    const factor = 1 - Math.pow(1 - LAG_PARAMS.k, dt * 60);
+    lagUv.x += (fingerUv.x - lagUv.x) * factor;
+    lagUv.y += (fingerUv.y - lagUv.y) * factor;
+  }
+
+  if (lagUv.distanceTo(lastInjectedUv) > LAG_PARAMS.minMoveUv) {
+    setSplatUv(lagUv);
+    lastInjectedUv.copy(lagUv);
+    dyeVariable.material.uniforms.uPointerActive.value = 1;
+  } else {
+    dyeVariable.material.uniforms.uPointerActive.value = 0;
+  }
+}
+
 // ── メインループ ──
 let frameCount = 0;
-function animate() {
+function animate(time) {
   requestAnimationFrame(animate);
+
+  updateLagAndSplat(time);
 
   gpuCompute.compute();
   displayMaterial.uniforms.uDyeTexture.value = gpuCompute.getCurrentRenderTarget(dyeVariable).texture;
