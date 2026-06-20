@@ -63,6 +63,19 @@ const SOFTEN_PARAMS = {
   strength: 0.03,
 };
 
+// PR-F.1: 速いstrokeだけ、pointerup後に始点→終点の順で少し遅れて解放するための
+// 最低限の数値。描画中の挙動(lag/soften/drift/通常dissipation)には一切関与しない。
+const RELEASE_PARAMS = {
+  speedLow: 0.35,            // 短辺比/秒。これ以下のstrokeはassist=0(無介入)
+  speedHigh: 1.10,           // 短辺比/秒。これ以上でassist=assistMaxへ漸近
+  assistMax: 0.60,           // assistの最大値。1.0相当(明確なワイプ)は使わない
+  minReleaseDistance: 0.04,  // 短辺比。stroke全体の距離がこれ未満ならtap等とみなしassist=0
+  durationMs: 600,           // pointerup後、release frontがstroke全体を進む実時間
+  holdDissipationStrong: 0.999, // 60fps基準。front未到達部分にuReleaseAssistでmixする強い保持値
+  meaningfulMoveFrac: 0.01,  // 短辺比。速度計測でジッターとして無視する移動量(onsetとは独立)
+  stallGapMs: 120,           // これを超える移動間隔は一時停止とみなし、速度計測の経過時間に加算しない
+};
+
 const canvas = document.getElementById('gl');
 
 let renderer;
@@ -106,6 +119,12 @@ dyeVariable.material.uniforms.uTime = { value: 0 };
 dyeVariable.material.uniforms.uDt = { value: 0 };
 dyeVariable.material.uniforms.uDriftStrength = { value: DRIFT_PARAMS.strength };
 dyeVariable.material.uniforms.uSoftenStrength = { value: SOFTEN_PARAMS.strength };
+dyeVariable.material.uniforms.uReleaseEpoch = { value: 0 };
+dyeVariable.material.uniforms.uReleaseFront = { value: 0 };
+dyeVariable.material.uniforms.uReleaseAssist = { value: 0 };
+dyeVariable.material.uniforms.uHoldDissipationStrong = { value: RELEASE_PARAMS.holdDissipationStrong };
+dyeVariable.material.uniforms.uStrokeEpoch = { value: 0 };
+dyeVariable.material.uniforms.uStrokeDistance = { value: 0 };
 log('dye variable 作成OK. filter=NEAREST');
 
 const initError = gpuCompute.init();
@@ -138,7 +157,7 @@ log('[7] linear filter usable?', linearUsable, '/ USE_LINEAR =', USE_LINEAR);
 // Erudaを開かずに反映状況を確認できるよう、画面左下のHUDに状態を出す。
 const hud = document.getElementById('hud');
 hud.textContent =
-  `${BUILD} | ${renderer.capabilities.isWebGL2 ? 'WebGL2' : 'WebGL1'} | linear:${(USE_LINEAR && linearUsable) ? 'ON' : 'OFF'} | lag:${LAG_ONSET_PARAMS.kOnset}→${LAG_PARAMS.k} | drift:OFF | soften:${SOFTEN_PARAMS.strength}`;
+  `${BUILD} | ${renderer.capabilities.isWebGL2 ? 'WebGL2' : 'WebGL1'} | linear:${(USE_LINEAR && linearUsable) ? 'ON' : 'OFF'} | lag:${LAG_ONSET_PARAMS.kOnset}→${LAG_PARAMS.k} | drift:OFF | soften:${SOFTEN_PARAMS.strength} | seq:${RELEASE_PARAMS.assistMax.toFixed(2)}/${RELEASE_PARAMS.durationMs}ms`;
 
 // ── 表示用シーン: フルスクリーン1枚のPlaneにdyeをそのまま映す ──
 const scene = new THREE.Scene();
@@ -171,6 +190,16 @@ let lastLagTime = null;
 let lastFingerClientPos = null;
 let onsetDistanceFrac = 0;
 let lastMeaningfulMoveTime = null;
+
+// PR-F.1: 速いstrokeだけのpointerup後release補助用の状態。
+// lag/onsetの状態(上記)とは完全に独立に保持し、lag処理には一切関与しない。
+let strokeEpoch = 0; // pointerdownごとに1..1023でwrapしてインクリメント。0は「strokeなし」予約
+let strokeDistanceAccum = 0; // 現strokeのink-trail距離(短辺比)。Gへ記録、release frontの目標値にも使う
+let speedDistanceAccum = 0; // 速度計測用の独立した移動距離(短辺比)
+let speedActiveDurationMs = 0; // 速度計測用の独立した「実際に動いていた時間」(一時停止は除く)
+let lastMeaningfulMoveTimeForSpeed = null;
+let lastFingerClientPosForSpeed = null;
+let activeRelease = null; // { epoch, totalDistance, assist, startTime } | null
 
 function clientToUv(clientX, clientY) {
   return new THREE.Vector2(
@@ -207,6 +236,18 @@ canvas.addEventListener('pointerdown', (e) => {
   lastFingerClientPos = { x: e.clientX, y: e.clientY };
   onsetDistanceFrac = 0;
   lastMeaningfulMoveTime = null;
+
+  // PR-F.1: 新しいstrokeを始めるたびにepoch/distance/速度計測をリセットする。
+  // 進行中の古いreleaseがあれば中断し、未解放部分は通常dissipationへ即座に戻す。
+  strokeEpoch = (strokeEpoch % 1023) + 1;
+  strokeDistanceAccum = 0;
+  speedDistanceAccum = 0;
+  speedActiveDurationMs = 0;
+  lastMeaningfulMoveTimeForSpeed = null;
+  lastFingerClientPosForSpeed = { x: e.clientX, y: e.clientY };
+  activeRelease = null;
+  dyeVariable.material.uniforms.uReleaseEpoch.value = 0;
+
   if (canvas.setPointerCapture) {
     try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
   }
@@ -237,6 +278,25 @@ canvas.addEventListener('pointermove', (e) => {
   }
   lastFingerClientPos = { x: e.clientX, y: e.clientY };
 
+  // PR-F.1: 速度計測用の独立した距離・時間蓄積（onset/lagの状態には触れない）。
+  // 押したまま少し止まっても、その停止時間は経過時間に加算しない(stallGapMs超なら除外)。
+  if (lastFingerClientPosForSpeed !== null && shortSidePx > 0) {
+    const dxPxSpeed = e.clientX - lastFingerClientPosForSpeed.x;
+    const dyPxSpeed = e.clientY - lastFingerClientPosForSpeed.y;
+    const stepFracSpeed = Math.hypot(dxPxSpeed, dyPxSpeed) / shortSidePx;
+    if (stepFracSpeed >= RELEASE_PARAMS.meaningfulMoveFrac) {
+      if (lastMeaningfulMoveTimeForSpeed !== null) {
+        const gapMs = e.timeStamp - lastMeaningfulMoveTimeForSpeed;
+        if (gapMs <= RELEASE_PARAMS.stallGapMs) {
+          speedActiveDurationMs += gapMs;
+        }
+      }
+      speedDistanceAccum += stepFracSpeed;
+      lastMeaningfulMoveTimeForSpeed = e.timeStamp;
+    }
+  }
+  lastFingerClientPosForSpeed = { x: e.clientX, y: e.clientY };
+
   e.preventDefault();
 }, { passive: false });
 
@@ -245,7 +305,24 @@ function release(e) {
   activePointerId = null;
   pendingInitialSplat = false;
   dyeVariable.material.uniforms.uPointerActive.value = 0; // 注入を即停止する
-  log('pointerup/cancel', e.pointerType);
+
+  // PR-F.1: pointerup/cancel時に、直近strokeのassistを一度だけ確定し、
+  // release frontを開始する。tap等(距離不足)や遅いstrokeはassist=0のままになり、
+  // その場合は以後の挙動が通常のdissipationと完全に同じになる。
+  const totalDistance = strokeDistanceAccum;
+  let assist = 0;
+  if (totalDistance >= RELEASE_PARAMS.minReleaseDistance && speedActiveDurationMs > 0) {
+    const avgSpeed = speedDistanceAccum / (speedActiveDurationMs / 1000);
+    assist = smoothstep(RELEASE_PARAMS.speedLow, RELEASE_PARAMS.speedHigh, avgSpeed) * RELEASE_PARAMS.assistMax;
+  }
+  activeRelease = {
+    epoch: strokeEpoch,
+    totalDistance,
+    assist,
+    startTime: e.timeStamp,
+  };
+
+  log('pointerup/cancel', e.pointerType, 'assist=', assist.toFixed(3), 'totalDistance=', totalDistance.toFixed(3));
   e.preventDefault();
 }
 canvas.addEventListener('pointerup', release, { passive: false });
@@ -264,6 +341,9 @@ function updateLagAndSplat(time) {
     lastInjectedUv.copy(fingerUv);
     setSplatUv(fingerUv);
     dyeVariable.material.uniforms.uPointerActive.value = 1;
+    // PR-F.1: stroke開始地点はdistance=0として記録する。
+    dyeVariable.material.uniforms.uStrokeEpoch.value = strokeEpoch;
+    dyeVariable.material.uniforms.uStrokeDistance.value = strokeDistanceAccum;
     pendingInitialSplat = false;
     lastLagTime = time;
     return;
@@ -284,12 +364,44 @@ function updateLagAndSplat(time) {
   }
 
   if (lagUv.distanceTo(lastInjectedUv) > LAG_PARAMS.minMoveUv) {
+    // PR-F.1: 新規splatを入れる直前に、lagUvのink-trail距離(短辺比)を加算し、
+    // そのstrokeのepoch/累積distanceをG/B記録用uniformへ反映する。
+    // lagUv/factor/minMoveUvの判定条件自体には触れない。
+    const shortSidePxForStroke = Math.min(window.innerWidth, window.innerHeight);
+    if (shortSidePxForStroke > 0) {
+      const dxPxStroke = (lagUv.x - lastInjectedUv.x) * window.innerWidth;
+      const dyPxStroke = (lagUv.y - lastInjectedUv.y) * window.innerHeight;
+      strokeDistanceAccum += Math.hypot(dxPxStroke, dyPxStroke) / shortSidePxForStroke;
+    }
     setSplatUv(lagUv);
     lastInjectedUv.copy(lagUv);
     dyeVariable.material.uniforms.uPointerActive.value = 1;
+    dyeVariable.material.uniforms.uStrokeEpoch.value = strokeEpoch;
+    dyeVariable.material.uniforms.uStrokeDistance.value = strokeDistanceAccum;
   } else {
     dyeVariable.material.uniforms.uPointerActive.value = 0;
   }
+}
+
+// PR-F.1: pointerup後、直近strokeのrelease frontをdistance=0から
+// totalDistanceまでdurationMsで線形に進める。指の有無に関わらず毎フレーム呼ぶ。
+function updateRelease(time) {
+  if (activeRelease === null) {
+    dyeVariable.material.uniforms.uReleaseEpoch.value = 0;
+    return;
+  }
+
+  const elapsedMs = time - activeRelease.startTime;
+  if (elapsedMs >= RELEASE_PARAMS.durationMs) {
+    activeRelease = null;
+    dyeVariable.material.uniforms.uReleaseEpoch.value = 0;
+    return;
+  }
+
+  const t = elapsedMs / RELEASE_PARAMS.durationMs;
+  dyeVariable.material.uniforms.uReleaseEpoch.value = activeRelease.epoch;
+  dyeVariable.material.uniforms.uReleaseFront.value = activeRelease.totalDistance * t;
+  dyeVariable.material.uniforms.uReleaseAssist.value = activeRelease.assist;
 }
 
 // ── メインループ ──
@@ -306,6 +418,7 @@ function animate(time) {
   dyeVariable.material.uniforms.uDt.value = driftDt;
 
   updateLagAndSplat(time);
+  updateRelease(time);
 
   gpuCompute.compute();
   displayMaterial.uniforms.uDyeTexture.value = gpuCompute.getCurrentRenderTarget(dyeVariable).texture;
