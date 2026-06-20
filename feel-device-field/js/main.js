@@ -43,6 +43,11 @@ const LAG_PARAMS = {
   minMoveUv: 0.0015, // lagPosが前回splat位置からこの距離(uv空間)以上動いた時だけ新規splatを入れる
 };
 
+// PR-C.1: 微弱なノイズ流れ（drift）用の最低限の数値。美しさはまだ調整しない。
+const DRIFT_PARAMS = {
+  strength: 0.008, // UV/秒。dyeのサンプリング位置をdissipation/splatより前にずらす強さ
+};
+
 const canvas = document.getElementById('gl');
 
 let renderer;
@@ -82,6 +87,9 @@ dyeVariable.material.uniforms.uPointerActive = { value: 0 };
 dyeVariable.material.uniforms.uRadius = { value: PARAMS.splatRadius };
 dyeVariable.material.uniforms.uStrength = { value: PARAMS.splatStrength };
 dyeVariable.material.uniforms.uDissipation = { value: PARAMS.dissipation };
+dyeVariable.material.uniforms.uTime = { value: 0 };
+dyeVariable.material.uniforms.uDt = { value: 0 };
+dyeVariable.material.uniforms.uDriftStrength = { value: DRIFT_PARAMS.strength };
 log('dye variable 作成OK. filter=NEAREST');
 
 const initError = gpuCompute.init();
@@ -114,7 +122,7 @@ log('[7] linear filter usable?', linearUsable, '/ USE_LINEAR =', USE_LINEAR);
 // Erudaを開かずに反映状況を確認できるよう、画面左下のHUDに状態を出す。
 const hud = document.getElementById('hud');
 hud.textContent =
-  `${BUILD} | ${renderer.capabilities.isWebGL2 ? 'WebGL2' : 'WebGL1'} | linear:${(USE_LINEAR && linearUsable) ? 'ON' : 'OFF'} | lag:${LAG_PARAMS.k}`;
+  `${BUILD} | ${renderer.capabilities.isWebGL2 ? 'WebGL2' : 'WebGL1'} | linear:${(USE_LINEAR && linearUsable) ? 'ON' : 'OFF'} | lag:${LAG_PARAMS.k} | drift:${DRIFT_PARAMS.strength}`;
 
 // ── 表示用シーン: フルスクリーン1枚のPlaneにdyeをそのまま映す ──
 const scene = new THREE.Scene();
@@ -226,8 +234,16 @@ function updateLagAndSplat(time) {
 
 // ── メインループ ──
 let frameCount = 0;
+// PR-C.1: drift用のuTime/uDt。lastLagTimeとは別に持つ（lastLagTimeは指を
+// 押している間だけ進むが、driftは指の有無に関わらず毎フレーム進める）。
+let lastFrameTime = null;
 function animate(time) {
   requestAnimationFrame(animate);
+
+  const driftDt = lastFrameTime !== null ? (time - lastFrameTime) / 1000 : 0;
+  lastFrameTime = time;
+  dyeVariable.material.uniforms.uTime.value = time / 1000;
+  dyeVariable.material.uniforms.uDt.value = driftDt;
 
   updateLagAndSplat(time);
 
