@@ -17,15 +17,18 @@ import {
   dyeComputeShader,
   displayVertexShader,
   displayFragmentShader,
-} from './shaders.js?v=2';
+} from './shaders.js?v=unbuilt';
 
 const TAG = '[feel-device-field]';
 const log = (...args) => console.log(TAG, ...args);
 const logError = (...args) => console.error(TAG, ...args);
 
-// コードを変えるたびに、このBUILDとindex.html側の?v=Nを必ずセットで上げる。
-// 画面のHUDに出る番号と読み込んでいる番号が一致して初めて「反映された」と確信できる。
-const BUILD = 'v4';
+// この 'build:unbuilt' は、Pagesデプロイ用ワークフロー（.github/workflows/
+// deploy-pages.yml）がstaging artifact内だけで実際のGITHUB_SHA短縮値に
+// 書き換える置き換え対象の文字列そのもの。ソース上の値を手で書き換えない。
+// この文字列のままHUDに出ている場合、ビルド未注入（mainブランチ直配信や
+// ローカル確認など）であることを意味する。
+const BUILD = 'build:unbuilt';
 
 // 校正用の最低限の数値。美しさはまだ調整しない。
 const PARAMS = {

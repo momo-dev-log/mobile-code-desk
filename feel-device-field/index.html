@@ -46,7 +46,8 @@
     font:12px monospace;color:#888;background:rgba(255,255,255,0.6);
     padding:2px 6px;border-radius:4px;pointer-events:none;"></div>
   <!-- スマホ側でjsが古いままキャッシュされる問題への対策。
-       校正のたびにこのクエリ値を上げて、確実に最新コードを読み込ませる。 -->
-  <script type="module" src="js/main.js?v=4"></script>
+       ?v=unbuilt は .github/workflows/deploy-pages.yml がstaging artifact内
+       だけでGITHUB_SHAの短縮値に書き換える置き換え対象。手で書き換えない。 -->
+  <script type="module" src="js/main.js?v=unbuilt"></script>
 </body>
 </html>
