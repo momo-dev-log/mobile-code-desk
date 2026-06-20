@@ -76,6 +76,16 @@ const RELEASE_PARAMS = {
   stallGapMs: 120,           // これを超える移動間隔は一時停止とみなし、速度計測の経過時間に加算しない
 };
 
+// PR-F.2: pointerup直後、lagUvが最後のfingerUvへ届ききらない差(tail)だけを
+// 少しだけ進める「settle」用の最低限の数値。新しい入力ではなく、pointerup
+// 時点で既に取得済みの位置情報だけを使う。lagUvはfingerUvへ完全には到達させない。
+const TAIL_PARAMS = {
+  maxAdvanceFrac: 0.75,   // pointerup時の残り差分に対する最大進行割合
+  maxDistanceFrac: 0.08,  // 短辺比。settle自体の移動距離の上限(差分が大きい速いstrokeで効く)
+  durationMs: 180,        // settleの実時間
+  minTailGapFrac: 0.012,  // 短辺比。差分がこれ未満ならsettleせず従来どおり即releaseする
+};
+
 const canvas = document.getElementById('gl');
 
 let renderer;
@@ -157,7 +167,7 @@ log('[7] linear filter usable?', linearUsable, '/ USE_LINEAR =', USE_LINEAR);
 // Erudaを開かずに反映状況を確認できるよう、画面左下のHUDに状態を出す。
 const hud = document.getElementById('hud');
 hud.textContent =
-  `${BUILD} | ${renderer.capabilities.isWebGL2 ? 'WebGL2' : 'WebGL1'} | linear:${(USE_LINEAR && linearUsable) ? 'ON' : 'OFF'} | lag:${LAG_ONSET_PARAMS.kOnset}→${LAG_PARAMS.k} | drift:OFF | soften:${SOFTEN_PARAMS.strength} | seq:${RELEASE_PARAMS.assistMax.toFixed(2)}/${RELEASE_PARAMS.durationMs}ms`;
+  `${BUILD} | ${renderer.capabilities.isWebGL2 ? 'WebGL2' : 'WebGL1'} | linear:${(USE_LINEAR && linearUsable) ? 'ON' : 'OFF'} | lag:${LAG_ONSET_PARAMS.kOnset}→${LAG_PARAMS.k} | drift:OFF | soften:${SOFTEN_PARAMS.strength} | seq:${RELEASE_PARAMS.assistMax.toFixed(2)}/${RELEASE_PARAMS.durationMs}ms | tail:${TAIL_PARAMS.maxAdvanceFrac.toFixed(2)}/${TAIL_PARAMS.durationMs}ms`;
 
 // ── 表示用シーン: フルスクリーン1枚のPlaneにdyeをそのまま映す ──
 const scene = new THREE.Scene();
@@ -201,6 +211,10 @@ let lastMeaningfulMoveTimeForSpeed = null;
 let lastFingerClientPosForSpeed = null;
 let activeRelease = null; // { epoch, totalDistance, assist, startTime } | null
 
+// PR-F.2: pointerup直後のtail settle用の状態。新しいstroke/距離は増やさず、
+// 既に確定したlagUv→targetUvの間だけをdurationMsで進める。
+let activeSettle = null; // { epoch, startUv, targetUv, startTime, pendingAssist } | null
+
 function clientToUv(clientX, clientY) {
   return new THREE.Vector2(
     clientX / window.innerWidth,
@@ -217,6 +231,16 @@ function setSplatUv(uv) {
 function smoothstep(edge0, edge1, x) {
   const t = Math.min(Math.max((x - edge0) / (edge1 - edge0), 0), 1);
   return t * t * (3 - 2 * t);
+}
+
+// uv座標2点間の距離を、画面短辺比(px基準)へ変換する。lag/stroke距離計測と
+// 単位を揃えるための共通ヘルパー（PR-F.1のstroke距離加算と同じ変換式）。
+function uvDistanceToShortSideFrac(a, b) {
+  const shortSidePx = Math.min(window.innerWidth, window.innerHeight);
+  if (shortSidePx <= 0) return 0;
+  const dxPx = (a.x - b.x) * window.innerWidth;
+  const dyPx = (a.y - b.y) * window.innerHeight;
+  return Math.hypot(dxPx, dyPx) / shortSidePx;
 }
 
 // 直近の動き始めからの累積移動距離(onsetDistanceFrac)に応じて、
@@ -246,6 +270,7 @@ canvas.addEventListener('pointerdown', (e) => {
   lastMeaningfulMoveTimeForSpeed = null;
   lastFingerClientPosForSpeed = { x: e.clientX, y: e.clientY };
   activeRelease = null;
+  activeSettle = null; // PR-F.2: 進行中のtail settleも新strokeで即中断する
   dyeVariable.material.uniforms.uReleaseEpoch.value = 0;
 
   if (canvas.setPointerCapture) {
@@ -300,42 +325,83 @@ canvas.addEventListener('pointermove', (e) => {
   e.preventDefault();
 }, { passive: false });
 
+// PR-F.1: 直近strokeのepoch/totalDistance/assistでrelease frontを開始する。
+// settleを経由しない場合(F.1までと同じ)も、settle完了後(F.2)もここを通る。
+function startRelease(epoch, totalDistance, assist, startTime) {
+  activeRelease = { epoch, totalDistance, assist, startTime };
+}
+
 function release(e) {
   if (e.pointerId !== activePointerId) return;
   activePointerId = null;
   pendingInitialSplat = false;
   dyeVariable.material.uniforms.uPointerActive.value = 0; // 注入を即停止する
 
-  // PR-F.1: pointerup/cancel時に、直近strokeのassistを一度だけ確定し、
-  // release frontを開始する。tap等(距離不足)や遅いstrokeはassist=0のままになり、
-  // その場合は以後の挙動が通常のdissipationと完全に同じになる。
+  // PR-F.1: pointerup/cancel時に、直近strokeのassistを一度だけ確定する。
+  // tap等(距離不足)や遅いstrokeはassist=0のままになり、その場合は以後の挙動が
+  // 通常のdissipationと完全に同じになる。assistはtailの有無に関わらず変わらない
+  // （速度判定はpointerup時点までの実移動だけに基づく。tail自体は速度計測に含めない）。
+  const epoch = strokeEpoch;
   const totalDistance = strokeDistanceAccum;
   let assist = 0;
   if (totalDistance >= RELEASE_PARAMS.minReleaseDistance && speedActiveDurationMs > 0) {
     const avgSpeed = speedDistanceAccum / (speedActiveDurationMs / 1000);
     assist = smoothstep(RELEASE_PARAMS.speedLow, RELEASE_PARAMS.speedHigh, avgSpeed) * RELEASE_PARAMS.assistMax;
   }
-  activeRelease = {
-    epoch: strokeEpoch,
-    totalDistance,
-    assist,
-    startTime: e.timeStamp,
-  };
 
-  log('pointerup/cancel', e.pointerType, 'assist=', assist.toFixed(3), 'totalDistance=', totalDistance.toFixed(3));
+  // PR-F.2: 新しい入力ではなく、pointerup時点で既に取得済みのlagUv/fingerUvの
+  // 差(届ききっていない分)だけをtailとして使う。差が小さければ(tap・微小揺れ等)
+  // settleせず、従来どおりこの場でreleaseを開始する。
+  const gapFrac = uvDistanceToShortSideFrac(fingerUv, lagUv);
+  if (gapFrac >= TAIL_PARAMS.minTailGapFrac) {
+    const advanceRatio = Math.min(
+      TAIL_PARAMS.maxAdvanceFrac,
+      TAIL_PARAMS.maxDistanceFrac / gapFrac,
+    );
+    activeSettle = {
+      epoch,
+      startUv: lagUv.clone(),
+      targetUv: new THREE.Vector2(
+        lagUv.x + (fingerUv.x - lagUv.x) * advanceRatio,
+        lagUv.y + (fingerUv.y - lagUv.y) * advanceRatio,
+      ),
+      startTime: e.timeStamp,
+      pendingAssist: assist,
+    };
+    log('pointerup/cancel -> settle', e.pointerType, 'gapFrac=', gapFrac.toFixed(4), 'advanceRatio=', advanceRatio.toFixed(3));
+  } else {
+    activeSettle = null;
+    startRelease(epoch, totalDistance, assist, e.timeStamp);
+    log('pointerup/cancel -> release', e.pointerType, 'assist=', assist.toFixed(3), 'totalDistance=', totalDistance.toFixed(3));
+  }
+
   e.preventDefault();
 }
 canvas.addEventListener('pointerup', release, { passive: false });
 canvas.addEventListener('pointercancel', release, { passive: false });
 
+// lagUvが前回splat位置(lastInjectedUv)からminMoveUv以上動いていれば、その
+// 位置へ新規splatを入れ、strokeDistanceAccum/G/Bを更新する。動いていなければ
+// 注入を止める。updateLagAndSplat(ドラッグ中)とupdateSettle(PR-F.2のtail)の
+// 両方から同じ間隔ルールで呼ばれる。speedDistanceAccum/speedActiveDurationMs
+// (sequence assistの速度判定)には一切触れない。
+function tryInjectSplat(epoch) {
+  if (lagUv.distanceTo(lastInjectedUv) > LAG_PARAMS.minMoveUv) {
+    strokeDistanceAccum += uvDistanceToShortSideFrac(lagUv, lastInjectedUv);
+    setSplatUv(lagUv);
+    lastInjectedUv.copy(lagUv);
+    dyeVariable.material.uniforms.uPointerActive.value = 1;
+    dyeVariable.material.uniforms.uStrokeEpoch.value = epoch;
+    dyeVariable.material.uniforms.uStrokeDistance.value = strokeDistanceAccum;
+    return true;
+  }
+  dyeVariable.material.uniforms.uPointerActive.value = 0;
+  return false;
+}
+
 // 指を押している間だけ呼ばれる。lagUvをfingerUvへフレームレート非依存で
 // 追従させ、前回splat位置から十分動いた時だけ新規splatを入れる。
 function updateLagAndSplat(time) {
-  if (activePointerId === null) {
-    dyeVariable.material.uniforms.uPointerActive.value = 0;
-    return;
-  }
-
   if (pendingInitialSplat) {
     lagUv.copy(fingerUv);
     lastInjectedUv.copy(fingerUv);
@@ -363,23 +429,32 @@ function updateLagAndSplat(time) {
     lagUv.y += (fingerUv.y - lagUv.y) * factor;
   }
 
-  if (lagUv.distanceTo(lastInjectedUv) > LAG_PARAMS.minMoveUv) {
-    // PR-F.1: 新規splatを入れる直前に、lagUvのink-trail距離(短辺比)を加算し、
-    // そのstrokeのepoch/累積distanceをG/B記録用uniformへ反映する。
-    // lagUv/factor/minMoveUvの判定条件自体には触れない。
-    const shortSidePxForStroke = Math.min(window.innerWidth, window.innerHeight);
-    if (shortSidePxForStroke > 0) {
-      const dxPxStroke = (lagUv.x - lastInjectedUv.x) * window.innerWidth;
-      const dyPxStroke = (lagUv.y - lastInjectedUv.y) * window.innerHeight;
-      strokeDistanceAccum += Math.hypot(dxPxStroke, dyPxStroke) / shortSidePxForStroke;
-    }
-    setSplatUv(lagUv);
-    lastInjectedUv.copy(lagUv);
-    dyeVariable.material.uniforms.uPointerActive.value = 1;
-    dyeVariable.material.uniforms.uStrokeEpoch.value = strokeEpoch;
-    dyeVariable.material.uniforms.uStrokeDistance.value = strokeDistanceAccum;
-  } else {
+  tryInjectSplat(strokeEpoch);
+}
+
+// PR-F.2: pointerup後、settle対象がある間だけ呼ばれる。新しい入力は使わず、
+// pointerup時点で確定したstartUv→targetUvの間をdurationMsで線形に進める
+// だけ。lagUvはtargetUv(=fingerUvより手前)までしか進まない。
+// 移動に伴う注入はtryInjectSplatの既存間隔ルールに従う(新しい間隔ルールは作らない)。
+// strokeDistanceAccum(G)は更新するが、speedDistanceAccum/speedActiveDurationMs
+// (sequence assistの速度判定)は更新しない。
+function updateSettle(time) {
+  if (activeSettle === null) return;
+
+  const elapsedMs = time - activeSettle.startTime;
+  const t = Math.min(elapsedMs / TAIL_PARAMS.durationMs, 1);
+
+  lagUv.x = activeSettle.startUv.x + (activeSettle.targetUv.x - activeSettle.startUv.x) * t;
+  lagUv.y = activeSettle.startUv.y + (activeSettle.targetUv.y - activeSettle.startUv.y) * t;
+
+  tryInjectSplat(activeSettle.epoch);
+
+  if (t >= 1) {
+    const { epoch, pendingAssist } = activeSettle;
+    const finalTotalDistance = strokeDistanceAccum; // tail分を含めた最終距離
+    activeSettle = null;
     dyeVariable.material.uniforms.uPointerActive.value = 0;
+    startRelease(epoch, finalTotalDistance, pendingAssist, time);
   }
 }
 
@@ -417,7 +492,16 @@ function animate(time) {
   dyeVariable.material.uniforms.uTime.value = time / 1000;
   dyeVariable.material.uniforms.uDt.value = driftDt;
 
-  updateLagAndSplat(time);
+  // PR-F.2: 指を押している間はupdateLagAndSplat、離した直後はtail settleが
+  // あればupdateSettle、どちらも無ければ注入を止める。settle完了時に
+  // activeReleaseが立つため、updateReleaseは常に呼ぶ。
+  if (activePointerId !== null) {
+    updateLagAndSplat(time);
+  } else if (activeSettle !== null) {
+    updateSettle(time);
+  } else {
+    dyeVariable.material.uniforms.uPointerActive.value = 0;
+  }
   updateRelease(time);
 
   gpuCompute.compute();
