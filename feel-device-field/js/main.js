@@ -39,8 +39,16 @@ const PARAMS = {
 
 // PR-B.1: 遅延splat（lag injection）用の最低限の数値。美しさはまだ調整しない。
 const LAG_PARAMS = {
-  k: 0.08,          // 60fps基準の追従量（1フレームで残り距離を詰める割合）
+  k: 0.08,          // 60fps基準の追従量（1フレームで残り距離を詰める割合）。動き始めの遷移完了後の通常値
   minMoveUv: 0.0015, // lagPosが前回splat位置からこの距離(uv空間)以上動いた時だけ新規splatを入れる
+};
+
+// PR-B.2: lagの立ち上がり緩和（onset）用の最低限の数値。美しさはまだ調整しない。
+const LAG_ONSET_PARAMS = {
+  kOnset: 0.16,          // 動き始め直後だけのk(60fps基準)。LAG_PARAMS.kへ滑らかに遷移する
+  transitionFrac: 0.08,  // 画面短辺に対する比率。この距離だけ実際に動いたらk:0.16→0.08の遷移が完了する(初期値)
+  resetGapMs: 120,       // 意味のある移動がこの時間(ms)以上無ければ、次の移動を新しい動き始めとして扱う
+  meaningfulMoveFrac: 0.01, // 画面短辺に対する比率。これ未満の移動はタッチ揺れとして無視する(リセット判定にも使わない)
 };
 
 // PR-D.1: C.1のdriftはOFFにする。driftField自体は削除せず、
@@ -130,7 +138,7 @@ log('[7] linear filter usable?', linearUsable, '/ USE_LINEAR =', USE_LINEAR);
 // Erudaを開かずに反映状況を確認できるよう、画面左下のHUDに状態を出す。
 const hud = document.getElementById('hud');
 hud.textContent =
-  `${BUILD} | ${renderer.capabilities.isWebGL2 ? 'WebGL2' : 'WebGL1'} | linear:${(USE_LINEAR && linearUsable) ? 'ON' : 'OFF'} | lag:${LAG_PARAMS.k} | drift:OFF | soften:${SOFTEN_PARAMS.strength}`;
+  `${BUILD} | ${renderer.capabilities.isWebGL2 ? 'WebGL2' : 'WebGL1'} | linear:${(USE_LINEAR && linearUsable) ? 'ON' : 'OFF'} | lag:${LAG_ONSET_PARAMS.kOnset}→${LAG_PARAMS.k} | drift:OFF | soften:${SOFTEN_PARAMS.strength}`;
 
 // ── 表示用シーン: フルスクリーン1枚のPlaneにdyeをそのまま映す ──
 const scene = new THREE.Scene();
@@ -158,6 +166,12 @@ const lastInjectedUv = new THREE.Vector2(0.5, 0.5);
 let pendingInitialSplat = false; // pointerdown直後の1回だけ、しきい値判定を素通りさせる
 let lastLagTime = null;
 
+// PR-B.2: lagの立ち上がり緩和（onset）用の状態。fingerUv/lagUvとは別に、
+// 「直近の動き始め」からの実移動距離(画面短辺比)だけを別途追跡する。
+let lastFingerClientPos = null;
+let onsetDistanceFrac = 0;
+let lastMeaningfulMoveTime = null;
+
 function clientToUv(clientX, clientY) {
   return new THREE.Vector2(
     clientX / window.innerWidth,
@@ -171,12 +185,28 @@ function setSplatUv(uv) {
   target.y = uv.y;
 }
 
+function smoothstep(edge0, edge1, x) {
+  const t = Math.min(Math.max((x - edge0) / (edge1 - edge0), 0), 1);
+  return t * t * (3 - 2 * t);
+}
+
+// 直近の動き始めからの累積移動距離(onsetDistanceFrac)に応じて、
+// k:0.16→0.08をsmoothstepで連続的に補間する。
+function currentLagK() {
+  const t = smoothstep(0, LAG_ONSET_PARAMS.transitionFrac, onsetDistanceFrac);
+  return LAG_ONSET_PARAMS.kOnset + (LAG_PARAMS.k - LAG_ONSET_PARAMS.kOnset) * t;
+}
+
 canvas.addEventListener('pointerdown', (e) => {
   if (activePointerId !== null) return;
   activePointerId = e.pointerId;
   fingerUv.copy(clientToUv(e.clientX, e.clientY));
   pendingInitialSplat = true; // fingerUv/lagUvの初期化とその場への1回splatはRAF側で行う
   lastLagTime = null;
+  // PR-B.2: 指を押した直後は、初速フェーズ(onset)を必ずリセットする。
+  lastFingerClientPos = { x: e.clientX, y: e.clientY };
+  onsetDistanceFrac = 0;
+  lastMeaningfulMoveTime = null;
   if (canvas.setPointerCapture) {
     try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
   }
@@ -188,6 +218,25 @@ canvas.addEventListener('pointermove', (e) => {
   if (e.pointerId !== activePointerId) return;
   // fingerUvのみ更新する。ここでは直接splatしない（lagUvがRAF側で追従する）。
   fingerUv.copy(clientToUv(e.clientX, e.clientY));
+
+  // PR-B.2: onset距離の更新。画面短辺(px)に対する比率で実移動距離を測る
+  // （UV距離はx/y毎にwidth/heightで正規化されており短辺比とは異なるため）。
+  const shortSidePx = Math.min(window.innerWidth, window.innerHeight);
+  if (lastFingerClientPos !== null && shortSidePx > 0) {
+    const dxPx = e.clientX - lastFingerClientPos.x;
+    const dyPx = e.clientY - lastFingerClientPos.y;
+    const stepFrac = Math.hypot(dxPx, dyPx) / shortSidePx;
+    if (stepFrac >= LAG_ONSET_PARAMS.meaningfulMoveFrac) {
+      // 意味のある移動が約120ms無かった場合は、これを新しい動き始めとして扱う。
+      if (lastMeaningfulMoveTime !== null && (e.timeStamp - lastMeaningfulMoveTime) > LAG_ONSET_PARAMS.resetGapMs) {
+        onsetDistanceFrac = 0;
+      }
+      onsetDistanceFrac += stepFrac;
+      lastMeaningfulMoveTime = e.timeStamp;
+    }
+  }
+  lastFingerClientPos = { x: e.clientX, y: e.clientY };
+
   e.preventDefault();
 }, { passive: false });
 
@@ -224,9 +273,12 @@ function updateLagAndSplat(time) {
   lastLagTime = time;
 
   if (dt > 0) {
-    // k=0.08は60fps基準。dtベースの減衰係数に変換し、120Hz等でも
-    // 実時間あたりの追従速度がほぼ変わらないようにする。
-    const factor = 1 - Math.pow(1 - LAG_PARAMS.k, dt * 60);
+    // PR-B.2: kは固定値ではなく、onsetDistanceFracに応じてkOnset(0.16)から
+    // LAG_PARAMS.k(0.08)へsmoothstepで連続的に遷移する値を使う。
+    // 60fps基準のkを、dtベースの減衰係数に変換し、120Hz等でも
+    // 実時間あたりの追従速度がほぼ変わらないようにする（既存のdt補正を維持）。
+    const k = currentLagK();
+    const factor = 1 - Math.pow(1 - k, dt * 60);
     lagUv.x += (fingerUv.x - lagUv.x) * factor;
     lagUv.y += (fingerUv.y - lagUv.y) * factor;
   }
