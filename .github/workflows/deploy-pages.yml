@@ -25,10 +25,14 @@ concurrency:
 
 jobs:
   build:
+    # workflow_dispatchはUIで任意のブランチ/タグを選んで実行できるため、
+    # push トリガーの branches 指定だけでは防げない。mainのref以外から
+    # 実行された場合はbuildそのものをskipし、本番への誤デプロイを防ぐ。
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Build staging directory
         run: |
@@ -50,12 +54,16 @@ jobs:
         uses: actions/configure-pages@v5
 
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v4
         with:
           path: ${{ env.STAGING_DIR }}
 
   deploy:
     needs: build
+    # buildジョブと同じ理由でmain以外からの実行をskipする。buildがskipされた
+    # 場合はneeds経由で自動的にskipされるが、deploy単独で見ても明示するため
+    # 同じガードを重ねて書いている。
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
