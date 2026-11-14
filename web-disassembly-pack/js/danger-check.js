@@ -76,13 +76,19 @@ const MASK_TEXT = '[WDP:マスク済み]';
  * @param {string} text
  * @returns {{ text: string, count: number }}
  */
+// マスク用の正規表現は読み込み時に1回だけ作る（全文つき版ではトークンごとに呼ばれるため）。
+// replace() は global の正規表現の lastIndex を毎回0から使うので、使い回してよい。
+const MASK_PATTERNS = PATTERNS.map(({ regex, maskRegex, keepPrefixGroups }) => ({
+  regex: new RegExp((maskRegex || regex).source, (maskRegex || regex).flags),
+  keepPrefixGroups,
+}));
+
 export function maskSensitive(text) {
   let count = 0;
   let out = text || '';
 
-  for (const { regex, maskRegex, keepPrefixGroups } of PATTERNS) {
-    const pattern = maskRegex || regex;
-    out = out.replace(new RegExp(pattern.source, pattern.flags), (...args) => {
+  for (const { regex, keepPrefixGroups } of MASK_PATTERNS) {
+    out = out.replace(regex, (...args) => {
       count += 1;
       const prefix = keepPrefixGroups ? args.slice(1, 1 + keepPrefixGroups).join('') : '';
       return prefix + MASK_TEXT;

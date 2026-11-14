@@ -575,3 +575,108 @@ test('メールアドレスのパターン: 英数字の長い連続でも時間
   assert.equal(found.length, expected.length);
   assert.equal(maskSensitive(text).text.match(/\[WDP:マスク済み\]/g).length, text.match(oldRegex).length);
 });
+
+// -----------------------------------------------
+// PR #100 追加確認: 長大HTMLでの切り詰め（再帰・メモリ・処理時間）
+// -----------------------------------------------
+const WORKER_MAX_HTML = 5 * 1024 * 1024; // Worker の取得上限（5MB）相当
+const LONG_HTML_TIME_LIMIT_MS = 15000;
+
+function timed(fn) {
+  const started = Date.now();
+  const value = fn();
+  return { value, ms: Date.now() - started };
+}
+
+test('長大HTML: 短いトークンが非常に多い5MiBのHTMLでも、上限内で終わる', () => {
+  const html = `<html><body>${'<b>x</b>'.repeat(Math.floor(WORKER_MAX_HTML / 8))}</body></html>`;
+  const { value: result, ms } = timed(() => buildHtmlSkeleton(html));
+  assert.equal(result.truncated, true);
+  assert.ok(result.includedChars <= MAX_FULL_HTML_CHARS);
+  assert.ok(result.text.endsWith('</body></html>'));
+  assert.ok(ms < LONG_HTML_TIME_LIMIT_MS, `${ms}ms`);
+});
+
+test('長大HTML: 入れ子が非常に深い5MiBのHTMLでも、メモリを使い切らず上限内で終わる', () => {
+  // 修正前は位置ごとに開いている要素の配列を複製していたため、深さ2万程度でメモリ不足になった
+  const depth = 500000;
+  const html = '<div>'.repeat(depth) + '</div>'.repeat(depth);
+  const { value: result, ms } = timed(() => buildHtmlSkeleton(html));
+  assert.ok(result.includedChars <= MAX_FULL_HTML_CHARS);
+  assert.equal(result.sourceBalance.unclosedAtEnd, 0);
+  assert.equal(result.sourceBalance.orphanCloses, 0);
+  assert.ok(result.cutStructure.endTagMissingCount > 0);
+  assert.ok(ms < LONG_HTML_TIME_LIMIT_MS, `${ms}ms`);
+});
+
+test('長大HTML: 対応する開始タグの無い終了タグが大量にあっても、たどり直さずに数える', () => {
+  const html = '<div>'.repeat(20000) + '</x>'.repeat(1200000);
+  const { value: result, ms } = timed(() => buildHtmlSkeleton(html));
+  assert.equal(result.sourceBalance.orphanCloses, 1200000);
+  assert.equal(result.sourceBalance.unclosedAtEnd, 20000);
+  assert.ok(result.includedChars <= MAX_FULL_HTML_CHARS);
+  assert.ok(ms < LONG_HTML_TIME_LIMIT_MS, `${ms}ms`);
+});
+
+test('切り詰めの仕上げ: 目印が予約より長くはみ出す場合も、再帰せずに先頭側を減らして上限内に収める', () => {
+  // 目印の予約を0にして、はみ出しを必ず起こす（短いトークン20万個）
+  const html = `<b>${'<i>a</i>'.repeat(200000)}</b>`;
+  const { value: result, ms } = timed(() => buildHtmlSkeleton(html, MAX_FULL_HTML_CHARS, { markerReserve: 0 }));
+  assert.ok(result.includedChars <= MAX_FULL_HTML_CHARS, `${result.includedChars}`);
+  // 1トークンずつ減らすので、上限との差はトークン1個分（最大8文字）と目印の桁の変化の範囲
+  assert.ok(result.includedChars > MAX_FULL_HTML_CHARS - 20, `${result.includedChars}`);
+  const [head, tail] = result.text.split(/\n<!-- \[WDP\][^\n]*-->\n/);
+  assert.ok(html.startsWith(head));
+  assert.ok(html.endsWith(tail));
+  assert.ok(ms < LONG_HTML_TIME_LIMIT_MS, `${ms}ms`);
+});
+
+test('切り詰めの仕上げ: 上限が目印より小さくても、上限を超えない', () => {
+  const html = `<b>${'<i>a</i>'.repeat(5000)}</b>`;
+  for (const limit of [200, 100, 40, 10]) {
+    const result = buildHtmlSkeleton(html, limit);
+    assert.ok(result.includedChars <= limit, `limit ${limit}: ${result.includedChars}`);
+  }
+});
+
+test('タグの対応の簡易計算: 連結リスト化した実装が、配列で素直に数えた結果と一致する', () => {
+  let seed = 12345;
+  const rnd = (n) => {
+    seed = (seed * 1103515245 + 12345) % 2147483648;
+    return seed % n;
+  };
+  const names = ['div', 'span', 'p', 'li', 'ul', 'br', 'img'];
+  let html = '';
+  for (let i = 0; i < 5000; i += 1) {
+    const name = names[rnd(names.length)];
+    const r = rnd(10);
+    if (r < 5) html += `<${name}>`;
+    else if (r < 9) html += `</${name}>`;
+    else html += 'text';
+  }
+  const tokens = tokenizeHtml(html);
+  const actual = computeOpenStacks(tokens);
+
+  // 参照実装: 位置ごとに配列で持つ（修正前と同じ考え方）
+  const VOID = new Set(['br', 'img']);
+  let stack = [];
+  let implicitlyClosed = 0;
+  let orphanCloses = 0;
+  tokens.forEach((token, i) => {
+    const chain = [];
+    for (let node = actual.stacks[i]; node; node = node.parent) chain.unshift(node.element.openIndex);
+    assert.deepEqual(chain, stack.map((e) => e.openIndex), `位置 ${i} の並びが違います`);
+    if (token.type === 'open' && !VOID.has(token.name)) stack = [...stack, { name: token.name, openIndex: i }];
+    if (token.type === 'close') {
+      const idx = stack.map((e) => e.name).lastIndexOf(token.name);
+      if (idx === -1) orphanCloses += 1;
+      else {
+        implicitlyClosed += stack.length - idx - 1;
+        stack = stack.slice(0, idx);
+      }
+    }
+  });
+  assert.equal(actual.implicitlyClosed, implicitlyClosed);
+  assert.equal(actual.orphanCloses, orphanCloses);
+  assert.equal(actual.unclosedAtEnd, stack.length);
+});

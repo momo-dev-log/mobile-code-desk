@@ -273,6 +273,7 @@ const omitNote = (count) => `…[WDP:${count}文字省略]`;
  *
  * @param {string} html 元のHTML
  * @param {number} [limit]
+ * @param {{ markerReserve?: number }} [options] テスト用。省略位置の目印のために空けておく文字数
  * @returns {{
  *   text: string, originalChars: number, includedChars: number, truncated: boolean,
  *   compacted: boolean, omittedChars: number, removedScriptBodies: number, removedStyleBodies: number,
@@ -280,7 +281,7 @@ const omitNote = (count) => `…[WDP:${count}文字省略]`;
  *   shortened: { text: number, attribute: number, comment: number },
  * }}
  */
-export function buildHtmlSkeleton(html, limit = MAX_FULL_HTML_CHARS) {
+export function buildHtmlSkeleton(html, limit = MAX_FULL_HTML_CHARS, { markerReserve = CUT_MARKER_RESERVE } = {}) {
   const original = html || '';
   const sanitized = sanitizeCodeText(original);
   const tokens = tokenizeHtml(sanitized.text);
@@ -342,19 +343,19 @@ export function buildHtmlSkeleton(html, limit = MAX_FULL_HTML_CHARS) {
   }
 
   // 段階2: 先頭と末尾を残して中間を省略する
+  // 元HTML自体のタグの対応（簡易計算）。省略とは別に、元から崩れている場合を区別して伝える
+  const { stacks, implicitlyClosed, unclosedAtEnd, orphanCloses } = computeOpenStacks(tokens);
+
   let truncated = false;
   let omittedChars = 0;
   let cutStructure = null;
   if (text.length > limit) {
     truncated = true;
-    const result = cutHeadAndTail(tokens, limit);
+    const result = cutHeadAndTail(tokens, limit, stacks, markerReserve);
     text = result.text;
     omittedChars = result.omittedChars;
     cutStructure = result.cutStructure;
   }
-
-  // 元HTML自体のタグの対応（簡易計算）。省略とは別に、元から崩れている場合を区別して伝える
-  const { implicitlyClosed, unclosedAtEnd, orphanCloses } = computeOpenStacks(tokens);
 
   return {
     text,
@@ -439,36 +440,70 @@ const VOID_ELEMENTS = new Set([
  * - ブラウザのHTML構文解析（自動で補う要素・入れ子の組み替えなど）は再現しない
  *
  * 要素は開始タグのトークン番号で区別する（同じ名前の別の要素と取り違えない）。
+ *
+ * 並びは「いちばん内側の要素 → 親」とたどれる節点（{ element, parent, depth }）で表し、
+ * stacks[i] は tokens[i] の直前の節点（何も開いていなければ null）。各位置で配列を複製しないため、
+ * メモリはトークン数に比例し、入れ子が深い巨大なHTMLでも使い切らない。
  */
 export function computeOpenStacks(tokens) {
   const stacks = new Array(tokens.length + 1);
-  let stack = [];
+  // 現在開いている要素の名前ごとの数（対応する開始タグの無い終了タグを、たどらずに判定するため）
+  const openCount = new Map();
+  let node = null;
   let implicitlyClosed = 0;
   let orphanCloses = 0;
 
   for (let i = 0; i < tokens.length; i += 1) {
-    stacks[i] = stack;
+    stacks[i] = node;
     const token = tokens[i];
     if (token.type === 'open') {
       if (VOID_ELEMENTS.has(token.name) || /\/>$/.test(token.raw)) continue;
-      stack = [...stack, { name: token.name, openIndex: i, closeIndex: null }];
+      const element = { name: token.name, openIndex: i, closeIndex: null };
+      node = { element, parent: node, depth: depthOf(node) + 1 };
+      openCount.set(token.name, (openCount.get(token.name) || 0) + 1);
     } else if (token.type === 'close') {
-      let idx = -1;
-      for (let j = stack.length - 1; j >= 0; j -= 1) {
-        if (stack[j].name === token.name) { idx = j; break; }
-      }
-      if (idx === -1) {
+      if (!openCount.get(token.name)) {
         orphanCloses += 1;
         continue;
       }
-      stack[idx].closeIndex = i;
-      implicitlyClosed += stack.length - idx - 1;
-      stack = stack.slice(0, idx);
+      // 同じ名前の要素まで閉じる。途中の要素は終了タグなしで閉じたものとして数える
+      while (node.element.name !== token.name) {
+        openCount.set(node.element.name, openCount.get(node.element.name) - 1);
+        implicitlyClosed += 1;
+        node = node.parent;
+      }
+      node.element.closeIndex = i;
+      openCount.set(token.name, openCount.get(token.name) - 1);
+      node = node.parent;
     }
   }
-  stacks[tokens.length] = stack;
+  stacks[tokens.length] = node;
 
-  return { stacks, implicitlyClosed, unclosedAtEnd: stack.length, orphanCloses };
+  return { stacks, implicitlyClosed, unclosedAtEnd: depthOf(node), orphanCloses };
+}
+
+function depthOf(node) {
+  return node ? node.depth : 0;
+}
+
+/** 外側から内側の順の要素の配列にする（outerDepth より外側は除く） */
+function elementsOf(node, outerDepth = 0) {
+  const list = [];
+  for (let cur = node; cur && cur.depth > outerDepth; cur = cur.parent) list.push(cur.element);
+  return list.reverse();
+}
+
+/** 2つの並びの、外側から共通している要素の数 */
+function commonDepth(a, b) {
+  let x = a;
+  let y = b;
+  while (depthOf(x) > depthOf(y)) x = x.parent;
+  while (depthOf(y) > depthOf(x)) y = y.parent;
+  while (x !== y) {
+    x = x.parent;
+    y = y.parent;
+  }
+  return depthOf(x);
 }
 
 function describeElement(tokens, element) {
@@ -484,28 +519,31 @@ function listElements(tokens, elements) {
   return names;
 }
 
-function commonPrefixLength(a, b) {
-  let k = 0;
-  while (k < a.length && k < b.length && a[k] === b[k]) k += 1;
-  return k;
-}
-
 /**
  * タグの境目で先頭と末尾を残し、中間を省略する。
  *
  * 切る位置は、予算内の境目のうち「開いている要素が少ない」ものを選ぶ（同じなら長く残す方）。
  * それでも省略をまたいで開始・終了タグの対応が崩れる要素は、元HTMLのどの要素かを記録する。
  * 欠けたタグを補うことはしない（元HTMLに無い構造を作らないため）。
+ *
+ * @param {Array} tokens
+ * @param {number} limit
+ * @param {Array} stacks computeOpenStacks(tokens).stacks
+ * @param {number} [markerReserve] 目印のために空けておく文字数（テストで目印のはみ出しを再現するときだけ変える）
  */
-function cutHeadAndTail(tokens, limit) {
-  const { stacks } = computeOpenStacks(tokens);
+function cutHeadAndTail(tokens, limit, stacks, markerReserve = CUT_MARKER_RESERVE) {
   const n = tokens.length;
   const prefix = new Array(n + 1);
+  const openPrefix = new Array(n + 1);
   prefix[0] = 0;
-  for (let i = 0; i < n; i += 1) prefix[i + 1] = prefix[i] + tokens[i].raw.length;
+  openPrefix[0] = 0;
+  for (let i = 0; i < n; i += 1) {
+    prefix[i + 1] = prefix[i] + tokens[i].raw.length;
+    openPrefix[i + 1] = openPrefix[i] + (tokens[i].type === 'open' ? 1 : 0);
+  }
   const total = prefix[n];
 
-  const budget = Math.max(0, limit - CUT_MARKER_RESERVE);
+  const budget = Math.max(0, limit - markerReserve);
   const headBudget = Math.floor(budget * HEAD_SHARE);
   const tailBudget = budget - headBudget;
 
@@ -515,61 +553,87 @@ function cutHeadAndTail(tokens, limit) {
   const headFloor = headBudget * (1 - CUT_SEARCH_SHARE);
   let headEnd = headMax;
   for (let b = headMax; b >= 0 && prefix[b] >= headFloor; b -= 1) {
-    if (stacks[b].length < stacks[headEnd].length) headEnd = b;
+    if (depthOf(stacks[b]) < depthOf(stacks[headEnd])) headEnd = b;
   }
 
   // 末尾側: total - prefix[t] <= tailBudget の境目 t のうち、先頭側との対応の崩れが最も少ないもの（同じなら前）
   let tailMin = n;
   while (tailMin > headEnd && total - prefix[tailMin - 1] <= tailBudget) tailMin -= 1;
   const tailFloor = tailBudget * (1 - CUT_SEARCH_SHARE);
+  const headNode = stacks[headEnd];
   const mismatch = (t) => {
-    const k = commonPrefixLength(stacks[headEnd], stacks[t]);
-    return (stacks[headEnd].length - k) + (stacks[t].length - k);
+    const k = commonDepth(headNode, stacks[t]);
+    return (depthOf(headNode) - k) + (depthOf(stacks[t]) - k);
   };
   let tailStart = tailMin;
-  for (let t = tailMin; t <= n && total - prefix[t] >= tailFloor; t += 1) {
-    if (mismatch(t) < mismatch(tailStart)) tailStart = t;
+  let best = mismatch(tailStart);
+  for (let t = tailMin + 1; t <= n && total - prefix[t] >= tailFloor; t += 1) {
+    const m = mismatch(t);
+    if (m < best) {
+      best = m;
+      tailStart = t;
+    }
   }
 
-  return finishCut(tokens, stacks, prefix, headEnd, tailStart, limit);
+  return finishCut(tokens, stacks, prefix, openPrefix, headEnd, tailStart, limit);
 }
 
-function finishCut(tokens, stacks, prefix, headEnd, tailStart, limit) {
-  const headStack = stacks[headEnd];
-  const tailStack = stacks[tailStart];
-  const common = commonPrefixLength(headStack, tailStack);
+const SHORT_CUT_MARKER = '\n<!-- [WDP] 文字数上限のため中間を省略 -->\n';
 
+function describeCut(tokens, stacks, prefix, openPrefix, headEnd, tailStart) {
+  const headNode = stacks[headEnd];
+  const tailNode = stacks[tailStart];
+  const common = commonDepth(headNode, tailNode);
   // 開始タグは先頭側に収録、終了タグは省略範囲（または元HTMLに無い）
-  const endTagMissing = headStack.slice(common);
+  const endTagMissing = elementsOf(headNode, common);
   // 開始タグは省略範囲。終了タグが末尾側に残っているかどうかで分ける
-  const startTagMissing = tailStack.slice(common);
-  const orphanEndTagsInTail = startTagMissing.filter((e) => e.closeIndex !== null && e.closeIndex >= tailStart);
-
-  const omitted = tokens.slice(headEnd, tailStart);
+  const startTagMissing = elementsOf(tailNode, common);
+  const orphanEndTagsInTail = startTagMissing.filter((e) => e.closeIndex !== null && e.closeIndex >= tailStart).length;
   const omittedChars = prefix[tailStart] - prefix[headEnd];
-  const omittedTags = omitted.filter((t) => t.type === 'open').length;
+  const omittedTags = openPrefix[tailStart] - openPrefix[headEnd];
   const marker = `\n<!-- [WDP] ここから ${omittedChars}文字（開始タグ ${omittedTags}個を含む）を文字数上限のため省略。`
-    + `省略により終了タグが欠けた要素 ${endTagMissing.length}個 / 開始タグが欠けた要素 ${startTagMissing.length}個（うち終了タグだけ末尾側にある ${orphanEndTagsInTail.length}個）。欠けたタグは補っていません -->\n`;
+    + `省略により終了タグが欠けた要素 ${endTagMissing.length}個 / 開始タグが欠けた要素 ${startTagMissing.length}個（うち終了タグだけ末尾側にある ${orphanEndTagsInTail}個）。欠けたタグは補っていません -->\n`;
+  return { headNode, common, endTagMissing, startTagMissing, orphanEndTagsInTail, omittedChars, marker };
+}
+
+/**
+ * 省略の目印を付けて仕上げる。
+ *
+ * 目印の長さは CUT_MARKER_RESERVE 以内を想定しているが、超えて上限をはみ出す場合は
+ * 先頭側を1トークンずつ減らし（先頭側が空なら末尾側を減らし）、上限に収まるまで繰り返す。
+ * 長さは累積和から計算するため、繰り返しても全体を連結し直さない（再帰もしない）。
+ */
+function finishCut(tokens, stacks, prefix, openPrefix, headEnd, tailStart, limit) {
+  const n = tokens.length;
+  const total = prefix[n];
+  const lengthOf = (h, t, marker) => prefix[h] + marker.length + (total - prefix[t]);
+
+  let cut = describeCut(tokens, stacks, prefix, openPrefix, headEnd, tailStart);
+  while (lengthOf(headEnd, tailStart, cut.marker) > limit && (headEnd > 0 || tailStart < n)) {
+    if (headEnd > 0) headEnd -= 1;
+    else tailStart += 1;
+    cut = describeCut(tokens, stacks, prefix, openPrefix, headEnd, tailStart);
+  }
+
+  // 目印だけで上限を超える（上限が極端に小さい）場合は、短い目印にする。それでも超えるなら目印も出さない
+  let { marker } = cut;
+  if (lengthOf(headEnd, tailStart, marker) > limit) {
+    marker = SHORT_CUT_MARKER.length <= limit ? SHORT_CUT_MARKER : '';
+  }
 
   const head = tokens.slice(0, headEnd).map((t) => t.raw).join('');
   const tail = tokens.slice(tailStart).map((t) => t.raw).join('');
-  const text = head + marker + tail;
-
-  // 目印が想定より長く上限を超えた場合は、先頭側を1トークンずつ減らして作り直す
-  if (text.length > limit && headEnd > 0) {
-    return finishCut(tokens, stacks, prefix, headEnd - 1, tailStart, limit);
-  }
 
   return {
-    text,
-    omittedChars,
+    text: head + marker + tail,
+    omittedChars: cut.omittedChars,
     cutStructure: {
-      enclosingAtCut: listElements(tokens, headStack.slice(0, common)),
-      endTagMissing: listElements(tokens, endTagMissing),
-      startTagMissing: listElements(tokens, startTagMissing),
-      endTagMissingCount: endTagMissing.length,
-      startTagMissingCount: startTagMissing.length,
-      orphanEndTagsInTailCount: orphanEndTagsInTail.length,
+      enclosingAtCut: listElements(tokens, elementsOf(cut.headNode).slice(0, cut.common)),
+      endTagMissing: listElements(tokens, cut.endTagMissing),
+      startTagMissing: listElements(tokens, cut.startTagMissing),
+      endTagMissingCount: cut.endTagMissing.length,
+      startTagMissingCount: cut.startTagMissing.length,
+      orphanEndTagsInTailCount: cut.orphanEndTagsInTail,
     },
   };
 }
