@@ -88,6 +88,12 @@ export default {
       return jsonResponse({ ok: false, reason: controller.signal.aborted ? 'timeout' : 'network' });
     }
 
+    // Redirects without a usable Location must not be reported as fetched page content.
+    if (siteResponse.status >= 300 && siteResponse.status < 400) {
+      clearTimeout(timeoutId);
+      return jsonResponse({ ok: false, reason: 'http_error', httpStatus: siteResponse.status });
+    }
+
     if (siteResponse.status >= 400) {
       clearTimeout(timeoutId);
       return jsonResponse({ ok: false, reason: 'http_error', httpStatus: siteResponse.status });
