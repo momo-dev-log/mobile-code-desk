@@ -19,10 +19,11 @@ export async function fetchResource(targetUrl, options = {}) {
 
   const controller = new AbortController();
   let timedOut = false;
+  const timeoutMs = Number.isFinite(options.timeoutMs) && options.timeoutMs >= 0 ? options.timeoutMs : 20000;
   const timer = setTimeout(() => {
     timedOut = true;
     controller.abort();
-  }, Math.max(0, typeof options.timeoutMs === 'number' ? options.timeoutMs : 20000));
+  }, timeoutMs);
 
   try {
     const result = await readJson(() => fetch(endpoint, { signal: controller.signal }));
