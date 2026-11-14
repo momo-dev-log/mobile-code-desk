@@ -46,7 +46,7 @@ export default {
       return jsonResponse({ ok: false, reason: 'http_error', httpStatus: 400 }, 400);
     }
 
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    if (!isAllowedTarget(parsed)) {
       return jsonResponse({ ok: false, reason: 'http_error', httpStatus: 400 }, 400);
     }
 
@@ -54,8 +54,10 @@ export default {
     const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
     let siteResponse;
+    let currentUrl = parsed.href;
     try {
-      siteResponse = await fetch(targetUrl, {
+      for (let redirectCount = 0; redirectCount <= 5; redirectCount += 1) {
+        siteResponse = await fetch(currentUrl, {
         method: 'GET',
         headers: {
           'User-Agent':
@@ -65,9 +67,22 @@ export default {
           'Accept': '*/*',
           'Accept-Language': 'ja,en-US;q=0.9,en;q=0.8',
         },
-        redirect: 'follow',
+        redirect: 'manual',
         signal: controller.signal,
-      });
+        });
+        if (![301, 302, 303, 307, 308].includes(siteResponse.status)) break;
+        const location = siteResponse.headers.get('location');
+        if (!location || redirectCount === 5) {
+          clearTimeout(timeoutId);
+          return jsonResponse({ ok: false, reason: 'http_error', httpStatus: 400 }, 400);
+        }
+        const next = new URL(location, currentUrl);
+        if (!isAllowedTarget(next)) {
+          clearTimeout(timeoutId);
+          return jsonResponse({ ok: false, reason: 'http_error', httpStatus: 400 }, 400);
+        }
+        currentUrl = next.href;
+      }
     } catch {
       clearTimeout(timeoutId);
       return jsonResponse({ ok: false, reason: controller.signal.aborted ? 'timeout' : 'network' });
@@ -104,7 +119,7 @@ export default {
       ok: true,
       content,
       contentType,
-      finalUrl: siteResponse.url || targetUrl,
+      finalUrl: siteResponse.url || currentUrl,
       httpStatus: siteResponse.status,
     });
   },
@@ -179,4 +194,26 @@ function jsonResponse(data, status = 200) {
       'Content-Type': 'application/json; charset=utf-8',
     },
   });
+}
+
+/** Block local/private network targets and credentialed or nonstandard-port URLs.
+ * DNS rebinding and distributed abuse limits require platform-level protection.
+ */
+export function isAllowedTarget(url) {
+  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) return false;
+  if (url.port && !['80', '443'].includes(url.port)) return false;
+  const host = url.hostname.toLowerCase().replace(/\.$/, '').replace(/^\[|\]$/g, '');
+  if (!host || host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') || host.endsWith('.internal') || host.endsWith('.test') || host.endsWith('.invalid')) return false;
+  if (!host.includes('.') && !host.includes(':')) return false;
+  if (host.includes(':')) {
+    // IPv6 literals, including mapped IPv4, are denied to avoid private-address bypasses.
+    return false;
+  }
+  if (/^\d+(?:\.\d+){0,3}$/.test(host)) {
+    const parts = host.split('.').map(Number);
+    if (parts.length !== 4 || parts.some(n => n > 255)) return false;
+    const [a, c] = parts;
+    if (a === 0 || a === 10 || a === 127 || a >= 224 || (a === 169 && c === 254) || (a === 172 && c >= 16 && c <= 31) || (a === 192 && c === 168) || (a === 100 && c >= 64 && c <= 127) || (a === 192 && c === 0) || (a === 198 && (c === 18 || c === 19))) return false;
+  }
+  return true;
 }
