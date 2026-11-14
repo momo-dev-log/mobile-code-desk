@@ -5,7 +5,7 @@ import { APP_VERSION } from './constants.js';
  * 解析結果からAI向けのMarkdown調査パックを組み立てる（v0.2）。
  *
  * 方針:
- * - 見出し順は固定（メタ情報→サマリ行→HTML構造→検出ライブラリ→
+ * - 見出し順は固定（メタ情報→サマリ行→HTML構造→取得・解析範囲→検出ライブラリ→
  *   JS内キーワード検出→CSS抜粋→JavaScript抜粋→推定メモ→
  *   危険情報チェック結果→取得対象外の記録）
  * - 検出が無い項目も省略せず、値（あり/なし/特定できず/未確認）として出す
@@ -24,6 +24,9 @@ import { APP_VERSION } from './constants.js';
  * @param {Array} data.cssResources
  * @param {Array} data.jsResources
  * @param {Array} data.dangerFindings
+ * @param {number} [data.htmlChars] HTML本文の文字数
+ * @param {Array<{ label: string, size: number, analyzedChars: number, truncated: boolean }>} [data.inlineStyles]
+ * @param {Array<{ label: string, size: number, analyzedChars: number, truncated: boolean }>} [data.inlineScripts]
  * @returns {string}
  */
 export function buildMarkdown(data) {
@@ -39,6 +42,9 @@ export function buildMarkdown(data) {
     cssResources,
     jsResources,
     dangerFindings,
+    htmlChars,
+    inlineStyles,
+    inlineScripts,
   } = data;
 
   const lines = [];
@@ -62,6 +68,9 @@ export function buildMarkdown(data) {
 
   // 3. HTML構造
   buildHtmlStructureSection(lines, structure);
+
+  // 3.5 取得・解析範囲
+  buildCoverageSection(lines, { htmlChars, inlineStyles, inlineScripts, cssResources, jsResources });
 
   // 4. 検出ライブラリ
   buildDetectionSection(lines, '## 検出ライブラリ', libraries);
@@ -259,6 +268,91 @@ function buildEstimationNotes(structure, jsFeatures, libraries) {
   }
 
   return notes;
+}
+
+/**
+ * 「取得・解析範囲」セクション。
+ *
+ * 解析したコードは1件ずつ「元の文字数／解析した文字数／切り詰めの有無」を出す。
+ * 未取得のコードは種類ごとの件数だけを出し、URLと理由は既存の
+ * 「取得対象外の記録」に任せる（同じURLを二重に並べない）。
+ * 本文（rawText）はここでは一切出力しない。
+ */
+function buildCoverageSection(lines, { htmlChars, inlineStyles, inlineScripts, cssResources, jsResources }) {
+  lines.push('## 取得・解析範囲');
+  lines.push('');
+  lines.push('このレポートのキーワード検出・ライブラリ検出・抜粋・危険情報チェックは、下の「解析」の文字数の範囲だけを対象にしています。');
+  lines.push('');
+
+  if (typeof htmlChars === 'number') {
+    lines.push(`- HTML本文: ${htmlChars}文字（全文を解析）`);
+    lines.push('');
+  }
+
+  const analyzed = [
+    ...(inlineStyles || []).map((entry) => ({ type: 'CSS', ...entry })),
+    ...(inlineScripts || []).map((entry) => ({ type: 'JS', ...entry })),
+    ...(cssResources || []).filter((entry) => entry.status === 'ok').map((entry) => ({ type: 'CSS', ...entry })),
+    ...(jsResources || []).filter((entry) => entry.status === 'ok').map((entry) => ({ type: 'JS', ...entry })),
+  ];
+
+  lines.push('### 解析したコード');
+  lines.push('');
+  if (analyzed.length === 0) {
+    lines.push('（解析したCSS/JSはありません）');
+  } else {
+    for (const entry of analyzed) {
+      lines.push(`- [${entry.type}] ${entry.label || '（識別子なし）'}: ${describeCoverage(entry)}`);
+    }
+  }
+  lines.push('');
+
+  const notFetched = [...(cssResources || []), ...(jsResources || [])].filter((entry) => entry.status !== 'ok');
+  const countOf = (status) => notFetched.filter((entry) => entry.status === status).length;
+
+  lines.push('### 未取得のコード');
+  lines.push('');
+  if (notFetched.length === 0) {
+    lines.push('（未取得のCSS/JSはありません）');
+  } else {
+    lines.push(`- 取得失敗: ${countOf('failed')}件`);
+    lines.push(`- 取得対象外（外部オリジン）: ${countOf('skipped_external')}件`);
+    lines.push(`- 取得対象外（取得件数の上限を超過）: ${countOf('skipped_limit')}件`);
+    lines.push('- 各URLと理由は「取得対象外の記録」を参照してください。');
+  }
+  lines.push('');
+
+  const anyTruncated = analyzed.some((entry) => entry.truncated);
+
+  lines.push('### 解析範囲についての注意');
+  lines.push('');
+  if (anyTruncated) {
+    lines.push('- 途中で切り詰めたコードがあります。切り詰めた部分（上の「未解析」の範囲）のコードの挙動は未確認です。このレポートだけで、全コードを解析済みと判断することはできません。');
+  }
+  if (notFetched.length > 0) {
+    lines.push('- 取得していないコードがあります。そのコードの挙動は未確認です。');
+  }
+  if (!anyTruncated && notFetched.length === 0) {
+    lines.push('- HTMLから参照されていたCSS/JSは、すべて全文を解析しました。');
+  }
+  lines.push('- HTMLの<script src>と<link rel="stylesheet">以外の方法で読み込まれるコード（JSの中から後で読み込まれるファイルなど）は、このツールでは追跡していません。その挙動は未確認です。');
+  lines.push('');
+}
+
+function describeCoverage(entry) {
+  const size = typeof entry.size === 'number' ? entry.size : null;
+  const analyzedChars = typeof entry.analyzedChars === 'number'
+    ? entry.analyzedChars
+    : (!entry.truncated && size !== null ? size : null);
+
+  const sizeText = size !== null ? `${size}文字` : '不明';
+  const analyzedText = analyzedChars !== null ? `${analyzedChars}文字` : '不明';
+
+  if (entry.truncated) {
+    const rest = analyzedChars !== null ? `${analyzedChars + 1}文字目以降は未解析` : '後半は未解析';
+    return `元 ${sizeText} / 解析 ${analyzedText} / 切り詰めあり（${rest}）`;
+  }
+  return `元 ${sizeText} / 解析 ${analyzedText} / 切り詰めなし`;
 }
 
 /**
