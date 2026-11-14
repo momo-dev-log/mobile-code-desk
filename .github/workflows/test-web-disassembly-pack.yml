@@ -1,0 +1,25 @@
+name: Web Disassembly Pack tests
+on:
+  pull_request:
+    paths:
+      - 'web-disassembly-pack/**'
+      - '.github/workflows/test-web-disassembly-pack.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'web-disassembly-pack/**'
+      - '.github/workflows/test-web-disassembly-pack.yml'
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web-disassembly-pack
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test tests/*.test.js
