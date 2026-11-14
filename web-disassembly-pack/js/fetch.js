@@ -4,7 +4,7 @@ import { WORKER_URL } from './constants.js';
  * 専用Worker（worker/index.js）経由でリソース（HTML/CSS/JS）を取得する。
  *
  * timeoutMs で通信（応答本文の読み取りを含む）を打ち切り、
- * reason: 'timeout' を返す。指定しない呼び出し（通常解析）は従来どおり打ち切らない。
+ * reason: 'timeout' を返す。指定しない呼び出しも20秒で打ち切る。
  * 打ち切ってもWorker側の処理は止まらない。
  *
  * @param {string} targetUrl

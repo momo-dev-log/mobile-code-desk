@@ -44,3 +44,14 @@ test('実際のキー代入はマスクする', async () => {
   assert.ok(result.count > 0);
   assert.ok(!result.text.includes('sk_live_1234567890abcdef'));
 });
+
+test('引用符付きJSONキーの機密値もマスクする', async () => {
+  const { maskSensitive } = await import('../js/danger-check.js');
+  const code = '{"api_key":"sk_live_1234567890abcdef","token": "abcdefghijklmnopqrstuvwxyz"}';
+  const masked = maskSensitive(code);
+  assert.equal(masked.count, 2);
+  assert.ok(!masked.text.includes('sk_live_1234567890abcdef'));
+  assert.ok(!masked.text.includes('abcdefghijklmnopqrstuvwxyz'));
+  assert.ok(masked.text.includes('"api_key":'));
+  assert.ok(masked.text.includes('"token":'));
+});
