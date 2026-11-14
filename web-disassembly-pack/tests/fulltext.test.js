@@ -8,6 +8,7 @@ import {
   inlineCode,
   sanitizeCodeText,
   tokenizeHtml,
+  computeOpenStacks,
   MASK_MARKER,
 } from '../js/fulltext.js';
 import { buildMarkdown, buildFullMarkdown, FULL_VARIANT_META_LINE } from '../js/markdown.js';
@@ -157,7 +158,7 @@ test('HTML構造枠: 上限を超えると長い部分を短くし、それで�
   // 先頭（head）と末尾（閉じタグ・最後のscript）が残る
   assert.ok(result.text.startsWith('<!DOCTYPE html><html><head><title>T</title></head><body><header id="top"></header>'));
   assert.ok(result.text.endsWith('<footer id="end"></footer><script src="/last.js"></script></body></html>'));
-  assert.match(result.text, /<!-- \[WDP\] ここから \d+文字（開始タグ \d+個を含む）を文字数上限のため省略 -->/);
+  assert.match(result.text, /<!-- \[WDP\] ここから \d+文字（開始タグ \d+個を含む）を文字数上限のため省略。[^\n]*欠けたタグは補っていません -->/);
   // タグの途中で切っていない（省略の目印の直前・直後がタグの境目）
   const [head, tail] = result.text.split(/\n<!-- \[WDP\] ここから[^\n]*-->\n/);
   assert.ok(head.trimEnd().endsWith('>'), head.slice(-50));
@@ -349,19 +350,16 @@ test('コードフェンス: 本文に「```」や「</script>」があっても
     html: `<body><div onclick="alert(3)">\`\`\`</div><script>${evilJs}</script><style>${evilCss}</style></body>`,
   }));
 
-  // 通常版にもともとある固定の説明文（ページ由来の内容ではない）は対象外にする
-  const KNOWN_FIXED_LINE = '- HTMLの<script src>と<link rel="stylesheet">以外の方法で読み込まれるコード';
-  const outside = linesOutsideFences(md).filter((line) => !line.startsWith(KNOWN_FIXED_LINE));
+  const outside = linesOutsideFences(md);
   for (const line of outside) {
     const plain = stripInlineCode(line);
     assert.ok(!/<script|<\/script|<img|<style|onerror|onclick|alert\(/i.test(plain), `フェンスの外に出ています: ${line}`);
   }
   assert.ok(!outside.includes('# 見出し偽装'));
 
-  // 識別子に改行が入っていても、全文節の見出しは壊れない
-  // （実際のURLは new URL().href を通すため改行を含まない。通常版の節は変更対象外）
-  const section = buildFullTextSections(baseData({ jsResources: [external('https://example.com/x.js\n## 偽見出し', 'x();')] }));
-  assert.ok(!linesOutsideFences(section).some((line) => line.startsWith('## 偽見出し')));
+  // 識別子に改行が入っていても、全文つき版のどの節の見出しも壊れない
+  const withNewline = buildFullMarkdown(baseData({ jsResources: [external('https://example.com/x.js\n## 偽見出し', 'x();')] }));
+  assert.ok(!linesOutsideFences(withNewline).some((line) => line.startsWith('## 偽見出し')));
   // 本文そのものはフェンスの中に残っている（実行はしない）
   assert.ok(md.includes('</script><script>alert(1)</script>'));
 });
@@ -415,14 +413,18 @@ test('通常版: html を渡しても出力は変わらず、全文収録の節�
   assert.ok(html.length > 0);
 });
 
-test('全文つき版: 通常版の内容（メタ情報1行を除く）を先頭にそのまま含み、末尾に全文節を追加する', () => {
+test('全文つき版: 通常版と同じ見出し構成・summary行に、メタ情報1行と末尾の全文節を加えたもの', () => {
   const data = baseData();
   const normal = buildMarkdown(data);
   const full = buildFullMarkdown(data);
+  const headings = (md) => md.split('\n').filter((line) => /^#{1,3} /.test(line));
+  const summaryLine = (md) => md.split('\n').find((line) => line.startsWith('summary: '));
 
   assert.ok(full.includes(FULL_VARIANT_META_LINE));
-  const withoutMeta = full.replace(`${FULL_VARIANT_META_LINE}\n`, '');
-  assert.ok(withoutMeta.startsWith(`${normal}\n## 全文収録（全文つき版のみ）`));
+  const fullHeadings = headings(full);
+  const appendedAt = fullHeadings.indexOf('## 全文収録（全文つき版のみ）');
+  assert.deepEqual(fullHeadings.slice(0, appendedAt), headings(normal));
+  assert.equal(summaryLine(full), summaryLine(normal));
   assert.ok(full.includes('function draw() {}'));
   // 入力（state）を書き換えない
   assert.equal(data.inlineScripts[0].rawText, 'draw();');
@@ -432,4 +434,144 @@ test('全文つき版: 通常版の内容（メタ情報1行を除く）を先�
 test('全文つき版: 同じ入力なら何度作っても同じ出力になる', () => {
   const data = baseData();
   assert.equal(buildFullMarkdown(data), buildFullMarkdown(data));
+});
+
+// -----------------------------------------------
+// PR #100 レビュー対応: 省略によるタグ対応の崩れ
+// -----------------------------------------------
+function sectionsHtml(count) {
+  const one = (i) => `<section id="s${i}"><div class="a"><ul><li>${'x'.repeat(150)}</li></ul></div></section>`;
+  return `<html><body><main id="m">${Array.from({ length: count }, (_, i) => one(i)).join('')}</main><footer>f</footer></body></html>`;
+}
+
+test('切り詰め: 兄弟要素の境目で切れる場合は、開始・終了タグの対応が崩れない', () => {
+  const result = buildHtmlSkeleton(sectionsHtml(300));
+  assert.equal(result.truncated, true);
+  assert.ok(result.includedChars <= MAX_FULL_HTML_CHARS);
+  const cut = result.cutStructure;
+  assert.equal(cut.endTagMissingCount, 0);
+  assert.equal(cut.startTagMissingCount, 0);
+  assert.deepEqual(cut.enclosingAtCut, ['html', 'body', 'main#m']);
+  // 収録したHTMLだけでタグの対応を数えても崩れていない（目印のコメントは1つのトークン）
+  const balance = computeOpenStacks(tokenizeHtml(result.text));
+  assert.equal(balance.orphanCloses, 0);
+  assert.equal(balance.unclosedAtEnd, 0);
+  assert.equal(balance.implicitlyClosed, 0);
+});
+
+test('切り詰め: 境目を選べない深い入れ子では、崩れた要素を元HTMLの要素として明記し、タグは補わない', () => {
+  // 1つの巨大な入れ子（兄弟の境目が無い）: <div#outer><div.lvl>…が深く続き、中身は短いテキストの連続
+  const depth = 400;
+  const open = Array.from({ length: depth }, (_, i) => `<div class="lvl l${i}">${'t'.repeat(40)}`).join('');
+  // 終了タグ側にもテキストがあり、末尾側の枠に全部の終了タグは入らない
+  const close = `${'c'.repeat(40)}</div>`.repeat(depth);
+  const html = `<html><body><div id="outer">${open}${close}</div></body></html>`;
+  const result = buildHtmlSkeleton(html);
+  assert.equal(result.truncated, true);
+  assert.ok(result.includedChars <= MAX_FULL_HTML_CHARS);
+
+  const cut = result.cutStructure;
+  assert.ok(cut.endTagMissingCount > 0);
+  assert.equal(cut.startTagMissingCount, 0);
+  assert.deepEqual(cut.enclosingAtCut.slice(0, 3), ['html', 'body', 'div#outer']);
+  assert.match(cut.endTagMissing[0], /^div\.lvl\.l\d+$/);
+
+  // 補っていない: 収録したHTMLの終了タグの数は、元の末尾側にあったものだけ
+  const [head, tail] = result.text.split(/\n<!-- \[WDP\][^\n]*-->\n/);
+  assert.ok(!head.includes('</div>'));
+  const tailCloses = (tail.match(/<\/div>/g) || []).length;
+  assert.ok(tailCloses <= depth + 1);
+  assert.match(result.text, /終了タグが欠けた要素 \d+個/);
+  assert.match(result.text, /欠けたタグは補っていません/);
+
+  const md = buildFullTextSections(baseData({ html }));
+  assert.match(md, /- 終了タグが欠けた要素（開始タグは先頭側にあり、終了タグは省略範囲）: [1-9]\d*個 `div\.lvl\.l\d+`/);
+  assert.match(md, /欠けたタグは補っていません。収録したHTMLをそのまま貼り付けても、元のページと同じ入れ子にはなりません/);
+  assert.match(md, /ブラウザが作るDOMと一致するとは限りません/);
+});
+
+test('切り詰め: 開始タグが省略範囲にあり終了タグだけ末尾側に残る要素を区別して数える', () => {
+  // 先頭は浅く、末尾が深い入れ子で終わる（末尾側に開始タグの無い終了タグが残る）
+  const head = Array.from({ length: 200 }, (_, i) => `<p id="p${i}">${'h'.repeat(80)}</p>`).join('');
+  const deepOpen = Array.from({ length: 300 }, (_, i) => `<span class="d${i}">${'z'.repeat(30)}`).join('');
+  const deepClose = Array.from({ length: 300 }, () => `${'z'.repeat(30)}</span>`).join('');
+  const html = `<body>${head}<article id="art">${deepOpen}${deepClose}</article></body>`;
+  const result = buildHtmlSkeleton(html);
+  const cut = result.cutStructure;
+  assert.ok(cut.startTagMissingCount > 0);
+  assert.equal(cut.orphanEndTagsInTailCount, cut.startTagMissingCount);
+  assert.equal(computeOpenStacks(tokenizeHtml(result.text)).orphanCloses, cut.orphanEndTagsInTailCount);
+});
+
+test('タグの対応の簡易計算: void要素・自己終了・終了タグ省略・対応の無い終了タグ', () => {
+  const tokens = tokenizeHtml('<div><img src=a><br/><p>a<p>b</div></span><svg><path d="M0"/></svg><ul><li>x');
+  const r = computeOpenStacks(tokens);
+  assert.equal(r.implicitlyClosed, 2); // </div> で閉じた p 2つ
+  assert.equal(r.orphanCloses, 1); // </span>
+  assert.equal(r.unclosedAtEnd, 2); // ul, li
+  const md = buildFullTextSections(baseData({ html: '<div><p>a</div></span>' }));
+  assert.match(md, /元HTMLのタグの対応（簡易計算）: 終了タグなしで閉じた要素 1個 \/ 最後まで閉じていない要素 0個 \/ 対応する開始タグのない終了タグ 1個/);
+});
+
+// -----------------------------------------------
+// PR #100 レビュー対応: 全文つき版の全体（先頭の通常版部分を含む）
+// -----------------------------------------------
+function hostileData() {
+  const evil = 'x = "```"; </script><script>alert(1)</script> token: "abcdefghijklmnop1234" a@b.example';
+  return baseData({
+    title: '<script>alert("title")</script> ``` boss@corp.example',
+    finalUrl: 'https://example.com/redirect?token=abcdefghijklmnop9999&<b>x</b>',
+    cssExcerpts: CSS_EXCERPT_CATEGORIES.map(({ key, label }, i) => ({
+      key, label, excerpts: i === 0 ? [{ keyword: 'body', source: 'インラインstyle #1', excerpt: '</style><img src=x onerror=alert(2)> body{}' }] : [],
+    })),
+    jsExcerpts: JS_EXCERPT_CATEGORIES.map(({ key, label }, i) => ({
+      key, label, excerpts: i === 0 ? [{ keyword: 'canvas', source: 'https://example.com/a`<i>`.js', excerpt: evil }] : [],
+    })),
+    cssResources: [{ label: 'https://cdn.other/<svg onload=alert(3)>.css', status: 'skipped_external' }],
+    dangerFindings: [{ label: 'HTML', type: 'メールアドレス', preview: 'boss...mple' }],
+  });
+}
+
+test('全文つき版の全体: ページ由来のHTML/スクリプト文字列がコードの外に出ない', () => {
+  const md = buildFullMarkdown(hostileData());
+  for (const line of linesOutsideFences(md)) {
+    const plain = stripInlineCode(line);
+    assert.ok(!/<script|<\/script|<img|<\/style|<svg|<b>|<i>|onerror|onload|alert\(/i.test(plain), `フェンスの外に出ています: ${line}`);
+  }
+  // 固定の説明文も、全文つき版ではインラインコードにしている
+  assert.ok(md.includes('- HTMLの `<script src>` と `<link rel="stylesheet">` 以外の方法で読み込まれるコード'));
+});
+
+test('全文つき版の全体: タイトル・URL・抜粋・危険情報チェック欄の機密情報らしい値を載せない', () => {
+  const md = buildFullMarkdown(hostileData());
+  for (const secret of ['abcdefghijklmnop1234', 'abcdefghijklmnop9999', 'a@b.example', 'boss@corp.example', 'boss...mple']) {
+    assert.ok(!md.includes(secret), `${secret} が残っています`);
+  }
+  assert.match(md, /- \[`HTML`\] メールアドレス（値は全文つき版には載せません/);
+  assert.match(md, /- ページタイトル: `+ ?<script>alert\("title"\)<\/script> ``` \[WDP:マスク済み\] ?`+/);
+});
+
+test('通常版は、危険な入力でも従来どおりの書き方のまま（全文つき版の安全処理が混ざらない）', () => {
+  const md = buildMarkdown(hostileData());
+  assert.ok(md.includes('- ページタイトル: <script>alert("title")</script> ``` boss@corp.example'));
+  assert.ok(md.includes('- [HTML] メールアドレス: `boss...mple`'));
+  assert.ok(md.includes('```\nx = "```"; </script>'));
+  assert.ok(!md.includes(MASK_MARKER));
+  assert.ok(md.includes('- HTMLの<script src>と<link rel="stylesheet">以外の方法で読み込まれるコード'));
+});
+
+test('メールアドレスのパターン: 英数字の長い連続でも時間がかからず、検出結果は従来と同じ', () => {
+  const blob = 'A'.repeat(MAX_RESOURCE_CHARS);
+  const started = Date.now();
+  assert.equal(maskSensitive(blob).count, 0);
+  assert.deepEqual(checkDangerousContent([{ label: 'X', text: blob }]), []);
+  assert.ok(Date.now() - started < 1000, `${Date.now() - started}ms`);
+
+  // 後読みを付ける前と同じ文字列が見つかる
+  const text = 'mail: foo.bar+x@example.co.jp, <a@b.cd> x-y_z@q.io icon@2x.png';
+  const oldRegex = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
+  const found = checkDangerousContent([{ label: 'X', text }]).filter((f) => f.type === 'メールアドレス');
+  const expected = (text.match(oldRegex) || []).slice(0, 3);
+  assert.equal(found.length, expected.length);
+  assert.equal(maskSensitive(text).text.match(/\[WDP:マスク済み\]/g).length, text.match(oldRegex).length);
 });

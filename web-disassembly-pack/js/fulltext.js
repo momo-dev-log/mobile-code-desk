@@ -80,6 +80,20 @@ export function inlineCode(text) {
   return `${tick}${pad}${body}${pad}${tick}`;
 }
 
+/**
+ * ページ由来の短い文字列（タイトル・URL・識別子）を、制御文字の置き換え・マスクのうえでインラインコードにする。
+ */
+export function safeText(value) {
+  return inlineCode(maskSensitive(sanitizeCodeText(String(value ?? '')).text).text);
+}
+
+/**
+ * ページ由来のコード片（抜粋など）を、制御文字の置き換え・マスクのうえで安全なコードフェンスにする。
+ */
+export function safeCodeBlock(value, lang = '') {
+  return fenceCode(maskSensitive(sanitizeCodeText(String(value ?? '')).text).text, lang);
+}
+
 // -----------------------------------------------
 // HTML構造枠
 // -----------------------------------------------
@@ -254,6 +268,8 @@ const omitNote = (count) => `…[WDP:${count}文字省略]`;
  * 1. 上限を超える場合: 空白の連続をまとめ、長いテキスト・属性値（data: URIなど）・コメントを短くする。
  *    タグと要素の入れ子はそのまま残す。
  * 2. それでも超える場合: タグの境目で「先頭」と「末尾」を残し、中間を省略する（省略した文字数を明記）。
+ *    切る位置は開いている要素の少ない境目を選び、それでも崩れる開始・終了タグの対応を記録する。
+ *    欠けたタグは補わない。
  *
  * @param {string} html 元のHTML
  * @param {number} [limit]
@@ -328,12 +344,17 @@ export function buildHtmlSkeleton(html, limit = MAX_FULL_HTML_CHARS) {
   // 段階2: 先頭と末尾を残して中間を省略する
   let truncated = false;
   let omittedChars = 0;
+  let cutStructure = null;
   if (text.length > limit) {
     truncated = true;
     const result = cutHeadAndTail(tokens, limit);
     text = result.text;
     omittedChars = result.omittedChars;
+    cutStructure = result.cutStructure;
   }
+
+  // 元HTML自体のタグの対応（簡易計算）。省略とは別に、元から崩れている場合を区別して伝える
+  const { implicitlyClosed, unclosedAtEnd, orphanCloses } = computeOpenStacks(tokens);
 
   return {
     text,
@@ -341,6 +362,8 @@ export function buildHtmlSkeleton(html, limit = MAX_FULL_HTML_CHARS) {
     truncated,
     compacted,
     omittedChars,
+    cutStructure,
+    sourceBalance: { implicitlyClosed, unclosedAtEnd, orphanCloses },
     ...stats,
   };
 }
@@ -396,35 +419,159 @@ function compactTokens(tokens, stats) {
 }
 
 const HEAD_SHARE = 0.8;
-const CUT_MARKER_RESERVE = 120;
+// 切る位置を探す範囲（各予算のうち、末尾側この割合の中から入れ子の浅い境目を選ぶ）
+const CUT_SEARCH_SHARE = 0.25;
+const CUT_MARKER_RESERVE = 240;
+const MAX_LISTED_ELEMENTS = 8;
 
+// 終了タグを持たない要素（HTML Living Standard の void elements）
+const VOID_ELEMENTS = new Set([
+  'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr',
+]);
+
+/**
+ * 開始タグ・終了タグの名前の対応から、各トークンの直前で「開いている要素」の並びを求める（簡易計算）。
+ *
+ * - void要素と「/>」で閉じたタグは開いたままにしない
+ * - 終了タグは、同じ名前で最も内側の開いている要素を閉じる。その内側で開いたままの要素は
+ *   「終了タグなしで閉じた」ものとして数える（p・li などの終了タグ省略を含む）
+ * - 対応する開始タグが無い終了タグは数えるだけで、並びは変えない
+ * - ブラウザのHTML構文解析（自動で補う要素・入れ子の組み替えなど）は再現しない
+ *
+ * 要素は開始タグのトークン番号で区別する（同じ名前の別の要素と取り違えない）。
+ */
+export function computeOpenStacks(tokens) {
+  const stacks = new Array(tokens.length + 1);
+  let stack = [];
+  let implicitlyClosed = 0;
+  let orphanCloses = 0;
+
+  for (let i = 0; i < tokens.length; i += 1) {
+    stacks[i] = stack;
+    const token = tokens[i];
+    if (token.type === 'open') {
+      if (VOID_ELEMENTS.has(token.name) || /\/>$/.test(token.raw)) continue;
+      stack = [...stack, { name: token.name, openIndex: i, closeIndex: null }];
+    } else if (token.type === 'close') {
+      let idx = -1;
+      for (let j = stack.length - 1; j >= 0; j -= 1) {
+        if (stack[j].name === token.name) { idx = j; break; }
+      }
+      if (idx === -1) {
+        orphanCloses += 1;
+        continue;
+      }
+      stack[idx].closeIndex = i;
+      implicitlyClosed += stack.length - idx - 1;
+      stack = stack.slice(0, idx);
+    }
+  }
+  stacks[tokens.length] = stack;
+
+  return { stacks, implicitlyClosed, unclosedAtEnd: stack.length, orphanCloses };
+}
+
+function describeElement(tokens, element) {
+  const attrs = tokens[element.openIndex].attrs || [];
+  const id = attrValue(attrs, 'id');
+  const cls = (attrValue(attrs, 'class') || '').trim().split(/\s+/).filter(Boolean).slice(0, 2);
+  return `${element.name}${id ? '#' + id : ''}${cls.map((c) => '.' + c).join('')}`;
+}
+
+function listElements(tokens, elements) {
+  const names = elements.slice(0, MAX_LISTED_ELEMENTS).map((e) => describeElement(tokens, e));
+  if (elements.length > MAX_LISTED_ELEMENTS) names.push(`ほか${elements.length - MAX_LISTED_ELEMENTS}個`);
+  return names;
+}
+
+function commonPrefixLength(a, b) {
+  let k = 0;
+  while (k < a.length && k < b.length && a[k] === b[k]) k += 1;
+  return k;
+}
+
+/**
+ * タグの境目で先頭と末尾を残し、中間を省略する。
+ *
+ * 切る位置は、予算内の境目のうち「開いている要素が少ない」ものを選ぶ（同じなら長く残す方）。
+ * それでも省略をまたいで開始・終了タグの対応が崩れる要素は、元HTMLのどの要素かを記録する。
+ * 欠けたタグを補うことはしない（元HTMLに無い構造を作らないため）。
+ */
 function cutHeadAndTail(tokens, limit) {
+  const { stacks } = computeOpenStacks(tokens);
+  const n = tokens.length;
+  const prefix = new Array(n + 1);
+  prefix[0] = 0;
+  for (let i = 0; i < n; i += 1) prefix[i + 1] = prefix[i] + tokens[i].raw.length;
+  const total = prefix[n];
+
   const budget = Math.max(0, limit - CUT_MARKER_RESERVE);
   const headBudget = Math.floor(budget * HEAD_SHARE);
   const tailBudget = budget - headBudget;
 
-  let headLen = 0;
-  let headEnd = 0;
-  while (headEnd < tokens.length && headLen + tokens[headEnd].raw.length <= headBudget) {
-    headLen += tokens[headEnd].raw.length;
-    headEnd += 1;
+  // 先頭側: prefix[b] <= headBudget の境目 b のうち、探索範囲で最も入れ子の浅いもの（同じなら後ろ）
+  let headMax = 0;
+  while (headMax < n && prefix[headMax + 1] <= headBudget) headMax += 1;
+  const headFloor = headBudget * (1 - CUT_SEARCH_SHARE);
+  let headEnd = headMax;
+  for (let b = headMax; b >= 0 && prefix[b] >= headFloor; b -= 1) {
+    if (stacks[b].length < stacks[headEnd].length) headEnd = b;
   }
 
-  let tailLen = 0;
-  let tailStart = tokens.length;
-  while (tailStart > headEnd && tailLen + tokens[tailStart - 1].raw.length <= tailBudget) {
-    tailLen += tokens[tailStart - 1].raw.length;
-    tailStart -= 1;
+  // 末尾側: total - prefix[t] <= tailBudget の境目 t のうち、先頭側との対応の崩れが最も少ないもの（同じなら前）
+  let tailMin = n;
+  while (tailMin > headEnd && total - prefix[tailMin - 1] <= tailBudget) tailMin -= 1;
+  const tailFloor = tailBudget * (1 - CUT_SEARCH_SHARE);
+  const mismatch = (t) => {
+    const k = commonPrefixLength(stacks[headEnd], stacks[t]);
+    return (stacks[headEnd].length - k) + (stacks[t].length - k);
+  };
+  let tailStart = tailMin;
+  for (let t = tailMin; t <= n && total - prefix[t] >= tailFloor; t += 1) {
+    if (mismatch(t) < mismatch(tailStart)) tailStart = t;
   }
+
+  return finishCut(tokens, stacks, prefix, headEnd, tailStart, limit);
+}
+
+function finishCut(tokens, stacks, prefix, headEnd, tailStart, limit) {
+  const headStack = stacks[headEnd];
+  const tailStack = stacks[tailStart];
+  const common = commonPrefixLength(headStack, tailStack);
+
+  // 開始タグは先頭側に収録、終了タグは省略範囲（または元HTMLに無い）
+  const endTagMissing = headStack.slice(common);
+  // 開始タグは省略範囲。終了タグが末尾側に残っているかどうかで分ける
+  const startTagMissing = tailStack.slice(common);
+  const orphanEndTagsInTail = startTagMissing.filter((e) => e.closeIndex !== null && e.closeIndex >= tailStart);
 
   const omitted = tokens.slice(headEnd, tailStart);
-  const omittedChars = omitted.reduce((sum, t) => sum + t.raw.length, 0);
+  const omittedChars = prefix[tailStart] - prefix[headEnd];
   const omittedTags = omitted.filter((t) => t.type === 'open').length;
-  const marker = `\n<!-- [WDP] ここから ${omittedChars}文字（開始タグ ${omittedTags}個を含む）を文字数上限のため省略 -->\n`;
+  const marker = `\n<!-- [WDP] ここから ${omittedChars}文字（開始タグ ${omittedTags}個を含む）を文字数上限のため省略。`
+    + `省略により終了タグが欠けた要素 ${endTagMissing.length}個 / 開始タグが欠けた要素 ${startTagMissing.length}個（うち終了タグだけ末尾側にある ${orphanEndTagsInTail.length}個）。欠けたタグは補っていません -->\n`;
 
   const head = tokens.slice(0, headEnd).map((t) => t.raw).join('');
   const tail = tokens.slice(tailStart).map((t) => t.raw).join('');
-  return { text: head + marker + tail, omittedChars };
+  const text = head + marker + tail;
+
+  // 目印が想定より長く上限を超えた場合は、先頭側を1トークンずつ減らして作り直す
+  if (text.length > limit && headEnd > 0) {
+    return finishCut(tokens, stacks, prefix, headEnd - 1, tailStart, limit);
+  }
+
+  return {
+    text,
+    omittedChars,
+    cutStructure: {
+      enclosingAtCut: listElements(tokens, headStack.slice(0, common)),
+      endTagMissing: listElements(tokens, endTagMissing),
+      startTagMissing: listElements(tokens, startTagMissing),
+      endTagMissingCount: endTagMissing.length,
+      startTagMissingCount: startTagMissing.length,
+      orphanEndTagsInTailCount: orphanEndTagsInTail.length,
+    },
+  };
 }
 
 // -----------------------------------------------
@@ -594,10 +741,20 @@ function buildSkeletonSection(lines, skeleton) {
     lines.push('- 短縮: なし（タグ・テキスト・属性値は元のまま）');
   }
   if (skeleton.truncated) {
+    const cut = skeleton.cutStructure;
+    const list = (names) => (names.length ? names.map((name) => safeText(name)).join(' > ') : 'なし');
     lines.push(`- 切り詰め: あり。先頭と末尾を残し、中間の${skeleton.omittedChars}文字（短縮後の文字数）を省略しました（省略位置に \`[WDP]\` のコメントがあります）。`);
+    lines.push('- 省略位置のタグ構造（下の「タグの対応についての限界」の簡易計算による）:');
+    lines.push(`  - 省略をまたいで開いたままの要素（開始タグは先頭側、終了タグは末尾側）: ${list(cut.enclosingAtCut)}`);
+    lines.push(`  - 終了タグが欠けた要素（開始タグは先頭側にあり、終了タグは省略範囲）: ${cut.endTagMissingCount}個 ${list(cut.endTagMissing)}`);
+    lines.push(`  - 開始タグが欠けた要素（開始タグは省略範囲）: ${cut.startTagMissingCount}個 ${list(cut.startTagMissing)}。うち終了タグだけが末尾側に残っているもの ${cut.orphanEndTagsInTailCount}個`);
+    lines.push('  - 欠けたタグは補っていません。収録したHTMLをそのまま貼り付けても、元のページと同じ入れ子にはなりません。省略範囲の中身（要素の種類・数・入れ子）は不明として扱ってください。');
   } else {
     lines.push('- 切り詰め: なし');
   }
+  const balance = skeleton.sourceBalance;
+  lines.push(`- 元HTMLのタグの対応（簡易計算）: 終了タグなしで閉じた要素 ${balance.implicitlyClosed}個 / 最後まで閉じていない要素 ${balance.unclosedAtEnd}個 / 対応する開始タグのない終了タグ ${balance.orphanCloses}個`);
+  lines.push('- タグの対応についての限界: 開始タグと終了タグを名前で対応させる簡易計算です（void要素と「/>」は考慮）。p・li などの終了タグ省略、ブラウザが自動で補う要素（tbodyなど）、入れ子の組み替えは再現しないため、ブラウザが作るDOMと一致するとは限りません。');
   if (skeleton.maskedCount > 0) lines.push(`- マスク: ${skeleton.maskedCount}件`);
   if (skeleton.replacedControls > 0) lines.push(`- 制御文字の置き換え: ${skeleton.replacedControls}件`);
   lines.push('');
@@ -621,7 +778,7 @@ function buildCodeSection(lines, heading, lang, sources, budget) {
   }
 
   for (const source of sources) {
-    lines.push(`#### [${source.type}・${ORIGIN_LABEL[source.origin]}] ${inlineCode(source.label)}`);
+    lines.push(`#### [${source.type}・${ORIGIN_LABEL[source.origin]}] ${safeText(source.label)}`);
     lines.push('');
     lines.push(`- 元の文字数: ${source.size}文字`);
     lines.push(source.analysisTruncated
@@ -629,7 +786,7 @@ function buildCodeSection(lines, heading, lang, sources, budget) {
       : `- 解析範囲: ${source.analyzedChars}文字（全文）`);
 
     if (source.inclusion === 'duplicate') {
-      lines.push(`- 収録: なし（${inlineCode(source.duplicateOf)} と同一内容のため本文を省略）`);
+      lines.push(`- 収録: なし（${safeText(source.duplicateOf)} と同一内容のため本文を省略）`);
       lines.push('');
       continue;
     }
@@ -670,13 +827,13 @@ function buildNotIncludedSection(lines, plan, data) {
     for (const entry of entries || []) {
       if (entry.status === 'ok') continue;
       const reason = entry.status === 'failed' && entry.reason ? `（理由: ${entry.reason}）` : '';
-      items.push(`- [${type}] ${inlineCode(entry.label)}: ${describe[entry.status] || '不明'}${reason}`);
+      items.push(`- [${type}] ${safeText(entry.label)}: ${describe[entry.status] || '不明'}${reason}`);
     }
   }
   for (const source of [...plan.css, ...plan.js]) {
-    if (source.inclusion === 'none') items.push(`- [${source.type}] ${inlineCode(source.label)}: 文字数上限のため本文を収録せず（${source.text.length}文字）`);
-    if (source.inclusion === 'partial') items.push(`- [${source.type}] ${inlineCode(source.label)}: 文字数上限のため ${source.includedChars + 1}文字目以降を収録せず`);
-    if (source.analysisTruncated) items.push(`- [${source.type}] ${inlineCode(source.label)}: 1ファイルの解析上限のため ${source.analyzedChars + 1}文字目以降は取得・収録せず`);
+    if (source.inclusion === 'none') items.push(`- [${source.type}] ${safeText(source.label)}: 文字数上限のため本文を収録せず（${source.text.length}文字）`);
+    if (source.inclusion === 'partial') items.push(`- [${source.type}] ${safeText(source.label)}: 文字数上限のため ${source.includedChars + 1}文字目以降を収録せず`);
+    if (source.analysisTruncated) items.push(`- [${source.type}] ${safeText(source.label)}: 1ファイルの解析上限のため ${source.analyzedChars + 1}文字目以降は取得・収録せず`);
   }
 
   if (items.length === 0) {
