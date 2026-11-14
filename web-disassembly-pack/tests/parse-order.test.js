@@ -59,3 +59,16 @@ test('非実行script（JSON-LD / importmap）はJSとして数えない', () =>
   assert.equal(parsed.structure.externalScriptCount, 1);
   assert.equal(parsed.jsScripts[0].url, 'https://example.com/app/main.js');
 });
+
+test('非HTTPのscript srcは取得対象と実行順から除外する', () => {
+  scripts = [
+    new FakeScript({ src: 'data:text/javascript,alert(1)' }, ''),
+    new FakeScript({ src: 'javascript:alert(1)' }, ''),
+    new FakeScript({ src: 'blob:https://site.example/id' }, ''),
+    new FakeScript({ src: './safe.js' }, ''),
+  ];
+  const parsed = parseHtml('', 'https://site.example/app/');
+  assert.deepEqual(parsed.jsScripts.map(x => x.url), ['https://site.example/app/safe.js']);
+  assert.equal(parsed.structure.externalScriptCount, 1);
+  assert.equal(parsed.scriptOrder.length, 1);
+});

@@ -113,7 +113,8 @@ function scriptAttributes(script) {
 function resolveUrl(maybeRelative, baseUrl) {
   if (!maybeRelative) return null;
   try {
-    return new URL(maybeRelative, baseUrl).href;
+    const resolved = new URL(maybeRelative, baseUrl);
+    return ['http:', 'https:'].includes(resolved.protocol) ? resolved.href : null;
   } catch {
     return null;
   }
