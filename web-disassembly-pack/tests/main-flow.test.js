@@ -221,3 +221,105 @@ test('取得中に「やり直す」を押すと、遅れて返ってきたHTML�
   assert.equal(el('step-structure').hidden, true);
   assert.equal(el('fetch-status').textContent, '');
 });
+
+// 前のテストの状態（失敗して残った保留中の通信を含む）に影響されないよう、最初からやり直す
+function startFresh() {
+  click('reset-btn');
+  pending.clear();
+}
+
+const TWO_EXTERNAL_HTML = '<script src="/a.js"></script><script src="/b.js"></script><script>const canvas = 1;</script>';
+
+test('解析中に「やり直す」を押すと、古い解析は残りの外部ファイルを取りに行かない', async () => {
+  startFresh();
+  el('url-input').value = 'https://stop.example/';
+  const fetched = click('fetch-btn');
+  respond('https://stop.example/', okHtml(TWO_EXTERNAL_HTML));
+  await fetched;
+
+  const analyzed = click('structure-btn');
+  await flush();
+  assert.ok(pending.has('https://stop.example/a.js'));
+
+  click('reset-btn');
+  respond('https://stop.example/a.js', okHtml('A'));
+  await flush();
+  // 返事を待ち続けて止まらないよう、古い解析の終了を待つ前に確かめる
+  assert.ok(!pending.has('https://stop.example/b.js'), '古い解析が b.js を取りに行っています');
+  assert.equal(pending.size, 0);
+  await analyzed;
+});
+
+test('E1: 古い解析の通信が、新しいURLの解析の途中で遅れて返っても混ざらない', async () => {
+  startFresh();
+  el('url-input').value = 'https://old.example/';
+  let fetched = click('fetch-btn');
+  respond('https://old.example/', okHtml(TWO_EXTERNAL_HTML));
+  await fetched;
+  const oldRun = click('structure-btn');
+  await flush();
+
+  click('reset-btn');
+  el('url-input').value = 'https://new.example/';
+  fetched = click('fetch-btn');
+  respond('https://new.example/', okHtml(PAGE_HTML));
+  await fetched;
+  const newRun = click('structure-btn');
+  await flush();
+
+  // 新しい解析の途中で、古い解析の通信が返ってくる
+  respond('https://old.example/a.js', okHtml('OLD_RESOURCE_MARKER'));
+  await flush();
+  // 返事を待ち続けて止まらないよう、古い解析の終了を待つ前に確かめる
+  assert.ok(!pending.has('https://old.example/b.js'), '古い解析が b.js を取りに行っています');
+  await oldRun;
+  assert.equal(el('structure-btn').textContent, '解析中...', '新しい解析が古い解析の後始末で止められています');
+  assert.equal(el('fetch-btn').disabled, true);
+
+  respond('https://new.example/app.js', okHtml('function draw() {}'));
+  await newRun;
+  click('markdown-btn');
+  const markdown = el('markdown-preview').value;
+  assert.ok(markdown.includes('https://new.example/'));
+  assert.ok(!markdown.includes('old.example'));
+  assert.ok(!markdown.includes('OLD_RESOURCE_MARKER'));
+});
+
+test('E2: 解析の途中で例外が出ても、ボタンが戻りメッセージが出る', async () => {
+  startFresh();
+  // 前のテストに頼らず、このテストで取得したページを解析する
+  el('url-input').value = 'https://throw.example/';
+  const fetched = click('fetch-btn');
+  respond('https://throw.example/', okHtml(PAGE_HTML));
+  await fetched;
+
+  const OriginalParser = globalThis.DOMParser;
+  globalThis.DOMParser = class { parseFromString() { throw new Error('parse failed'); } };
+  try {
+    await click('structure-btn');
+  } finally {
+    globalThis.DOMParser = OriginalParser;
+  }
+  assert.equal(el('structure-btn').disabled, false);
+  assert.equal(el('structure-btn').textContent, '構造を見る');
+  assert.equal(el('fetch-btn').disabled, false);
+  assert.equal(el('markdown-btn').disabled, false);
+  assert.match(el('analyzed-url').textContent, /解析中にエラーが発生しました/);
+  assert.equal(el('step-markdown').hidden, true);
+  assert.equal(el('markdown-preview').value, '');
+});
+
+test('E3: 取得の通信そのものが失敗（reject）しても、ボタンが戻る', async () => {
+  startFresh();
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = () => Promise.reject(new Error('network down'));
+  try {
+    el('url-input').value = 'https://reject.example/';
+    await click('fetch-btn');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+  assert.equal(el('fetch-btn').disabled, false);
+  assert.match(el('fetch-status').textContent, /取得に失敗しました（通信エラー）/);
+  assert.equal(el('step-structure').hidden, true);
+});
