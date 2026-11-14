@@ -29,3 +29,18 @@ test('該当パターンが無い場合は空配列', () => {
 
   assert.deepEqual(findings, []);
 });
+
+test('JavaScript識別子と画像パスは機密情報として検出しない', async () => {
+  const { maskSensitive } = await import('../js/danger-check.js');
+  const code = 'getAccessTokenFromStorage(); firebaseAuthInstance; url(img/icon@2x.png)';
+  assert.equal(maskSensitive(code).text, code);
+  assert.deepEqual(checkDangerousContent([{ label: 'JS', text: code }]), []);
+});
+
+test('実際のキー代入はマスクする', async () => {
+  const { maskSensitive } = await import('../js/danger-check.js');
+  const source = 'const apiKey = "sk_live_1234567890abcdef";';
+  const result = maskSensitive(source);
+  assert.ok(result.count > 0);
+  assert.ok(!result.text.includes('sk_live_1234567890abcdef'));
+});

@@ -69,17 +69,18 @@ export default {
         signal: controller.signal,
       });
     } catch {
-      return jsonResponse({ ok: false, reason: 'network' });
-    } finally {
       clearTimeout(timeoutId);
+      return jsonResponse({ ok: false, reason: controller.signal.aborted ? 'timeout' : 'network' });
     }
 
     if (siteResponse.status >= 400) {
+      clearTimeout(timeoutId);
       return jsonResponse({ ok: false, reason: 'http_error', httpStatus: siteResponse.status });
     }
 
     const contentLength = siteResponse.headers.get('content-length');
     if (contentLength && Number(contentLength) > MAX_RAW_BYTES) {
+      clearTimeout(timeoutId);
       return jsonResponse({ ok: false, reason: 'too_large', httpStatus: siteResponse.status });
     }
 
@@ -87,7 +88,9 @@ export default {
     try {
       buffer = await siteResponse.arrayBuffer();
     } catch {
-      return jsonResponse({ ok: false, reason: 'network' });
+      return jsonResponse({ ok: false, reason: controller.signal.aborted ? 'timeout' : 'network' });
+    } finally {
+      clearTimeout(timeoutId);
     }
 
     if (buffer.byteLength > MAX_RAW_BYTES) {

@@ -9,7 +9,7 @@
 const PATTERNS = [
   {
     type: 'APIキー/トークンらしき文字列',
-    regex: /(api[_-]?key|secret|token|access[_-]?key|auth)(["'\s:=]+)([A-Za-z0-9_\-]{12,})/gi,
+    regex: /\b(api[_-]?key|secret|token|access[_-]?key|auth)\b(\s*[:=]\s*["']?|["']\s*:\s*["'])([A-Za-z0-9_\-]{12,})/gi,
     // マスク時はキー名と区切りを残し、値だけを置き換える
     keepPrefixGroups: 2,
   },
@@ -25,7 +25,7 @@ const PATTERNS = [
     type: 'メールアドレス',
     // 先頭の否定の後読み: 英数字の長い連続（base64など）の途中から照合を始め直さない（2乗の時間を防ぐ）。
     // 一致は必ず連続の先頭から始まるため、見つかる文字列は後読みなしの場合と同じ。
-    regex: /(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g,
+    regex: /(?<![A-Za-z0-9._%+/@-])[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}(?![A-Za-z0-9/])/g,
   },
   {
     type: '秘密鍵ブロック',

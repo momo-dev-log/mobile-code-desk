@@ -37,14 +37,25 @@ test('scriptOrder: script要素を記述順に、外部・インラインと属�
     { kind: 'external', url: 'https://cdn.example/lib.js', sameOrigin: false, type: '', module: false, async: true, defer: false, nomodule: false },
     { kind: 'external', url: 'https://site.example/app.js', sameOrigin: true, type: 'module', module: true, async: false, defer: false, nomodule: false },
     { kind: 'external', url: 'https://site.example/legacy.js', sameOrigin: true, type: '', module: false, async: false, defer: true, nomodule: true },
-    { kind: 'inline', label: 'インラインscript #2', chars: 7, type: 'application/ld+json', module: false, async: false, defer: false, nomodule: false },
   ]);
 
   // 既存の項目（通常解析が使う）は従来どおり
   assert.deepEqual(parsed.jsScripts.map((s) => s.url), [
     'https://site.example/vendor.js', 'https://cdn.example/lib.js', 'https://site.example/app.js', 'https://site.example/legacy.js',
   ]);
-  assert.deepEqual(parsed.inlineScripts, ['window.CONFIG = {};', '{"a":1}']);
+  assert.deepEqual(parsed.inlineScripts, ['window.CONFIG = {};']);
   assert.equal(parsed.structure.externalScriptCount, 4);
-  assert.equal(parsed.structure.inlineScriptCount, 2);
+  assert.equal(parsed.structure.inlineScriptCount, 1);
+});
+
+test('非実行script（JSON-LD / importmap）はJSとして数えない', () => {
+  scripts = [
+    new FakeScript({ type: 'application/ld+json' }, '{"name":"Example"}'),
+    new FakeScript({ type: 'importmap' }, '{"imports":{}}'),
+    new FakeScript({ type: 'module', src: './main.js' }, ''),
+  ];
+  const parsed = parseHtml('', 'https://example.com/app/');
+  assert.equal(parsed.structure.inlineScriptCount, 0);
+  assert.equal(parsed.structure.externalScriptCount, 1);
+  assert.equal(parsed.jsScripts[0].url, 'https://example.com/app/main.js');
 });
