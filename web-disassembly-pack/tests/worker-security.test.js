@@ -29,3 +29,17 @@ test('Worker blocks redirect to private network before fetching it', async () =>
     globalThis.fetch = oldFetch;
   }
 });
+
+test('Worker rejects redirect response with no Location header', async () => {
+  const oldFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(null, { status: 302 });
+  try {
+    const response = await worker.fetch(new Request('https://worker.example/?url=https%3A%2F%2Fexample.com'));
+    const data = await response.json();
+    assert.equal(data.ok, false);
+    assert.equal(data.reason, 'http_error');
+    assert.equal(data.httpStatus, 400);
+  } finally {
+    globalThis.fetch = oldFetch;
+  }
+});
