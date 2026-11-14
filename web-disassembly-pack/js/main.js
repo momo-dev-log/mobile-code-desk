@@ -5,7 +5,8 @@ import { CSS_EXCERPT_CATEGORIES, JS_EXCERPT_CATEGORIES } from './keywords.js';
 import { detectLibraries } from './libraries.js';
 import { checkDangerousContent } from './danger-check.js';
 import { buildMarkdown } from './markdown.js';
-import { MAX_CSS_FILES, MAX_JS_FILES, MAX_RESOURCE_CHARS, APP_VERSION } from './constants.js';
+import { buildInlineEntry, truncateForAnalysis } from './coverage.js';
+import { MAX_CSS_FILES, MAX_JS_FILES, APP_VERSION } from './constants.js';
 
 // -----------------------------------------------
 // DOM要素
@@ -132,8 +133,8 @@ async function handleStructure() {
   analyzedUrlEl.textContent = `解析対象: ${state.pageUrl}`;
   renderStructureCards(parsed.structure);
 
-  state.inlineStyles = parsed.inlineStyles.map((text) => buildInlineEntry(text));
-  state.inlineScripts = parsed.inlineScripts.map((text) => buildInlineEntry(text));
+  state.inlineStyles = parsed.inlineStyles.map((text, i) => buildInlineEntry(text, `インラインstyle #${i + 1}`));
+  state.inlineScripts = parsed.inlineScripts.map((text, i) => buildInlineEntry(text, `インラインscript #${i + 1}`));
 
   state.cssResources = await buildResourceEntries(parsed.cssLinks, MAX_CSS_FILES);
   state.jsResources = await buildResourceEntries(parsed.jsScripts, MAX_JS_FILES);
@@ -250,30 +251,16 @@ async function buildResourceEntries(links, maxCount) {
       continue;
     }
 
-    const text = result.content;
-    const truncated = text.length > MAX_RESOURCE_CHARS;
-    const processedText = truncated ? text.slice(0, MAX_RESOURCE_CHARS) : text;
-
+    // size（元の文字数）・analyzedChars（解析した文字数）・truncated を残し、
+    // Markdownの「取得・解析範囲」で切り詰めを明示できるようにする。
     entries.push({
       label: link.url,
       status: 'ok',
-      size: text.length,
-      truncated,
-      rawText: processedText,
+      ...truncateForAnalysis(result.content),
     });
   }
 
   return entries;
-}
-
-function buildInlineEntry(text) {
-  const truncated = text.length > MAX_RESOURCE_CHARS;
-  const processedText = truncated ? text.slice(0, MAX_RESOURCE_CHARS) : text;
-
-  return {
-    size: text.length,
-    rawText: processedText,
-  };
 }
 
 function describeFailure(result) {
@@ -391,6 +378,9 @@ function handleMarkdown() {
     cssResources: state.cssResources,
     jsResources: state.jsResources,
     dangerFindings: state.dangerFindings,
+    htmlChars: (state.html || '').length,
+    inlineStyles: state.inlineStyles,
+    inlineScripts: state.inlineScripts,
   });
 
   markdownPreview.value = state.markdown;
