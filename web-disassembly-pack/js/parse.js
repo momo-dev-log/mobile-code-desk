@@ -31,7 +31,7 @@
 export function parseHtml(html, pageUrl) {
   const doc = new DOMParser().parseFromString(html, 'text/html');
   const pageOrigin = getOrigin(pageUrl);
-  const baseHref = doc.querySelector('base[href]')?.getAttribute('href');
+  const baseHref = doc.querySelector?.('base[href]')?.getAttribute('href');
   const resourceBaseUrl = baseHref ? resolveUrl(baseHref, pageUrl) || pageUrl : pageUrl;
 
   const structure = {
