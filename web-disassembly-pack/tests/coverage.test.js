@@ -167,3 +167,11 @@ test('動的に読み込まれるコードは追跡していないことを常�
   const markdown = buildMarkdown(baseData());
   assert.ok(coverageSection(markdown).includes('このツールでは追跡していません'));
 });
+
+test('危険情報チェックの対象範囲と、安全を保証しないことを正しく説明する', () => {
+  const section = coverageSection(buildMarkdown(baseData()));
+  assert.ok(section.includes('キーワード検出・ライブラリ検出・抜粋は、下の「解析」の文字数の範囲だけを対象'));
+  assert.ok(section.includes('危険情報チェックは、HTML本文の全文（インラインのstyle/scriptを含む）'));
+  assert.ok(section.includes('検出されなくても安全とは限りません'));
+  assert.ok(!section.includes('抜粋・危険情報チェックは、下の「解析」の文字数の範囲だけ'));
+});

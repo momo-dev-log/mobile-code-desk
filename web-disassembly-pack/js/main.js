@@ -1,6 +1,6 @@
 import { fetchResource } from './fetch.js';
 import { parseHtml } from './parse.js';
-import { extractCategoryExcerpts, detectJsFeatures } from './excerpt.js';
+import { extractCategoryExcerpts, detectJsFeatures, orderSourcesBySize } from './excerpt.js';
 import { CSS_EXCERPT_CATEGORIES, JS_EXCERPT_CATEGORIES } from './keywords.js';
 import { detectLibraries } from './libraries.js';
 import { checkDangerousContent } from './danger-check.js';
@@ -40,6 +40,30 @@ const resetBtn = document.getElementById('reset-btn');
 // 状態（1ページ分の解析結果。永続化はしない）
 // -----------------------------------------------
 let state = {};
+
+// 実行中の取得・解析の識別番号。clearResults() のたびに進めることで、
+// やり直し・新しいURLの取得より前に始まった処理の結果を、画面と状態に書き込ませない。
+let runId = 0;
+
+function beginRun() {
+  runId += 1;
+  return runId;
+}
+
+function isCurrentRun(id) {
+  return id === runId;
+}
+
+/**
+ * 取得・解析の実行中かどうかで、操作ボタンの状態を切り替える。
+ * 実行中は「URLを取得」「構造を見る」「Markdownを作る」を押せないようにする。
+ */
+function setBusy(busy) {
+  fetchBtn.disabled = busy;
+  structureBtn.disabled = busy;
+  markdownBtn.disabled = busy;
+  structureBtn.textContent = busy && !stepStructure.hidden ? '解析中...' : '構造を見る';
+}
 
 // -----------------------------------------------
 // イベント登録
@@ -96,13 +120,22 @@ async function handleFetch() {
     return;
   }
 
-  fetchBtn.disabled = true;
-  fetchStatus.textContent = '取得中...';
   clearResults();
+  const id = beginRun();
+  setBusy(true);
+  fetchStatus.textContent = '取得中...';
 
-  const result = await fetchResource(normalizedUrl);
+  let result;
+  try {
+    result = await fetchResource(normalizedUrl);
+  } catch {
+    result = { ok: false, reason: 'network' };
+  }
 
-  fetchBtn.disabled = false;
+  // 取得中に「やり直す」が押された場合、この結果は捨てる
+  if (!isCurrentRun(id)) return;
+
+  setBusy(false);
 
   if (!result.ok) {
     fetchStatus.textContent = `取得に失敗しました（${describeFailure(result)}）`;
@@ -123,9 +156,28 @@ async function handleFetch() {
 // 2. 構造を見る
 // -----------------------------------------------
 async function handleStructure() {
-  structureBtn.disabled = true;
-  structureBtn.textContent = '解析中...';
+  // 前回の解析結果（生成済みMarkdownを含む）を消し、取得済みのHTMLだけを残す
+  const { pageUrl, finalUrl, html } = state;
+  if (typeof html !== 'string') return;
+  state = { pageUrl, finalUrl, html };
+  clearAnalysisOutputs();
 
+  const id = beginRun();
+  setBusy(true);
+
+  try {
+    await runStructureAnalysis(id);
+  } catch {
+    if (isCurrentRun(id)) {
+      analyzedUrlEl.textContent = '解析中にエラーが発生しました。もう一度「構造を見る」を押してください。';
+    }
+  } finally {
+    // やり直し・新しい取得で無効になった解析は、ボタン状態に触らない
+    if (isCurrentRun(id)) setBusy(false);
+  }
+}
+
+async function runStructureAnalysis(id) {
   const parsed = parseHtml(state.html, state.pageUrl);
   state.title = parsed.title;
   state.structure = parsed.structure;
@@ -136,8 +188,13 @@ async function handleStructure() {
   state.inlineStyles = parsed.inlineStyles.map((text, i) => buildInlineEntry(text, `インラインstyle #${i + 1}`));
   state.inlineScripts = parsed.inlineScripts.map((text, i) => buildInlineEntry(text, `インラインscript #${i + 1}`));
 
-  state.cssResources = await buildResourceEntries(parsed.cssLinks, MAX_CSS_FILES);
-  state.jsResources = await buildResourceEntries(parsed.jsScripts, MAX_JS_FILES);
+  const cssResources = await buildResourceEntries(parsed.cssLinks, MAX_CSS_FILES);
+  if (!isCurrentRun(id)) return;
+  state.cssResources = cssResources;
+
+  const jsResources = await buildResourceEntries(parsed.jsScripts, MAX_JS_FILES);
+  if (!isCurrentRun(id)) return;
+  state.jsResources = jsResources;
 
   const jsTexts = collectJsTexts();
   state.jsFeatures = detectJsFeatures(jsTexts);
@@ -153,9 +210,6 @@ async function handleStructure() {
 
   state.dangerFindings = checkDangerousContent(collectDangerCheckSources());
   renderDangerResult(state.dangerFindings);
-
-  structureBtn.disabled = false;
-  structureBtn.textContent = '構造を見る';
 
   structureNextHint.hidden = false;
   showStep(stepDanger);
@@ -186,9 +240,13 @@ function collectCssSources() {
 /**
  * JavaScript抜粋用のソース一覧を作る。
  *
- * インラインscript（ページ固有のコードである可能性が高い）を先頭に置き、
- * 外部JSはサイズが小さいものから順に並べることで、巨大なライブラリ本体に
- * 抜粋が埋め尽くされず、ページ本体の処理らしいscriptが優先されるようにする。
+ * インライン・外部をまとめ、元の文字数が小さいものから順に並べる。
+ * インラインに巨大なライブラリ本体が埋め込まれているページでも、
+ * 小さなページ本体のscriptが先に抜粋の枠を使えるようにする。
+ * ライブラリ判定による除外はしない（誤って本体を外さないため）。
+ *
+ * 注意: 抜粋はファイルごと・キーワードごとに最初の1か所だけを取るため、
+ * 並べ替えだけでは大きなファイル由来の抜粋の偏りは解消しきれない。
  */
 function collectJsSourcesForExcerpts() {
   const inline = state.inlineScripts.map((entry, i) => ({
@@ -199,10 +257,9 @@ function collectJsSourcesForExcerpts() {
 
   const external = state.jsResources
     .filter((entry) => entry.status === 'ok')
-    .map((entry) => ({ label: entry.label, text: entry.rawText, size: entry.size }))
-    .sort((a, b) => a.size - b.size);
+    .map((entry) => ({ label: entry.label, text: entry.rawText, size: entry.size }));
 
-  return [...inline, ...external];
+  return orderSourcesBySize([...inline, ...external]);
 }
 
 function collectDangerCheckSources() {
@@ -366,6 +423,9 @@ function escapeHtml(text) {
 // 3. Markdownを作る / コピーする / .mdを保存
 // -----------------------------------------------
 function handleMarkdown() {
+  // 解析が完了していない状態ではMarkdownを作らない
+  if (!state.structure || !state.dangerFindings) return;
+
   state.markdown = buildMarkdown({
     pageUrl: state.pageUrl,
     finalUrl: state.finalUrl,
@@ -429,6 +489,8 @@ function handleReset() {
   urlInput.value = '';
   fetchStatus.textContent = '';
   clearResults();
+  // 実行中だった取得・解析は clearResults() で無効になり、ボタンを戻さないため、ここで戻す
+  setBusy(false);
 }
 
 /**
@@ -438,7 +500,21 @@ function handleReset() {
  */
 function clearResults() {
   state = {};
+  // 実行中の取得・解析を無効にする（その結果は画面と状態に書き込まれない）
+  beginRun();
 
+  clearAnalysisOutputs();
+
+  hideStep(stepStructure);
+  hideStep(stepDanger);
+  hideStep(stepMarkdown);
+}
+
+/**
+ * 解析結果の表示（構造・ライブラリ・JS検出・危険情報・Markdown）を消す。
+ * 取得済みのHTMLは残すため、「構造を見る」の再実行時にも使う。
+ */
+function clearAnalysisOutputs() {
   analyzedUrlEl.textContent = '';
   structureCards.innerHTML = '';
   libraryList.innerHTML = '';
@@ -452,7 +528,6 @@ function clearResults() {
   markdownPreviewWrap.hidden = true;
   copyStatus.textContent = '';
 
-  hideStep(stepStructure);
   hideStep(stepDanger);
   hideStep(stepMarkdown);
 }

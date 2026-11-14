@@ -60,6 +60,25 @@ export function extractCategoryExcerpts(sources, categories) {
   });
 }
 
+/**
+ * 抜粋用のソース一覧を、元の文字数（size）が小さい順に並べ替えた新しい配列を返す。
+ *
+ * - size が無いものは本文の長さを使う
+ * - 同じ文字数のものは元の並び順を保つ（安定ソート）
+ * - 何も除外しない
+ *
+ * @param {Array<{ label: string, text: string, size?: number }>} sources
+ * @returns {Array<{ label: string, text: string, size?: number }>}
+ */
+export function orderSourcesBySize(sources) {
+  const sizeOf = (source) => (typeof source.size === 'number' ? source.size : (source.text || '').length);
+
+  return (sources || [])
+    .map((source, index) => ({ source, index }))
+    .sort((a, b) => sizeOf(a.source) - sizeOf(b.source) || a.index - b.index)
+    .map(({ source }) => source);
+}
+
 function overlapsExisting(ranges, start, end) {
   return ranges.some(([s, e]) => start < e && end > s);
 }
