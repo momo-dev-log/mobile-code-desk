@@ -67,9 +67,8 @@ export function parseHtml(html, pageUrl) {
   const inlineScripts = [];
   const scriptOrder = [];
   doc.querySelectorAll('script').forEach((script) => {
-    const type = (script.getAttribute('type') || '').trim().toLowerCase().split(';')[0].trim();
     // JSON-LD、importmap、テンプレート等は実行可能なJSではない。
-    if (type && type !== 'module' && !['text/javascript', 'application/javascript', 'application/ecmascript', 'text/ecmascript', 'text/jscript'].includes(type)) return;
+    if (!isJavaScriptType(script.getAttribute('type'))) return;
     const src = script.getAttribute('src');
     if (src) {
       const absolute = resolveUrl(src, resourceBaseUrl);
@@ -96,6 +95,21 @@ export function parseHtml(html, pageUrl) {
     inlineScripts,
     scriptOrder,
   };
+}
+
+const JAVASCRIPT_TYPES = new Set(['module', 'text/javascript', 'application/javascript', 'application/ecmascript', 'text/ecmascript', 'text/jscript']);
+
+/**
+ * script要素のtype属性が、JavaScriptとして実行されるものかどうか。
+ * typeなし・空・module・JavaScriptのMIMEタイプは true。JSON-LD・importmap・テンプレート等は false。
+ * 全文つき版のHTML構造（fulltext.js）も同じ判定を使い、インラインscriptの番号をそろえる。
+ *
+ * @param {string | null | undefined} typeAttr
+ * @returns {boolean}
+ */
+export function isJavaScriptType(typeAttr) {
+  const type = (typeAttr || '').trim().toLowerCase().split(';')[0].trim();
+  return !type || JAVASCRIPT_TYPES.has(type);
 }
 
 function scriptAttributes(script) {

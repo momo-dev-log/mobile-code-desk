@@ -198,6 +198,8 @@ z-index, background, border-radius, backdrop-filter, display, flex, grid
 - フロントの取得は通常20秒、Workerの取得は15秒でタイムアウトする。
 - Workerはローカル/プライベートアドレスや不正なリダイレクト先を拒否する。ただしDNSリバインディングや大量アクセスへの完全な防御ではなく、Cloudflare側のレート制限などは別途必要。
 - 機密値マスクはヒューリスティックであり、**すべての秘密情報を検出できるわけではない**。共有前の確認は必要。
+- 機密値の検出は、前に語が付いた複合名のキー（`access_token`・`client_secret`・`authToken` など）も対象にする（v0.4.2）。区切りは `:` か `=` に限る。
+- 全文つき版のHTML構造では、JavaScriptではないscript（JSON-LD・埋め込みデータ等）に番号を付けず、本文は収録しない旨を書く（v0.4.2）。インラインscriptの番号は「JavaScript本文」と一致する。判定は `parse.js` の `isJavaScriptType` を共有する。
 
 ### 現状の制約と次の課題
 

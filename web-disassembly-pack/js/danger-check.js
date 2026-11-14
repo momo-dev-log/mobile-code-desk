@@ -9,7 +9,10 @@
 const PATTERNS = [
   {
     type: 'APIキー/トークンらしき文字列',
-    regex: /(["']?\b(?:api[_-]?key|secret|token|access[_-]?key|auth)\b["']?)(\s*[:=]\s*["']?)([A-Za-z0-9_\-]{12,})/gi,
+    // キー名は「前に語が付いた複合名」（access_token / client_secret / authToken / API_TOKEN など）も対象にする。
+    // 先頭の否定の後読み: 英数字の長い連続の途中から照合を始め直さない（2乗の時間を防ぐ）。
+    // 区切りは : か = に限る（「secret sauce」のような文章を拾わないため）。
+    regex: /((?<![A-Za-z0-9_$-])["']?[A-Za-z0-9_$-]*(?:api[_-]?key|secret|token|access[_-]?key|auth)["']?)(\s*[:=]\s*["']?)([A-Za-z0-9_\-]{12,})/gi,
     // マスク時はキー名と区切りを残し、値だけを置き換える
     keepPrefixGroups: 2,
   },
