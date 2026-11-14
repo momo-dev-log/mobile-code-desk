@@ -9,10 +9,13 @@ import {
   sanitizeCodeText,
   tokenizeHtml,
   computeOpenStacks,
+  prepareCodeText,
+  remainingChars,
   MASK_MARKER,
 } from '../js/fulltext.js';
 import { buildMarkdown, buildFullMarkdown, FULL_VARIANT_META_LINE } from '../js/markdown.js';
 import { checkDangerousContent, maskSensitive } from '../js/danger-check.js';
+import { sanitizeCodeText as sanitizeForCompare } from '../js/fulltext.js';
 import { truncateForAnalysis, buildInlineEntry } from '../js/coverage.js';
 import { JS_FEATURE_CHECKS, CSS_EXCERPT_CATEGORIES, JS_EXCERPT_CATEGORIES } from '../js/keywords.js';
 import { LIBRARY_CHECKS } from '../js/libraries.js';
@@ -311,8 +314,12 @@ test('全文節: 途中まで・解析上限で切り詰めたソースは、文
   }));
   assert.match(md, new RegExp(`- 元の文字数: ${huge.length}文字`));
   assert.match(md, new RegExp(`- 解析範囲: ${MAX_RESOURCE_CHARS}文字（1ファイルの解析上限で切り詰め`));
-  assert.match(md, /- 収録: \d+文字（途中まで。文字数上限のため \d+文字目以降は未収録）/);
-  assert.match(md, /\*\*↑ このソースはここで途中終了しています（残り \d+文字は未収録）。\*\*/);
+  // CSS（インラインstyle 18文字）の余りがJSの枠になる。マスクなしなので収録文字数 = 元の文字数
+  const included = MAX_FULL_CODE_CHARS - 'body { margin: 0 }'.length;
+  const inAnalysis = MAX_RESOURCE_CHARS - included;
+  assert.ok(md.includes(`- 収録: ${included}文字（途中まで。元ファイルの1〜${included}文字目）`));
+  assert.ok(md.includes(`- 未収録: 元ファイルの${included + 1}文字目以降。解析範囲内の残り ${inAnalysis}文字 / 元ファイル全体の残り ${inAnalysis + 5000}文字（うち解析範囲外 5000文字）`));
+  assert.ok(md.includes(`**↑ このソースはここで途中終了しています（元ファイルの${included + 1}文字目以降は未収録。解析範囲内の残り ${inAnalysis}文字 / 元ファイル全体の残り ${inAnalysis + 5000}文字（うち解析範囲外 5000文字））。**`));
   assert.match(md, new RegExp(`1ファイルの解析上限のため ${MAX_RESOURCE_CHARS + 1}文字目以降は取得・収録せず`));
 });
 
@@ -679,4 +686,144 @@ test('タグの対応の簡易計算: 連結リスト化した実装が、配列
   assert.equal(actual.implicitlyClosed, implicitlyClosed);
   assert.equal(actual.orphanCloses, orphanCloses);
   assert.equal(actual.unclosedAtEnd, stack.length);
+});
+
+// -----------------------------------------------
+// PR #100 表示の修正1: 置き換え文の文字数を「元の文字数」と同じ数え方にする
+// -----------------------------------------------
+test('表示1: HTML構造の置き換え文の文字数が、本文の節の「元の文字数」と一致する（前後の空白・CRLF・制御文字）', () => {
+  // parse.js は DOMParser の textContent を trim する。HTMLの構文解析は CRLF を LF にそろえる
+  const styleBody = '.a { color: red }\n.b { color: blue }';
+  const scriptBody = 'const s = "x\u202Ey";\nrun();';
+  const html = `<head><style>\r\n    ${styleBody.replace('\n', '\r\n')}\r\n  </style></head>`
+    + `<body><script>\n\n  ${scriptBody}\n  </script><template><script>  t();  </script></template></body>`;
+  const md = buildFullTextSections(baseData({
+    html,
+    inlineStyles: [inline('インラインstyle #1', styleBody)],
+    inlineScripts: [inline('インラインscript #1', scriptBody)],
+    jsResources: [],
+  }));
+
+  const placeholder = (label) => Number(md.match(new RegExp(`${label}（(\\d+)文字）`))[1]);
+  const original = (label) => Number(md.match(new RegExp(`#### \\[[^\\]]+\\] \`${label}\`\\n\\n- 元の文字数: (\\d+)文字`))[1]);
+  assert.equal(placeholder('インラインstyle #1'), styleBody.length);
+  assert.equal(placeholder('インラインscript #1'), scriptBody.length);
+  assert.equal(placeholder('インラインstyle #1'), original('インラインstyle #1'));
+  assert.equal(placeholder('インラインscript #1'), original('インラインscript #1'));
+  // template 内・src つきも同じ数え方（前後の空白を除く）
+  assert.match(md, /template内のscript本文 4文字は省略/);
+  const src = buildHtmlSkeleton('<script src="/a.js">  \r\n  ab  </script>');
+  assert.match(src.text, /src指定scriptの中の本文 2文字は省略/);
+});
+
+test('表示1: 置き換え文の文字数を直しても、HTML構造枠の他の部分と制御文字の置き換えは変わらない', () => {
+  const html = '<p title="a\u202Eb">x</p>\r\n<script>  a\u0000b  </script>';
+  const result = buildHtmlSkeleton(html);
+  assert.equal(result.text, '<p title="a[U+202E]b">x</p>\n<script>/* [WDP] 本文省略: インラインscript #1（3文字）。本文は「JavaScript本文」を参照 */</script>');
+  assert.equal(result.replacedControls, 2);
+});
+
+// -----------------------------------------------
+// PR #100 表示の修正2: 「収録」がマスク後の文字数であることを明記する
+// -----------------------------------------------
+test('表示2: マスク・制御文字の置き換えがあると、収録がその後の文字数であることと置き換え前の文字数を書く', () => {
+  const js = 'const apiKey = "abcdefghijklmnop1234"; // dev@example.com\nif (a\u202E) {}';
+  const md = buildFullTextSections(baseData({ inlineScripts: [inline('インラインscript #1', js)], jsResources: [] }));
+  const plan = planCodeInclusion(codeInput({ inlineScripts: [inline('インラインscript #1', js)] }));
+  const included = plan.js[0].includedChars;
+  assert.notEqual(included, js.length);
+  assert.ok(md.includes(`- 元の文字数: ${js.length}文字`));
+  assert.ok(md.includes(`- 収録: ${included}文字（全文。マスク・制御文字の置き換え後の文字数。置き換え前は${js.length}文字）`));
+  // 収録の文字数はコードブロックに実際に載せた文字数
+  const fenced = md.match(/```javascript\n([\s\S]*?)\n```/)[1];
+  assert.equal(fenced.length, included);
+});
+
+test('表示2: 置き換えが無いときは、収録の文字数に注記を付けない（元の文字数と同じ）', () => {
+  const md = buildFullTextSections(baseData({ inlineScripts: [inline('インラインscript #1', 'draw();')], jsResources: [] }));
+  assert.ok(md.includes('- 収録: 7文字（全文）'));
+  assert.ok(!md.includes('置き換え後の文字数。置き換え前'));
+  assert.match(md, /- 収録: \d+文字（上限20000文字。script\/style本文の置き換え文・マスク・制御文字の置き換え後の文字数）/);
+  assert.match(md, /- 文字数の数え方: /);
+});
+
+test('表示2: 置き換え後の位置から元の本文の位置へ正しく戻せる（改行・制御文字・マスク）', () => {
+  const raw = 'AB\r\nC' + 'D\u202EE' + ' api_key: "abcdefghijklmnop" ' + 'END';
+  const prepared = prepareCodeText(raw);
+  const markerAt = prepared.text.indexOf(MASK_MARKER);
+  assert.equal(prepared.text, maskSensitive(sanitizeForCompare(raw).text).text, '収録する文字列は従来と同じ');
+  assert.equal(prepared.toOriginal(0), 0);
+  assert.equal(prepared.toOriginal(3), 4); // 'AB\n' ← 'AB\r\n'
+  assert.equal(prepared.toOriginal(5), 6); // 'AB\nCD'
+  assert.equal(prepared.toOriginal(8), 6); // 制御文字の表記の途中は、その文字を含めない
+  assert.equal(prepared.toOriginal(13), 7); // 表記 [U+202E] の直後
+  assert.equal(prepared.toOriginal(markerAt), raw.indexOf('abcdefghijklmnop'));
+  assert.equal(prepared.toOriginal(markerAt + 3), raw.indexOf('abcdefghijklmnop')); // マスクの途中
+  assert.equal(prepared.toOriginal(markerAt + MASK_MARKER.length), raw.indexOf('abcdefghijklmnop') + 16);
+  assert.equal(prepared.toOriginal(prepared.text.length), raw.length);
+});
+
+// -----------------------------------------------
+// PR #100 表示の修正3: 途中収録の未収録を、解析範囲内と元ファイル全体に分ける
+// -----------------------------------------------
+test('表示3: マスクを含む大きなファイルの途中収録で、未収録を元の本文の数え方で解析範囲内と全体に分ける', () => {
+  const unit = 'const apiKey = "abcdefghijklmnop1234"; draw();\n';
+  const huge = unit.repeat(Math.ceil((MAX_RESOURCE_CHARS + 30000) / unit.length));
+  const data = baseData({ inlineStyles: [], inlineScripts: [], jsResources: [external('https://example.com/k.js', huge)] });
+  const md = buildFullTextSections(data);
+  const source = planCodeInclusion(data).js[0];
+
+  assert.equal(source.inclusion, 'partial');
+  assert.equal(source.includedChars, MAX_FULL_CODE_CHARS);
+  // マスクで短くなるため、収録した部分は元の本文ではもっと長い
+  assert.ok(source.originalIncludedChars > source.includedChars);
+  // 元の本文の先頭 originalIncludedChars 文字を同じ処理にかけると、収録した文字列の先頭と一致する。
+  // 収録がマスク表記の途中で切れた場合、その秘密の値は元の数え方では「収録済み」に数えない（控えめに数える）ため、
+  // 差は途中で切れたマスク表記の部分だけになる
+  const fromOriginal = prepareCodeText(huge.slice(0, source.originalIncludedChars)).text;
+  assert.ok(source.includedText.startsWith(fromOriginal));
+  const leftover = source.includedText.slice(fromOriginal.length);
+  assert.ok(leftover.length < MASK_MARKER.length && MASK_MARKER.startsWith(leftover), JSON.stringify(leftover));
+
+  const rest = remainingChars(source);
+  assert.equal(rest.inAnalysis, MAX_RESOURCE_CHARS - source.originalIncludedChars);
+  assert.equal(rest.outsideAnalysis, huge.length - MAX_RESOURCE_CHARS);
+  assert.equal(rest.total, huge.length - source.originalIncludedChars);
+  assert.ok(md.includes(`- 収録: ${MAX_FULL_CODE_CHARS}文字（途中まで。マスク・制御文字の置き換え後の文字数。元ファイルの1〜${source.originalIncludedChars}文字目にあたる）`));
+  assert.ok(md.includes(`- 未収録: 元ファイルの${source.originalIncludedChars + 1}文字目以降。解析範囲内の残り ${rest.inAnalysis}文字 / 元ファイル全体の残り ${rest.total}文字（うち解析範囲外 ${rest.outsideAnalysis}文字）`));
+  assert.ok(md.includes(`文字数上限のため 元ファイルの${source.originalIncludedChars + 1}文字目以降を収録せず（解析範囲内の残り ${rest.inAnalysis}文字`));
+});
+
+test('表示3: 解析上限内のファイルの途中収録では、解析範囲内の残りと全体の残りが同じで、範囲外を書かない', () => {
+  const data = baseData({ inlineStyles: [], inlineScripts: [], jsResources: [external('https://example.com/a.js', sized(150000, 'q'))] });
+  const md = buildFullTextSections(data);
+  assert.ok(md.includes(`- 未収録: 元ファイルの${MAX_FULL_CODE_CHARS + 1}文字目以降。解析範囲内の残り 50000文字 / 元ファイル全体の残り 50000文字`));
+  assert.ok(!md.includes('うち解析範囲外'));
+});
+
+test('表示3: 文字数上限で収録しなかったソースも、解析範囲内と全体の未収録を書く', () => {
+  const big = sized(MAX_RESOURCE_CHARS + 1000, 'b');
+  const data = baseData({
+    inlineStyles: [], inlineScripts: [],
+    jsResources: [external('https://example.com/a.js', sized(MAX_FULL_CODE_CHARS - 100, 'a')), external('https://example.com/b.js', big)],
+  });
+  const md = buildFullTextSections(data);
+  assert.ok(md.includes(`- 未収録: 解析範囲内の残り ${MAX_RESOURCE_CHARS}文字 / 元ファイル全体の残り ${big.length}文字（うち解析範囲外 1000文字）`));
+  assert.ok(md.includes(`文字数上限のため本文を収録せず（解析範囲内の残り ${MAX_RESOURCE_CHARS}文字 / 元ファイル全体の残り ${big.length}文字（うち解析範囲外 1000文字））`));
+});
+
+test('表示の修正で、収録内容・優先順・上限は変わらない（収録する文字列は従来の処理の結果の先頭）', () => {
+  const sources = [
+    external('https://example.com/a.js', 'const token = "abcdefghijklmnopqr";\r\n'.repeat(4000)),
+    external('https://example.com/b.js', sized(30000, 'b')),
+    external('https://example.com/c.js', 'x\u202Ey;'.repeat(9000)),
+  ];
+  const plan = planCodeInclusion(codeInput({ jsResources: sources }));
+  for (const [i, source] of plan.js.entries()) {
+    const legacy = maskSensitive(sanitizeForCompare(sources[i].rawText).text).text;
+    assert.equal(source.text, legacy);
+    assert.equal(source.includedText, legacy.slice(0, source.includedChars));
+  }
+  assert.deepEqual(plan.js.map((s) => s.priority), [3, 1, 2]);
+  assert.ok(plan.usedChars <= MAX_FULL_CODE_CHARS);
 });

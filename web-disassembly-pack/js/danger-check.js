@@ -74,6 +74,10 @@ const MASK_TEXT = '[WDP:マスク済み]';
  * パターン照合なので、すべての機密情報を見つけられるわけではない。
  *
  * @param {string} text
+ * @param {(passIndex: number, start: number, end: number, length: number) => void} [onReplace]
+ *   置き換えのたびに呼ばれる（任意）。パターンごとの置き換えは順に行うため、start/end は
+ *   そのパターンを適用する直前の文字列での位置、length は置き換え後の文字数。
+ *   元の文字列の何文字目にあたるかを数え直すために使う。結果の文字列は渡さない場合と同じ。
  * @returns {{ text: string, count: number }}
  */
 // マスク用の正規表現は読み込み時に1回だけ作る（全文つき版ではトークンごとに呼ばれるため）。
@@ -83,17 +87,22 @@ const MASK_PATTERNS = PATTERNS.map(({ regex, maskRegex, keepPrefixGroups }) => (
   keepPrefixGroups,
 }));
 
-export function maskSensitive(text) {
+export function maskSensitive(text, onReplace) {
   let count = 0;
   let out = text || '';
 
-  for (const { regex, keepPrefixGroups } of MASK_PATTERNS) {
+  MASK_PATTERNS.forEach(({ regex, keepPrefixGroups }, passIndex) => {
     out = out.replace(regex, (...args) => {
       count += 1;
       const prefix = keepPrefixGroups ? args.slice(1, 1 + keepPrefixGroups).join('') : '';
+      if (onReplace) {
+        // 名前付きグループは使っていないため、一致位置は引数の後ろから2番目
+        const offset = args[args.length - 2];
+        onReplace(passIndex, offset + prefix.length, offset + args[0].length, MASK_TEXT.length);
+      }
       return prefix + MASK_TEXT;
     });
-  }
+  });
 
   return { text: out, count };
 }

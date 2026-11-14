@@ -45,9 +45,153 @@ export function sanitizeCodeText(text) {
   let replacedControls = 0;
   const normalized = (text || '').replace(/\r\n?/g, '\n').replace(INVISIBLE_CONTROL_RE, (ch) => {
     replacedControls += 1;
-    return `[U+${ch.charCodeAt(0).toString(16).toUpperCase().padStart(4, '0')}]`;
+    return controlNotation(ch);
   });
   return { text: normalized, replacedControls };
+}
+
+// -----------------------------------------------
+// 置き換えの前後の文字位置の対応
+// -----------------------------------------------
+//
+// 収録する本文は、改行の統一・制御文字の置き換え・マスクで文字数が変わる。
+// 「元の何文字目まで収録したか」「元の何文字が未収録か」を元の本文の数え方で示すため、
+// 置き換え後の文字列の区間が元の文字列のどの区間にあたるかを記録する。
+// 区間は { cur, curEnd, orig, origEnd, same }。same が true の区間は1文字ずつ対応し、
+// false の区間（置き換えた部分）は区間全体どうしで対応する。
+
+function initialSegments(length) {
+  return length > 0 ? [{ cur: 0, curEnd: length, orig: 0, origEnd: length, same: true }] : [];
+}
+
+function findSegment(segments, pos) {
+  let lo = 0;
+  let hi = segments.length - 1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (pos < segments[mid].cur) hi = mid - 1;
+    else if (pos >= segments[mid].curEnd) lo = mid + 1;
+    else return segments[mid];
+  }
+  return null;
+}
+
+/**
+ * 置き換え後の pos 文字目の直前までに、元の文字列の何文字が対応するか。
+ * 置き換えた部分の途中で切れる場合は、その部分の元の文字は含めない（控えめに数える）。
+ */
+function originalStartAt(segments, pos) {
+  if (segments.length === 0) return 0;
+  const seg = findSegment(segments, pos);
+  if (!seg) return pos <= 0 ? 0 : segments[segments.length - 1].origEnd;
+  return seg.same ? seg.orig + (pos - seg.cur) : seg.orig;
+}
+
+/** 置き換え後の [.., pos) の区間の終わりが、元の文字列の何文字目にあたるか（置き換えた部分は全体を含める） */
+function originalEndAt(segments, pos) {
+  if (segments.length === 0 || pos <= 0) return 0;
+  const seg = findSegment(segments, pos - 1);
+  if (!seg) return segments[segments.length - 1].origEnd;
+  return seg.same ? seg.orig + (pos - seg.cur) : seg.origEnd;
+}
+
+/**
+ * 1回分の置き換え（重ならない区間の一覧。位置は置き換え前の文字列）を、区間の記録に反映する。
+ * @param {Array} segments
+ * @param {Array<{ start: number, end: number, length: number }>} edits
+ */
+function applyEdits(segments, edits) {
+  if (edits.length === 0) return segments;
+  const out = [];
+  const total = segments.length ? segments[segments.length - 1].curEnd : 0;
+  let shift = 0;
+  let pos = 0;
+  let si = 0;
+
+  const copy = (a, b) => {
+    while (si < segments.length && segments[si].curEnd <= a) si += 1;
+    for (let k = si; k < segments.length && segments[k].cur < b; k += 1) {
+      const seg = segments[k];
+      const from = Math.max(a, seg.cur);
+      const to = Math.min(b, seg.curEnd);
+      if (from >= to) continue;
+      out.push(seg.same
+        ? { cur: from + shift, curEnd: to + shift, orig: seg.orig + (from - seg.cur), origEnd: seg.orig + (to - seg.cur), same: true }
+        : { cur: from + shift, curEnd: to + shift, orig: seg.orig, origEnd: seg.origEnd, same: false });
+    }
+  };
+
+  for (const edit of edits) {
+    copy(pos, edit.start);
+    out.push({
+      cur: edit.start + shift,
+      curEnd: edit.start + shift + edit.length,
+      orig: originalStartAt(segments, edit.start),
+      origEnd: originalEndAt(segments, edit.end),
+      same: false,
+    });
+    shift += edit.length - (edit.end - edit.start);
+    pos = edit.end;
+  }
+  copy(pos, total);
+  return out;
+}
+
+const controlNotation = (ch) => `[U+${ch.charCodeAt(0).toString(16).toUpperCase().padStart(4, '0')}]`;
+
+/**
+ * sanitizeCodeText と同じ置き換えを行い、元の文字位置との対応も返す。
+ * @returns {{ text: string, replacedControls: number, segments: Array }}
+ */
+function sanitizeTracked(raw) {
+  const source = raw || '';
+  let segments = initialSegments(source.length);
+
+  let edits = [];
+  let text = source.replace(/\r\n?/g, (m, offset) => {
+    edits.push({ start: offset, end: offset + m.length, length: 1 });
+    return '\n';
+  });
+  segments = applyEdits(segments, edits);
+
+  edits = [];
+  let replacedControls = 0;
+  text = text.replace(INVISIBLE_CONTROL_RE, (ch, offset) => {
+    replacedControls += 1;
+    const notation = controlNotation(ch);
+    edits.push({ start: offset, end: offset + 1, length: notation.length });
+    return notation;
+  });
+  segments = applyEdits(segments, edits);
+
+  return { text, replacedControls, segments };
+}
+
+/**
+ * 収録する本文を作る（制御文字の置き換え → マスク）。文字列は sanitizeCodeText → maskSensitive と同じ。
+ * toOriginal(n) は「置き換え後の先頭 n 文字」が元の本文の何文字分にあたるかを返す。
+ */
+export function prepareCodeText(raw) {
+  const sanitized = sanitizeTracked(raw);
+  let { segments } = sanitized;
+  let pass = -1;
+  let edits = [];
+  const masked = maskSensitive(sanitized.text, (passIndex, start, end, length) => {
+    if (passIndex !== pass) {
+      segments = applyEdits(segments, edits);
+      edits = [];
+      pass = passIndex;
+    }
+    edits.push({ start, end, length });
+  });
+  segments = applyEdits(segments, edits);
+
+  return {
+    text: masked.text,
+    maskedCount: masked.count,
+    replacedControls: sanitized.replacedControls,
+    toOriginal: (n) => originalStartAt(segments, n),
+  };
 }
 
 /**
@@ -161,7 +305,7 @@ export function tokenizeHtml(html) {
       closeRe.lastIndex = i;
       const found = closeRe.exec(src);
       const bodyEnd = found ? found.index : n;
-      tokens.push({ type: 'rawtext', name, raw: src.slice(i, bodyEnd) });
+      tokens.push({ type: 'rawtext', name, raw: src.slice(i, bodyEnd), start: i });
       i = bodyEnd;
     }
   }
@@ -283,8 +427,15 @@ const omitNote = (count) => `…[WDP:${count}文字省略]`;
  */
 export function buildHtmlSkeleton(html, limit = MAX_FULL_HTML_CHARS, { markerReserve = CUT_MARKER_RESERVE } = {}) {
   const original = html || '';
-  const sanitized = sanitizeCodeText(original);
+  const sanitized = sanitizeTracked(original);
   const tokens = tokenizeHtml(sanitized.text);
+  // 置き換え文に書く本文の文字数。parse.js（DOMParser の textContent を trim）と同じ数え方にし、
+  // 「CSS本文」「JavaScript本文」の「元の文字数」と一致させる（HTMLの構文解析は改行 CRLF/CR を LF にそろえる）
+  const bodyChars = (token) => {
+    const from = originalStartAt(sanitized.segments, token.start);
+    const to = originalEndAt(sanitized.segments, token.start + token.raw.length);
+    return original.slice(from, to).replace(/\r\n?/g, '\n').trim().length;
+  };
 
   const stats = {
     originalChars: original.length,
@@ -324,7 +475,7 @@ export function buildHtmlSkeleton(html, limit = MAX_FULL_HTML_CHARS, { markerRes
     } else if (token.type === 'close') {
       if (token.name === 'template' && templateDepth > 0) templateDepth -= 1;
     } else if (token.type === 'rawtext') {
-      token.raw = replaceRawText(token, lastOpen, templateDepth > 0, stats, {
+      token.raw = replaceRawText(token, lastOpen, templateDepth > 0, stats, bodyChars(token), {
         nextScript: () => (inlineScriptNo += 1),
         nextStyle: () => (inlineStyleNo += 1),
       });
@@ -369,23 +520,27 @@ export function buildHtmlSkeleton(html, limit = MAX_FULL_HTML_CHARS, { markerRes
   };
 }
 
-function replaceRawText(token, openToken, inTemplate, stats, counters) {
+/**
+ * script/style本文を置き換え文にする。
+ * chars は本文の文字数（前後の空白を除き、改行をそろえた元の本文の文字数。parse.js と同じ数え方）。
+ */
+function replaceRawText(token, openToken, inTemplate, stats, chars, counters) {
   const body = token.raw;
   if (body.trim() === '') return body;
 
   if (token.name === 'style') {
     stats.removedStyleBodies += 1;
-    if (inTemplate) return `/* [WDP] template内のstyle本文 ${body.length}文字は省略（本文は収録対象外） */`;
+    if (inTemplate) return `/* [WDP] template内のstyle本文 ${chars}文字は省略（本文は収録対象外） */`;
     const no = counters.nextStyle();
-    return `/* [WDP] 本文省略: インラインstyle #${no}（${body.length}文字）。本文は「CSS本文」を参照 */`;
+    return `/* [WDP] 本文省略: インラインstyle #${no}（${chars}文字）。本文は「CSS本文」を参照 */`;
   }
 
   stats.removedScriptBodies += 1;
   const src = openToken && openToken.attrs ? attrValue(openToken.attrs, 'src') : undefined;
-  if (src) return `/* [WDP] src指定scriptの中の本文 ${body.length}文字は省略（ブラウザは実行しない部分） */`;
-  if (inTemplate) return `/* [WDP] template内のscript本文 ${body.length}文字は省略（本文は収録対象外） */`;
+  if (src) return `/* [WDP] src指定scriptの中の本文 ${chars}文字は省略（ブラウザは実行しない部分） */`;
+  if (inTemplate) return `/* [WDP] template内のscript本文 ${chars}文字は省略（本文は収録対象外） */`;
   const no = counters.nextScript();
-  return `/* [WDP] 本文省略: インラインscript #${no}（${body.length}文字）。本文は「JavaScript本文」を参照 */`;
+  return `/* [WDP] 本文省略: インラインscript #${no}（${chars}文字）。本文は「JavaScript本文」を参照 */`;
 }
 
 function compactTokens(tokens, stats) {
@@ -674,6 +829,12 @@ export function planCodeInclusion({ inlineStyles, inlineScripts, cssResources, j
 
   allocate(css, cssBudget);
   allocate(js, jsBudget);
+  for (const source of [...css, ...js]) {
+    // 収録した部分が、元の本文（解析範囲）の先頭から何文字分にあたるか
+    if (source.inclusion === 'full') source.originalIncludedChars = source.analyzedChars;
+    else if (source.inclusion === 'partial') source.originalIncludedChars = source.toOriginal(source.includedChars);
+    else source.originalIncludedChars = 0;
+  }
 
   const used = (list) => list.reduce((sum, s) => sum + s.includedChars, 0);
   return {
@@ -704,8 +865,7 @@ function collectSources(type, inlineEntries, resourceEntries) {
 }
 
 function makeSource(type, origin, entry, label) {
-  const sanitized = sanitizeCodeText(entry.rawText || '');
-  const masked = maskSensitive(sanitized.text);
+  const prepared = prepareCodeText(entry.rawText || '');
   const size = typeof entry.size === 'number' ? entry.size : (entry.rawText || '').length;
   return {
     type,
@@ -714,9 +874,10 @@ function makeSource(type, origin, entry, label) {
     size,
     analyzedChars: typeof entry.analyzedChars === 'number' ? entry.analyzedChars : (entry.rawText || '').length,
     analysisTruncated: Boolean(entry.truncated),
-    text: masked.text,
-    maskedCount: masked.count,
-    replacedControls: sanitized.replacedControls,
+    text: prepared.text,
+    maskedCount: prepared.maskedCount,
+    replacedControls: prepared.replacedControls,
+    toOriginal: prepared.toOriginal,
     duplicateOf: null,
     includedChars: 0,
     includedText: '',
@@ -781,6 +942,7 @@ export function buildFullTextSections(data) {
   lines.push('- パターン照合なので、すべての機密情報・個人情報を見つけられるわけではありません。共有前に必ず内容を確認してください。');
   lines.push('- 文字の向きを変える制御文字などの見えない文字は `[U+XXXX]` の表記に置き換えています。');
   lines.push(`- HTML構造は最大${MAX_FULL_HTML_CHARS}文字、CSS/JS本文は合計最大${MAX_FULL_CODE_CHARS}文字まで収録します（メタ情報の行は数えません）。`);
+  lines.push('- 文字数の数え方: 「元の文字数」「解析範囲」「未収録」「元ファイルの○文字目」は、取得した元の本文で数えた文字数です。「収録」は、マスク・制御文字の置き換え後に実際にコードブロックへ載せた文字数で、上限もこの文字数で数えます。HTML構造の置き換え文にある本文の文字数は、「CSS本文」「JavaScript本文」の「元の文字数」と同じ数え方です。');
   lines.push('- 外部CSS/JSの取得件数・1ファイルの解析範囲の上限は通常版と同じです。取得していないコード・解析範囲外の部分は収録していません。');
   lines.push('');
 
@@ -796,7 +958,7 @@ function buildSkeletonSection(lines, skeleton) {
   lines.push('### HTML構造（script/style本文を除く）');
   lines.push('');
   lines.push(`- 元のHTML: ${skeleton.originalChars}文字`);
-  lines.push(`- 収録: ${skeleton.includedChars}文字（上限${MAX_FULL_HTML_CHARS}文字）`);
+  lines.push(`- 収録: ${skeleton.includedChars}文字（上限${MAX_FULL_HTML_CHARS}文字。script/style本文の置き換え文・マスク・制御文字の置き換え後の文字数）`);
   lines.push(`- script本文の除去: ${skeleton.removedScriptBodies}件 / style本文の除去: ${skeleton.removedStyleBodies}件（本文は下の「CSS本文」「JavaScript本文」に収録）`);
   if (skeleton.compacted) {
     const { text, attribute, comment } = skeleton.shortened;
@@ -856,12 +1018,20 @@ function buildCodeSection(lines, heading, lang, sources, budget) {
     }
 
     lines.push(`- 収録優先順: ${source.priority}`);
+    const rest = remainingChars(source);
     if (source.inclusion === 'full') {
-      lines.push(`- 収録: ${source.includedChars}文字（${source.analysisTruncated ? '解析範囲の全文。元ファイルの後半は未収録' : '全文'}）`);
+      const scope = source.analysisTruncated ? '解析範囲の全文。元ファイルの後半は未収録' : '全文';
+      lines.push(isReplaced(source)
+        ? `- 収録: ${source.includedChars}文字（${scope}。マスク・制御文字の置き換え後の文字数。置き換え前は${source.analyzedChars}文字）`
+        : `- 収録: ${source.includedChars}文字（${scope}）`);
     } else if (source.inclusion === 'partial') {
-      lines.push(`- 収録: ${source.includedChars}文字（途中まで。文字数上限のため ${source.includedChars + 1}文字目以降は未収録）`);
+      lines.push(isReplaced(source)
+        ? `- 収録: ${source.includedChars}文字（途中まで。マスク・制御文字の置き換え後の文字数。元ファイルの1〜${source.originalIncludedChars}文字目にあたる）`
+        : `- 収録: ${source.includedChars}文字（途中まで。元ファイルの1〜${source.originalIncludedChars}文字目）`);
+      lines.push(`- 未収録: 元ファイルの${source.originalIncludedChars + 1}文字目以降。${describeRemaining(rest)}`);
     } else {
-      lines.push('- 収録: なし（CSS/JS本文の文字数上限のため）');
+      lines.push(`- 収録: なし（CSS/JS本文の文字数上限のため）`);
+      lines.push(`- 未収録: ${describeRemaining(rest)}`);
     }
     if (source.maskedCount > 0) lines.push(`- マスク: ${source.maskedCount}件`);
     if (source.replacedControls > 0) lines.push(`- 制御文字の置き換え: ${source.replacedControls}件`);
@@ -872,13 +1042,34 @@ function buildCodeSection(lines, heading, lang, sources, budget) {
     lines.push(fenceCode(source.includedText, lang));
     if (source.inclusion === 'partial') {
       lines.push('');
-      lines.push(`**↑ このソースはここで途中終了しています（残り ${source.text.length - source.includedChars}文字は未収録）。**`);
+      lines.push(`**↑ このソースはここで途中終了しています（元ファイルの${source.originalIncludedChars + 1}文字目以降は未収録。${describeRemaining(rest)}）。**`);
     } else if (source.analysisTruncated) {
       lines.push('');
       lines.push(`**↑ 元ファイルは${source.size}文字あり、${source.analyzedChars + 1}文字目以降は解析範囲外のため未収録です。**`);
     }
     lines.push('');
   }
+}
+
+function isReplaced(source) {
+  return source.maskedCount > 0 || source.replacedControls > 0;
+}
+
+/**
+ * 未収録の文字数（元の本文の数え方）。
+ * - inAnalysis: 解析範囲（取得して解析した部分）のうち、収録しなかった文字数
+ * - outsideAnalysis: 1ファイルの解析上限を超えて、取得・解析していない文字数
+ * - total: 元ファイル全体のうち、収録しなかった文字数
+ */
+export function remainingChars(source) {
+  const inAnalysis = Math.max(0, source.analyzedChars - source.originalIncludedChars);
+  const outsideAnalysis = Math.max(0, source.size - source.analyzedChars);
+  return { inAnalysis, outsideAnalysis, total: inAnalysis + outsideAnalysis };
+}
+
+function describeRemaining(rest) {
+  const outside = rest.outsideAnalysis > 0 ? `（うち解析範囲外 ${rest.outsideAnalysis}文字）` : '';
+  return `解析範囲内の残り ${rest.inAnalysis}文字 / 元ファイル全体の残り ${rest.total}文字${outside}`;
 }
 
 function buildNotIncludedSection(lines, plan, data) {
@@ -895,8 +1086,8 @@ function buildNotIncludedSection(lines, plan, data) {
     }
   }
   for (const source of [...plan.css, ...plan.js]) {
-    if (source.inclusion === 'none') items.push(`- [${source.type}] ${safeText(source.label)}: 文字数上限のため本文を収録せず（${source.text.length}文字）`);
-    if (source.inclusion === 'partial') items.push(`- [${source.type}] ${safeText(source.label)}: 文字数上限のため ${source.includedChars + 1}文字目以降を収録せず`);
+    if (source.inclusion === 'none') items.push(`- [${source.type}] ${safeText(source.label)}: 文字数上限のため本文を収録せず（${describeRemaining(remainingChars(source))}）`);
+    if (source.inclusion === 'partial') items.push(`- [${source.type}] ${safeText(source.label)}: 文字数上限のため 元ファイルの${source.originalIncludedChars + 1}文字目以降を収録せず（${describeRemaining(remainingChars(source))}）`);
     if (source.analysisTruncated) items.push(`- [${source.type}] ${safeText(source.label)}: 1ファイルの解析上限のため ${source.analyzedChars + 1}文字目以降は取得・収録せず`);
   }
 
