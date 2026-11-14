@@ -281,7 +281,8 @@ function buildEstimationNotes(structure, jsFeatures, libraries) {
 function buildCoverageSection(lines, { htmlChars, inlineStyles, inlineScripts, cssResources, jsResources }) {
   lines.push('## 取得・解析範囲');
   lines.push('');
-  lines.push('このレポートのキーワード検出・ライブラリ検出・抜粋・危険情報チェックは、下の「解析」の文字数の範囲だけを対象にしています。');
+  lines.push('このレポートのキーワード検出・ライブラリ検出・抜粋は、下の「解析」の文字数の範囲だけを対象にしています。');
+  lines.push('危険情報チェックは、HTML本文の全文（インラインのstyle/scriptを含む）と、取得できた外部CSS/JSの「解析」の範囲を対象にしています。パターンに当てはまる文字列を探すだけなので、検出されなくても安全とは限りません。');
   lines.push('');
 
   if (typeof htmlChars === 'number') {
