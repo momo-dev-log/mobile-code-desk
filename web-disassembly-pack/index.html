@@ -56,8 +56,14 @@
       <h2>4. Markdownを作成</h2>
       <p class="hint-text">現在の解析結果からAI用Markdownを作成します。</p>
       <button type="button" id="markdown-btn" class="btn btn-primary btn-block">Markdownを作る</button>
+      <p class="hint-text">
+        ページを作り直す材料が必要なときだけ、全文つきを選んでください。HTML構造（最大20,000文字）とCSS/JSの本文（合計最大100,000文字）を収録します。
+        機密情報らしい文字列はマスクしますが、すべてを見つけられるわけではありません。
+      </p>
+      <button type="button" id="markdown-full-btn" class="btn btn-secondary btn-block">全文つきでMarkdownを作る</button>
 
       <div id="markdown-preview-wrap" hidden>
+        <p id="markdown-variant" class="status-text"></p>
         <textarea id="markdown-preview" class="markdown-preview" readonly rows="10"></textarea>
 
         <div class="action-row">
@@ -75,7 +81,7 @@
     </section>
   </main>
 
-  <script type="module" src="js/main.js?v=0.3.2"></script>
+  <script type="module" src="js/main.js?v=0.4.0"></script>
   <script>
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('./sw.js');

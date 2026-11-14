@@ -1,5 +1,6 @@
 import { JS_FEATURE_SUMMARY_MAP } from './keywords.js';
 import { APP_VERSION } from './constants.js';
+import { buildFullTextSections, safeText, safeCodeBlock } from './fulltext.js';
 
 /**
  * 解析結果からAI向けのMarkdown調査パックを組み立てる（v0.2）。
@@ -45,21 +46,26 @@ export function buildMarkdown(data) {
     htmlChars,
     inlineStyles,
     inlineScripts,
+    outputVariant,
   } = data;
 
   const lines = [];
+  const fmt = outputVariant === 'full' ? SAFE_FORMAT : PLAIN_FORMAT;
 
   // 1. メタ情報
   lines.push('# Web解体パック 調査結果');
   lines.push('');
-  lines.push(`- 対象URL: ${pageUrl}`);
+  lines.push(`- 対象URL: ${fmt.text(pageUrl)}`);
   if (finalUrl && finalUrl !== pageUrl) {
-    lines.push(`- 最終URL（リダイレクト後）: ${finalUrl}`);
+    lines.push(`- 最終URL（リダイレクト後）: ${fmt.text(finalUrl)}`);
   }
   if (title) {
-    lines.push(`- ページタイトル: ${title}`);
+    lines.push(`- ページタイトル: ${fmt.text(title)}`);
   }
   lines.push(`- Web解体パック版: ${APP_VERSION}`);
+  if (outputVariant === 'full') {
+    lines.push(FULL_VARIANT_META_LINE);
+  }
   lines.push('');
 
   // 2. サマリ行
@@ -70,7 +76,7 @@ export function buildMarkdown(data) {
   buildHtmlStructureSection(lines, structure);
 
   // 3.5 取得・解析範囲
-  buildCoverageSection(lines, { htmlChars, inlineStyles, inlineScripts, cssResources, jsResources });
+  buildCoverageSection(lines, { htmlChars, inlineStyles, inlineScripts, cssResources, jsResources }, fmt);
 
   // 4. 検出ライブラリ
   buildDetectionSection(lines, '## 検出ライブラリ', libraries);
@@ -79,10 +85,10 @@ export function buildMarkdown(data) {
   buildDetectionSection(lines, '## JS内キーワード検出', jsFeatures);
 
   // 6. CSS抜粋
-  buildExcerptSection(lines, '## CSS抜粋', cssExcerpts);
+  buildExcerptSection(lines, '## CSS抜粋', cssExcerpts, fmt);
 
   // 7. JavaScript抜粋
-  buildExcerptSection(lines, '## JavaScript抜粋', jsExcerpts);
+  buildExcerptSection(lines, '## JavaScript抜粋', jsExcerpts, fmt);
 
   // 8. 推定メモ
   lines.push('## 推定メモ');
@@ -99,7 +105,7 @@ export function buildMarkdown(data) {
     lines.push('以下のパターンが検出されました。共有してよいか確認してください。');
     lines.push('');
     for (const finding of dangerFindings) {
-      lines.push(`- [${finding.label}] ${finding.type}: \`${finding.preview}\``);
+      lines.push(fmt.finding(finding));
     }
   } else {
     lines.push('チェック対象のパターンは検出されませんでした。');
@@ -107,9 +113,48 @@ export function buildMarkdown(data) {
   lines.push('');
 
   // 10. 取得対象外の記録
-  buildSkippedSection(lines, cssResources, jsResources);
+  buildSkippedSection(lines, cssResources, jsResources, fmt);
 
   return lines.join('\n');
+}
+
+/**
+ * ページ由来の文字列の書き方。
+ *
+ * - PLAIN_FORMAT: 通常版。v0.3.2 までと同じ出力（変更しない）
+ * - SAFE_FORMAT: 全文つき版。ページ由来の文字列（タイトル・URL・識別子）はマスクしてインラインコードに、
+ *   抜粋は本文で閉じないコードフェンスにする。危険情報チェックの一部表示（先頭・末尾4文字）は出さない。
+ *   全文つき版はAIへ渡す前提で本文を多く含むため、先頭の通常版部分も同じ扱いにそろえる。
+ */
+const PLAIN_FORMAT = {
+  text: (value) => value,
+  code: (value) => `\`\`\`\n${value}\n\`\`\``,
+  finding: (finding) => `- [${finding.label}] ${finding.type}: \`${finding.preview}\``,
+  untrackedNote: '- HTMLの<script src>と<link rel="stylesheet">以外の方法で読み込まれるコード（JSの中から後で読み込まれるファイルなど）は、このツールでは追跡していません。その挙動は未確認です。',
+};
+
+const SAFE_FORMAT = {
+  text: (value) => safeText(value),
+  code: (value) => safeCodeBlock(value),
+  finding: (finding) => `- [${safeText(finding.label)}] ${finding.type}（値は全文つき版には載せません。画面の「危険情報チェック」で確認してください）`,
+  untrackedNote: '- HTMLの `<script src>` と `<link rel="stylesheet">` 以外の方法で読み込まれるコード（JSの中から後で読み込まれるファイルなど）は、このツールでは追跡していません。その挙動は未確認です。',
+};
+
+export const FULL_VARIANT_META_LINE = '- 出力形式: 全文つき（末尾の「全文収録」にHTML構造・CSS/JS本文を収録）';
+
+/**
+ * 全文つきMarkdownを組み立てる（v0.4.0）。
+ *
+ * 通常版（buildMarkdown）と同じ構成にメタ情報の1行を加え、末尾に「全文収録」の節を追加する。
+ * ページ由来の文字列は SAFE_FORMAT で書く（マスク・インラインコード・安全なフェンス）。
+ * 通常版の出力そのものは変えない。
+ *
+ * @param {object} data buildMarkdown の入力に html（取得したHTML全文）を加えたもの
+ * @returns {string}
+ */
+export function buildFullMarkdown(data) {
+  const summary = buildMarkdown({ ...data, outputVariant: 'full' });
+  return `${summary}\n${buildFullTextSections(data)}`;
 }
 
 /**
@@ -194,7 +239,7 @@ function buildDetectionSection(lines, heading, items) {
  * 「CSS抜粋」「JavaScript抜粋」のような、観点ごとの抜粋セクションを出力する。
  * 該当が無い観点も省略せず「（該当なし）」を出す。
  */
-function buildExcerptSection(lines, heading, categories) {
+function buildExcerptSection(lines, heading, categories, fmt = PLAIN_FORMAT) {
   lines.push(heading);
   lines.push('');
 
@@ -209,11 +254,9 @@ function buildExcerptSection(lines, heading, categories) {
     }
 
     for (const ex of category.excerpts) {
-      lines.push(`キーワード: \`${ex.keyword}\`（${ex.source}）`);
+      lines.push(`キーワード: \`${ex.keyword}\`（${fmt.text(ex.source)}）`);
       lines.push('');
-      lines.push('```');
-      lines.push(ex.excerpt);
-      lines.push('```');
+      lines.push(fmt.code(ex.excerpt));
       lines.push('');
     }
   }
@@ -278,7 +321,7 @@ function buildEstimationNotes(structure, jsFeatures, libraries) {
  * 「取得対象外の記録」に任せる（同じURLを二重に並べない）。
  * 本文（rawText）はここでは一切出力しない。
  */
-function buildCoverageSection(lines, { htmlChars, inlineStyles, inlineScripts, cssResources, jsResources }) {
+function buildCoverageSection(lines, { htmlChars, inlineStyles, inlineScripts, cssResources, jsResources }, fmt = PLAIN_FORMAT) {
   lines.push('## 取得・解析範囲');
   lines.push('');
   lines.push('このレポートのキーワード検出・ライブラリ検出・抜粋は、下の「解析」の文字数の範囲だけを対象にしています。');
@@ -303,7 +346,7 @@ function buildCoverageSection(lines, { htmlChars, inlineStyles, inlineScripts, c
     lines.push('（解析したCSS/JSはありません）');
   } else {
     for (const entry of analyzed) {
-      lines.push(`- [${entry.type}] ${entry.label || '（識別子なし）'}: ${describeCoverage(entry)}`);
+      lines.push(`- [${entry.type}] ${entry.label ? fmt.text(entry.label) : '（識別子なし）'}: ${describeCoverage(entry)}`);
     }
   }
   lines.push('');
@@ -336,7 +379,7 @@ function buildCoverageSection(lines, { htmlChars, inlineStyles, inlineScripts, c
   if (!anyTruncated && notFetched.length === 0) {
     lines.push('- HTMLから参照されていたCSS/JSは、すべて全文を解析しました。');
   }
-  lines.push('- HTMLの<script src>と<link rel="stylesheet">以外の方法で読み込まれるコード（JSの中から後で読み込まれるファイルなど）は、このツールでは追跡していません。その挙動は未確認です。');
+  lines.push(fmt.untrackedNote);
   lines.push('');
 }
 
@@ -359,7 +402,7 @@ function describeCoverage(entry) {
 /**
  * 取得対象外・取得失敗のCSS/JSリソースを一覧化する。
  */
-function buildSkippedSection(lines, cssResources, jsResources) {
+function buildSkippedSection(lines, cssResources, jsResources, fmt = PLAIN_FORMAT) {
   lines.push('## 取得対象外の記録');
   lines.push('');
 
@@ -380,7 +423,7 @@ function buildSkippedSection(lines, cssResources, jsResources) {
   }
 
   for (const entry of entries) {
-    lines.push(`- [${entry.type}] ${entry.label}: ${describeSkipped(entry)}`);
+    lines.push(`- [${entry.type}] ${fmt.text(entry.label)}: ${describeSkipped(entry)}`);
   }
   lines.push('');
 }
