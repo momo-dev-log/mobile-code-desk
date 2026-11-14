@@ -1,6 +1,6 @@
 import { JS_FEATURE_SUMMARY_MAP } from './keywords.js';
 import { APP_VERSION } from './constants.js';
-import { buildFullTextSections, safeText, safeCodeBlock } from './fulltext.js';
+import { buildFullTextSections, safeText, safeCodeBlock, describeFullFetchStatus } from './fulltext.js';
 
 /**
  * 解析結果からAI向けのMarkdown調査パックを組み立てる（v0.2）。
@@ -47,10 +47,11 @@ export function buildMarkdown(data) {
     inlineStyles,
     inlineScripts,
     outputVariant,
+    full,
   } = data;
 
   const lines = [];
-  const fmt = outputVariant === 'full' ? SAFE_FORMAT : PLAIN_FORMAT;
+  const fmt = outputVariant === 'full' ? makeSafeFormat(full) : PLAIN_FORMAT;
 
   // 1. メタ情報
   lines.push('# Web解体パック 調査結果');
@@ -101,6 +102,10 @@ export function buildMarkdown(data) {
   // 9. 危険情報チェック結果
   lines.push('## 危険情報チェック結果');
   lines.push('');
+  if (fmt.dangerNote) {
+    lines.push(fmt.dangerNote);
+    lines.push('');
+  }
   if (dangerFindings && dangerFindings.length > 0) {
     lines.push('以下のパターンが検出されました。共有してよいか確認してください。');
     lines.push('');
@@ -131,6 +136,9 @@ const PLAIN_FORMAT = {
   code: (value) => `\`\`\`\n${value}\n\`\`\``,
   finding: (finding) => `- [${finding.label}] ${finding.type}: \`${finding.preview}\``,
   untrackedNote: '- HTMLの<script src>と<link rel="stylesheet">以外の方法で読み込まれるコード（JSの中から後で読み込まれるファイルなど）は、このツールでは追跡していません。その挙動は未確認です。',
+  coverageNote: null,
+  dangerNote: null,
+  skippedSuffix: () => '',
 };
 
 const SAFE_FORMAT = {
@@ -138,7 +146,29 @@ const SAFE_FORMAT = {
   code: (value) => safeCodeBlock(value),
   finding: (finding) => `- [${safeText(finding.label)}] ${finding.type}（値は全文つき版には載せません。画面の「危険情報チェック」で確認してください）`,
   untrackedNote: '- HTMLの `<script src>` と `<link rel="stylesheet">` 以外の方法で読み込まれるコード（JSの中から後で読み込まれるファイルなど）は、このツールでは追跡していません。その挙動は未確認です。',
+  coverageNote: null,
+  dangerNote: null,
+  skippedSuffix: () => '',
 };
+
+/**
+ * 全文つき版の書式。追加取得の記録（full）があるときは、通常解析の節に
+ * 「この節は通常解析の結果」という注記と、ファイルごとの全文つき版での取得状態を書き足す（v0.4.1）。
+ * 通常解析の取得状態そのものは書き換えない（通常版と同じ事実を残し、全文つき版の状態を並べて書く）。
+ */
+function makeSafeFormat(full) {
+  if (!full || !Array.isArray(full.candidates)) return SAFE_FORMAT;
+  const byUrl = new Map(full.candidates.map((c) => [`${c.type}\n${c.url}`, c]));
+  return {
+    ...SAFE_FORMAT,
+    coverageNote: '- この節・「危険情報チェック結果」・「取得対象外の記録」は、通常解析（「構造を見る」でCSS・JS各5件まで取得）の結果です。全文つき版で追加取得した結果は、末尾の「全文収録」にある「全文つき版の取得状態」と「危険情報チェック（全文つき版の追加取得分）」を参照してください。',
+    dangerNote: '（通常解析で取得した範囲の結果です。全文つき版で追加取得したファイルの結果は「全文収録」に別に記載しています。）',
+    skippedSuffix: (entry) => {
+      const candidate = byUrl.get(`${entry.type}\n${entry.label}`);
+      return candidate ? ` → 全文つき版: ${describeFullFetchStatus(candidate)}` : '';
+    },
+  };
+}
 
 export const FULL_VARIANT_META_LINE = '- 出力形式: 全文つき（末尾の「全文収録」にHTML構造・CSS/JS本文を収録）';
 
@@ -327,6 +357,10 @@ function buildCoverageSection(lines, { htmlChars, inlineStyles, inlineScripts, c
   lines.push('このレポートのキーワード検出・ライブラリ検出・抜粋は、下の「解析」の文字数の範囲だけを対象にしています。');
   lines.push('危険情報チェックは、HTML本文の全文（インラインのstyle/scriptを含む）と、取得できた外部CSS/JSの「解析」の範囲を対象にしています。パターンに当てはまる文字列を探すだけなので、検出されなくても安全とは限りません。');
   lines.push('');
+  if (fmt.coverageNote) {
+    lines.push(fmt.coverageNote);
+    lines.push('');
+  }
 
   if (typeof htmlChars === 'number') {
     lines.push(`- HTML本文: ${htmlChars}文字（全文を解析）`);
@@ -423,7 +457,7 @@ function buildSkippedSection(lines, cssResources, jsResources, fmt = PLAIN_FORMA
   }
 
   for (const entry of entries) {
-    lines.push(`- [${entry.type}] ${fmt.text(entry.label)}: ${describeSkipped(entry)}`);
+    lines.push(`- [${entry.type}] ${fmt.text(entry.label)}: ${describeSkipped(entry)}${fmt.skippedSuffix(entry)}`);
   }
   lines.push('');
 }

@@ -50,6 +50,7 @@
       <h2>3. 危険情報チェック</h2>
       <p class="hint-text">共有前に、検出された内容を確認してください。パターンに当てはまる文字列を探すだけなので、検出されなくても安全とは限りません。</p>
       <div id="danger-result" class="card danger-card"></div>
+      <div id="danger-extra-result" class="card danger-card" hidden></div>
     </section>
 
     <section class="step" id="step-markdown" hidden>
@@ -58,9 +59,11 @@
       <button type="button" id="markdown-btn" class="btn btn-primary btn-block">Markdownを作る</button>
       <p class="hint-text">
         ページを作り直す材料が必要なときだけ、全文つきを選んでください。HTML構造（最大20,000文字）とCSS/JSの本文（合計最大100,000文字）を収録します。
+        初回は、構造の確認で取得しなかったCSS/JSを追加で取得します（CSS 10件・JS 20件まで、最大60秒）。
         機密情報らしい文字列はマスクしますが、すべてを見つけられるわけではありません。
       </p>
       <button type="button" id="markdown-full-btn" class="btn btn-secondary btn-block">全文つきでMarkdownを作る</button>
+      <p id="full-fetch-status" class="status-text" aria-live="polite"></p>
 
       <div id="markdown-preview-wrap" hidden>
         <p id="markdown-variant" class="status-text"></p>
@@ -81,7 +84,7 @@
     </section>
   </main>
 
-  <script type="module" src="js/main.js?v=0.4.0"></script>
+  <script type="module" src="js/main.js?v=0.4.1"></script>
   <script>
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('./sw.js');

@@ -3,7 +3,7 @@
  * notebooklm-packerの定数とは独立して管理する。
  */
 
-export const APP_VERSION = 'v0.4.0';
+export const APP_VERSION = 'v0.4.1';
 
 // 専用Worker（worker/index.js）のエンドポイント
 export const WORKER_URL = 'https://web-disassembly-pack-worker.momo19830831.workers.dev';
@@ -24,3 +24,14 @@ export const MAX_FULL_CODE_CHARS = 100000;
 export const FULL_CODE_CSS_SHARE = 0.4;
 // 途中まで収録するときの最小文字数（残り枠がこれ未満なら、そのソースは収録しない）
 export const MIN_PARTIAL_CHARS = 500;
+
+// 全文つき版の追加取得（v0.4.1）。通常版の取得（上の MAX_CSS_FILES / MAX_JS_FILES）は変えない。
+// 取得件数の上限（通常解析で取得した分を含む。失敗した通信も1件と数える）
+export const FULL_MAX_CSS_FILES = 10;
+export const FULL_MAX_JS_FILES = 20;
+// 追加取得の通信1件あたりの最大待ち時間（ミリ秒）。全体の残り時間の方が短ければ、そちらを使う
+export const FULL_FETCH_PER_REQUEST_MS = 20 * 1000;
+// 1回の全文生成での追加取得全体の最大時間（ミリ秒）
+export const FULL_FETCH_TOTAL_MS = 60 * 1000;
+// 追加取得した解析範囲（1ファイル最大 MAX_RESOURCE_CHARS）の合計の上限（文字数）
+export const FULL_EXTRA_MAX_CHARS = 2000000;

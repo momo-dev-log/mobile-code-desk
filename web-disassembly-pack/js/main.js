@@ -7,6 +7,14 @@ import { checkDangerousContent } from './danger-check.js';
 import { buildMarkdown, buildFullMarkdown } from './markdown.js';
 import { buildInlineEntry, truncateForAnalysis } from './coverage.js';
 import { MAX_CSS_FILES, MAX_JS_FILES, APP_VERSION } from './constants.js';
+import {
+  createFullFetchCache,
+  planFullFetch,
+  runFullFetch,
+  resolveWithoutFetch,
+  toFullResources,
+  DEFAULT_FULL_FETCH_LIMITS,
+} from './full-fetch.js';
 
 // -----------------------------------------------
 // DOM要素
@@ -25,11 +33,13 @@ const structureNextHint = document.getElementById('structure-next-hint');
 
 const stepDanger = document.getElementById('step-danger');
 const dangerResult = document.getElementById('danger-result');
+const dangerExtraResult = document.getElementById('danger-extra-result');
 
 const stepMarkdown = document.getElementById('step-markdown');
 const markdownBtn = document.getElementById('markdown-btn');
 const markdownFullBtn = document.getElementById('markdown-full-btn');
 const markdownVariantEl = document.getElementById('markdown-variant');
+const fullFetchStatusEl = document.getElementById('full-fetch-status');
 const markdownPreviewWrap = document.getElementById('markdown-preview-wrap');
 const markdownPreview = document.getElementById('markdown-preview');
 const copyBtn = document.getElementById('copy-btn');
@@ -60,12 +70,12 @@ function isCurrentRun(id) {
  * 取得・解析の実行中かどうかで、操作ボタンの状態を切り替える。
  * 実行中は「URLを取得」「構造を見る」「Markdownを作る」「全文つきでMarkdownを作る」を押せないようにする。
  */
-function setBusy(busy) {
+function setBusy(busy, { analyzing = true } = {}) {
   fetchBtn.disabled = busy;
   structureBtn.disabled = busy;
   markdownBtn.disabled = busy;
   markdownFullBtn.disabled = busy;
-  structureBtn.textContent = busy && !stepStructure.hidden ? '解析中...' : '構造を見る';
+  structureBtn.textContent = busy && analyzing && !stepStructure.hidden ? '解析中...' : '構造を見る';
 }
 
 // -----------------------------------------------
@@ -74,7 +84,7 @@ function setBusy(busy) {
 fetchBtn.addEventListener('click', handleFetch);
 structureBtn.addEventListener('click', handleStructure);
 markdownBtn.addEventListener('click', () => handleMarkdown('summary'));
-markdownFullBtn.addEventListener('click', () => handleMarkdown('full'));
+markdownFullBtn.addEventListener('click', handleFullMarkdown);
 copyBtn.addEventListener('click', handleCopy);
 saveBtn.addEventListener('click', handleSave);
 resetBtn.addEventListener('click', handleReset);
@@ -185,6 +195,10 @@ async function runStructureAnalysis(id) {
   const parsed = parseHtml(state.html, state.pageUrl);
   state.title = parsed.title;
   state.structure = parsed.structure;
+  // 全文つき版の追加取得・記述順の一覧で使う（通常解析の処理と出力には使わない）
+  state.cssLinks = parsed.cssLinks;
+  state.jsScripts = parsed.jsScripts;
+  state.scriptOrder = parsed.scriptOrder || [];
 
   analyzedUrlEl.textContent = `解析対象: ${state.pageUrl}`;
   renderStructureCards(parsed.structure);
@@ -336,6 +350,8 @@ function describeFailure(result) {
       return '通信エラー';
     case 'too_large':
       return 'サイズが大きすぎます';
+    case 'timeout':
+      return 'タイムアウト';
     case 'http_error':
       return `HTTPエラー${result.httpStatus ? ' ' + result.httpStatus : ''}`;
     default:
@@ -423,6 +439,43 @@ function renderDangerResult(findings) {
   dangerResult.appendChild(list);
 }
 
+/**
+ * 全文つき版の追加取得分の危険情報チェック結果を、通常解析分とは別の欄に表示する。
+ */
+function renderExtraDangerResult(findings, checkedFiles) {
+  dangerExtraResult.innerHTML = '';
+  dangerExtraResult.hidden = false;
+
+  const title = document.createElement('p');
+  title.className = 'danger-extra-title';
+  title.textContent = `全文つき版の追加取得分（${checkedFiles}件）`;
+  dangerExtraResult.appendChild(title);
+
+  if (checkedFiles === 0) {
+    dangerExtraResult.classList.remove('card-warning');
+    const p = document.createElement('p');
+    p.textContent = '追加取得したファイルはありません。';
+    dangerExtraResult.appendChild(p);
+    return;
+  }
+  if (!findings || findings.length === 0) {
+    dangerExtraResult.classList.remove('card-warning');
+    const p = document.createElement('p');
+    p.textContent = 'チェック対象のパターンは検出されませんでした。';
+    dangerExtraResult.appendChild(p);
+    return;
+  }
+
+  dangerExtraResult.classList.add('card-warning');
+  const list = document.createElement('ul');
+  for (const finding of findings) {
+    const li = document.createElement('li');
+    li.textContent = `[${finding.label}] ${finding.type}: ${finding.preview}`;
+    list.appendChild(li);
+  }
+  dangerExtraResult.appendChild(list);
+}
+
 function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = text;
@@ -441,7 +494,21 @@ function handleMarkdown(variant) {
   // 解析が完了していない状態ではMarkdownを作らない
   if (!state.structure || !state.dangerFindings) return;
 
-  const data = {
+  const data = markdownData();
+  const isFull = variant === 'full';
+  state.markdown = isFull ? buildFullMarkdown({ ...data, html: state.html || '', full: fullMarkdownData() }) : buildMarkdown(data);
+  state.markdownVariant = isFull ? 'full' : 'summary';
+
+  markdownPreview.value = state.markdown;
+  markdownVariantEl.textContent = isFull
+    ? `全文つきのMarkdownです（${state.markdown.length}文字）。共有前に、機密情報が含まれていないか確認してください。`
+    : `通常版のMarkdownです（${state.markdown.length}文字）。`;
+  markdownPreviewWrap.hidden = false;
+  copyStatus.textContent = '';
+}
+
+function markdownData() {
+  return {
     pageUrl: state.pageUrl,
     finalUrl: state.finalUrl,
     title: state.title,
@@ -457,17 +524,113 @@ function handleMarkdown(variant) {
     inlineStyles: state.inlineStyles,
     inlineScripts: state.inlineScripts,
   };
+}
 
-  const isFull = variant === 'full';
-  state.markdown = isFull ? buildFullMarkdown({ ...data, html: state.html || '' }) : buildMarkdown(data);
-  state.markdownVariant = isFull ? 'full' : 'summary';
+// -----------------------------------------------
+// 全文つきでMarkdownを作る（v0.4.1: 不足分の追加取得つき）
+// -----------------------------------------------
 
-  markdownPreview.value = state.markdown;
-  markdownVariantEl.textContent = isFull
-    ? `全文つきのMarkdownです（${state.markdown.length}文字）。共有前に、機密情報が含まれていないか確認してください。`
-    : `通常版のMarkdownです（${state.markdown.length}文字）。`;
-  markdownPreviewWrap.hidden = false;
-  copyStatus.textContent = '';
+/**
+ * 「全文つきでMarkdownを作る」。
+ *
+ * 初回は、通常解析で取得しなかった同一オリジンのCSS/JSを、全文つき版の上限まで1件ずつ追加取得してから作る。
+ * 取得に成功したファイルは保存して再利用する。失敗・タイムアウト・時間切れのものは次に押したときに再試行する。
+ * 追加取得が要らないとき（すべて取得済み・上限に達している）は、通信せずにすぐ作る。
+ * 追加取得の結果は state.fullFetch にだけ保存し、通常解析の結果（state.cssResources 等）は変えない。
+ */
+function handleFullMarkdown() {
+  if (!state.structure || !state.dangerFindings) return undefined;
+
+  if (!state.fullFetch) {
+    state.fullFetch = { cache: createFullFetchCache(state.cssResources, state.jsResources), runs: [], result: null };
+  }
+
+  const plan = planFullFetch({ cssLinks: state.cssLinks, jsScripts: state.jsScripts, cache: state.fullFetch.cache });
+  if (plan.attempts === 0) {
+    state.fullFetch.result = resolveWithoutFetch(plan, state.fullFetch.cache);
+    finishFullMarkdown();
+    return undefined;
+  }
+  return fetchMissingThenBuild(plan.attempts);
+}
+
+async function fetchMissingThenBuild(plannedAttempts) {
+  const id = beginRun();
+  const { fullFetch } = state;
+  setBusy(true, { analyzing: false });
+  fullFetchStatusEl.textContent = `不足しているCSS/JSを追加取得しています（0/${plannedAttempts}件）...`;
+
+  let run;
+  try {
+    run = await runFullFetch({
+      cssLinks: state.cssLinks,
+      jsScripts: state.jsScripts,
+      cache: fullFetch.cache,
+      fetchFn: (url, options) => fetchResource(url, options),
+      isCancelled: () => !isCurrentRun(id),
+      onProgress: ({ done, total }) => {
+        if (isCurrentRun(id)) fullFetchStatusEl.textContent = `不足しているCSS/JSを追加取得しています（${done}/${total}件）...`;
+      },
+    });
+  } catch {
+    run = null;
+  } finally {
+    if (isCurrentRun(id)) setBusy(false);
+  }
+
+  // やり直し・再解析で無効になった取得は、画面にも状態にも書き込まない
+  if (!isCurrentRun(id) || state.fullFetch !== fullFetch) return;
+  if (!run || run.cancelled) {
+    fullFetchStatusEl.textContent = '追加取得中にエラーが発生しました。もう一度「全文つきでMarkdownを作る」を押してください。';
+    return;
+  }
+
+  fullFetch.runs.push({ log: run.log, stats: run.stats });
+  fullFetch.result = run;
+  finishFullMarkdown();
+}
+
+function finishFullMarkdown() {
+  const { fullFetch } = state;
+  const extras = [...fullFetch.cache.values()].filter((entry) => entry.source === 'extra');
+  fullFetch.dangerFindings = checkDangerousContent(extras.map((entry) => ({ label: entry.label, text: entry.rawText })));
+  fullFetch.extraFileCount = extras.length;
+  renderExtraDangerResult(fullFetch.dangerFindings, extras.length);
+
+  const { stats, retryable } = fullFetch.result;
+  fullFetchStatusEl.textContent = describeFullFetchStatus(stats, retryable, fullFetch.result.fetched);
+  handleMarkdown('full');
+}
+
+function describeFullFetchStatus(stats, retryable, fetched) {
+  const parts = [];
+  if (fetched) {
+    parts.push(`追加取得: 通信${stats.attempts}件（成功${stats.okThisRun}件・失敗${stats.failed}件・タイムアウト${stats.timeout}件）`);
+  } else {
+    parts.push('追加取得: 通信なし（取得済みのファイルを使用）');
+  }
+  if (stats.skippedTime > 0) parts.push(`時間上限で未試行${stats.skippedTime}件`);
+  if (stats.skippedBudget > 0) parts.push(`文字数上限で未試行${stats.skippedBudget}件`);
+  if (stats.skippedLimit > 0) parts.push(`件数上限で未試行${stats.skippedLimit}件`);
+  if (retryable) parts.push('取得できなかったファイルは、もう一度押すと再試行します');
+  return `${parts.join('。')}。`;
+}
+
+/** 全文Markdownに渡す、追加取得を含む取得記録 */
+function fullMarkdownData() {
+  const { fullFetch } = state;
+  const { candidates } = fullFetch.result;
+  return {
+    cssResources: toFullResources(candidates, fullFetch.cache, 'CSS'),
+    jsResources: toFullResources(candidates, fullFetch.cache, 'JS'),
+    candidates,
+    runs: fullFetch.runs,
+    lastRun: fullFetch.result,
+    dangerFindings: fullFetch.dangerFindings,
+    extraFileCount: fullFetch.extraFileCount,
+    scriptOrder: state.scriptOrder || [],
+    limits: DEFAULT_FULL_FETCH_LIMITS,
+  };
 }
 
 async function handleCopy() {
@@ -546,7 +709,11 @@ function clearAnalysisOutputs() {
 
   dangerResult.innerHTML = '';
   dangerResult.classList.remove('card-warning');
+  dangerExtraResult.innerHTML = '';
+  dangerExtraResult.classList.remove('card-warning');
+  dangerExtraResult.hidden = true;
 
+  fullFetchStatusEl.textContent = '';
   markdownPreview.value = '';
   markdownVariantEl.textContent = '';
   markdownPreviewWrap.hidden = true;

@@ -34,7 +34,7 @@ class FakeElement {
 }
 
 const INITIALLY_HIDDEN = new Set([
-  'step-structure', 'step-danger', 'step-markdown', 'markdown-preview-wrap', 'structure-next-hint',
+  'step-structure', 'step-danger', 'step-markdown', 'markdown-preview-wrap', 'structure-next-hint', 'danger-extra-result',
 ]);
 const elements = new Map();
 
@@ -75,9 +75,12 @@ class FakeDOMParser {
 
 // 作り物の fetch: 対象URLごとに応答を保留し、テストから respond() で返す
 const pending = new Map();
+// 全文つき版の追加取得では待ち時間（signal）つきで呼ばれる。どちらの呼び方かを記録する
+const fetchLog = [];
 
-function fakeFetch(endpoint) {
+function fakeFetch(endpoint, options) {
   const target = new URL(endpoint).searchParams.get('url');
+  fetchLog.push({ target, withSignal: Boolean(options && options.signal) });
   return new Promise((resolve) => {
     pending.set(target, (payload) => resolve({ json: async () => payload }));
   });
@@ -104,7 +107,7 @@ const PAGE_HTML = '<script src="/app.js"></script><script>const canvas = 1; requ
 const okHtml = (html) => ({ ok: true, content: html, contentType: 'text/html', finalUrl: '', httpStatus: 200 });
 
 before(async () => {
-  ['library-list', 'js-feature-list', 'structure-cards'].forEach((id) => resetChildrenOnClear(el(id)));
+  ['library-list', 'js-feature-list', 'structure-cards', 'danger-extra-result'].forEach((id) => resetChildrenOnClear(el(id)));
 
   globalThis.document = {
     getElementById: el,
@@ -406,4 +409,160 @@ test('F4: 解析中に「やり直す」→別URLの全文つきに、古いペ�
   assert.equal(el('markdown-preview').value, '');
   assert.equal(el('markdown-variant').textContent, '');
   assert.equal(el('markdown-full-btn').disabled, false);
+});
+
+// -----------------------------------------------
+// v0.4.1: 全文つき版の追加取得
+// -----------------------------------------------
+const EIGHT = ['base', 'helpers', 'store', 'model', 'template', 'view', 'controller', 'app'];
+const EIGHT_HTML = `${EIGHT.map((n) => `<script src="/js/${n}.js"></script>`).join('')}<script>const canvas = 1;</script>`;
+const jsUrl = (host, n) => `https://${host}/js/${n}.js`;
+const body = (n) => `function ${n}Body() { return '${n}'; }`;
+
+/** 取得→構造を見る（先頭5件を返す）まで進める */
+async function analyzeEight(host) {
+  startFresh();
+  el('url-input').value = `https://${host}/`;
+  const fetched = click('fetch-btn');
+  respond(`https://${host}/`, okHtml(EIGHT_HTML));
+  await fetched;
+  const analyzed = click('structure-btn');
+  for (const n of EIGHT.slice(0, 5)) {
+    await flush();
+    respond(jsUrl(host, n), okHtml(body(n)));
+  }
+  await analyzed;
+  assert.equal(pending.size, 0, '通常解析は5件で止まる');
+}
+
+test('F5: 全文つきの初回は不足分だけを1件ずつ追加取得し、2回目は通信しない。通常版の出力は変わらない', async () => {
+  await analyzeEight('eight.example');
+  click('markdown-btn');
+  const normalBefore = el('markdown-preview').value;
+
+  fetchLog.length = 0;
+  const done = click('markdown-full-btn');
+  assert.ok(done instanceof Promise, '追加取得があるときは非同期で作る');
+  // 取得中は全ボタンを押せず、「構造を見る」の表示は変えない
+  assert.equal(el('markdown-full-btn').disabled, true);
+  assert.equal(el('markdown-btn').disabled, true);
+  assert.equal(el('fetch-btn').disabled, true);
+  assert.equal(el('structure-btn').disabled, true);
+  assert.equal(el('structure-btn').textContent, '構造を見る');
+  assert.match(el('full-fetch-status').textContent, /追加取得しています（0\/3件）/);
+
+  // 1件ずつ: 応答するまで次の要求は出ない
+  for (const n of ['view', 'controller', 'app']) {
+    await flush();
+    assert.deepEqual([...pending.keys()], [jsUrl('eight.example', n)]);
+    respond(jsUrl('eight.example', n), okHtml(body(n)));
+  }
+  await done;
+  assert.deepEqual(fetchLog.map((r) => r.target.split('/').pop()), ['view.js', 'controller.js', 'app.js'], '取得済みの5件は再取得しない');
+  assert.ok(fetchLog.every((r) => r.withSignal), '追加取得は待ち時間つき');
+  assert.equal(el('markdown-full-btn').disabled, false);
+
+  const full = el('markdown-preview').value;
+  for (const n of EIGHT) assert.ok(full.includes(body(n)), `${n} が収録されていない`);
+  assert.match(el('full-fetch-status').textContent, /追加取得: 通信3件（成功3件・失敗0件・タイムアウト0件）/);
+
+  // 2回目: 通信しない
+  fetchLog.length = 0;
+  const again = click('markdown-full-btn');
+  assert.equal(again, undefined, '追加取得が要らないときはすぐ作る');
+  assert.equal(fetchLog.length, 0);
+  assert.equal(el('markdown-preview').value.includes(body('app')), true);
+  assert.match(el('full-fetch-status').textContent, /通信なし/);
+
+  // 通常版は追加取得の前後で同じ
+  click('markdown-btn');
+  assert.equal(el('markdown-preview').value, normalBefore);
+  assert.ok(!normalBefore.includes(body('view')));
+});
+
+test('F6: 追加取得の失敗は成功扱いにせず、次に押したときは失敗分だけを再試行する', async () => {
+  await analyzeEight('retry.example');
+  const first = click('markdown-full-btn');
+  await flush();
+  respond(jsUrl('retry.example', 'view'), okHtml(body('view')));
+  await flush();
+  respond(jsUrl('retry.example', 'controller'), { ok: false, reason: 'http_error', httpStatus: 503 });
+  await flush();
+  respond(jsUrl('retry.example', 'app'), okHtml(body('app')));
+  await first;
+
+  let md = el('markdown-preview').value;
+  assert.ok(!md.includes(body('controller')));
+  assert.match(md, /取得失敗（理由: HTTPエラー 503）。成功扱いにせず、次回の全文生成で再試行します/);
+  assert.match(el('full-fetch-status').textContent, /もう一度押すと再試行します/);
+
+  fetchLog.length = 0;
+  const second = click('markdown-full-btn');
+  await flush();
+  assert.deepEqual([...pending.keys()], [jsUrl('retry.example', 'controller')]);
+  respond(jsUrl('retry.example', 'controller'), okHtml(body('controller')));
+  await second;
+  assert.equal(fetchLog.length, 1);
+  md = el('markdown-preview').value;
+  assert.ok(md.includes(body('controller')));
+  assert.ok(md.includes('#### 2回目の全文生成（通信1件）'));
+});
+
+test('F7: 追加取得中に「やり直す」を押すと、取得結果は書き込まれず、ボタンも戻る', async () => {
+  await analyzeEight('reset.example');
+  const done = click('markdown-full-btn');
+  await flush();
+  assert.ok(pending.has(jsUrl('reset.example', 'view')));
+
+  click('reset-btn');
+  assert.equal(el('markdown-full-btn').disabled, false);
+  assert.equal(el('full-fetch-status').textContent, '');
+  respond(jsUrl('reset.example', 'view'), okHtml(body('view')));
+  await done;
+  await flush();
+  assert.equal(pending.size, 0, '残りのファイルは取りに行かない');
+  assert.equal(el('markdown-preview').value, '');
+  assert.equal(el('step-markdown').hidden, true);
+  assert.equal(el('danger-extra-result').hidden, true);
+});
+
+test('F8: 「構造を見る」をやり直すと追加取得の結果は捨てられ、次の全文つきで取り直す', async () => {
+  await analyzeEight('reanalyze.example');
+  let done = click('markdown-full-btn');
+  for (const n of ['view', 'controller', 'app']) { await flush(); respond(jsUrl('reanalyze.example', n), okHtml(body(n))); }
+  await done;
+
+  const analyzed = click('structure-btn');
+  assert.equal(el('danger-extra-result').hidden, true);
+  for (const n of EIGHT.slice(0, 5)) { await flush(); respond(jsUrl('reanalyze.example', n), okHtml(`${body(n)} // v2`)); }
+  await analyzed;
+
+  fetchLog.length = 0;
+  done = click('markdown-full-btn');
+  for (const n of ['view', 'controller', 'app']) { await flush(); respond(jsUrl('reanalyze.example', n), okHtml(`${body(n)} // v2`)); }
+  await done;
+  assert.equal(fetchLog.length, 3);
+  assert.ok(el('markdown-preview').value.includes(`${body('app')} // v2`));
+});
+
+test('F9: 追加取得分の危険情報チェック結果を、通常解析分とは別の欄に表示する', async () => {
+  await analyzeEight('danger.example');
+  assert.equal(el('danger-extra-result').hidden, true);
+  const done = click('markdown-full-btn');
+  await flush(); respond(jsUrl('danger.example', 'view'), okHtml('const k = "AKIAABCDEFGHIJKLMNOP";'));
+  await flush(); respond(jsUrl('danger.example', 'controller'), okHtml(body('controller')));
+  await flush(); respond(jsUrl('danger.example', 'app'), okHtml(body('app')));
+  await done;
+
+  const extra = el('danger-extra-result');
+  assert.equal(extra.hidden, false);
+  assert.equal(extra.children[0].textContent, '全文つき版の追加取得分（3件）');
+  const list = extra.children[1];
+  assert.equal(list.children.length, 1);
+  assert.match(list.children[0].textContent, /\[https:\/\/danger\.example\/js\/view\.js\] AWSアクセスキーID: AKIA\.\.\.MNOP/);
+  // 通常解析分の欄は変わらない
+  assert.match(el('danger-result').textContent, /検出されませんでした/);
+  const md = el('markdown-preview').value;
+  assert.ok(md.includes('### 危険情報チェック（全文つき版の追加取得分）'));
+  assert.ok(!md.includes('AKIAABCDEFGHIJKLMNOP'));
 });

@@ -874,6 +874,8 @@ function makeSource(type, origin, entry, label) {
     size,
     analyzedChars: typeof entry.analyzedChars === 'number' ? entry.analyzedChars : (entry.rawText || '').length,
     analysisTruncated: Boolean(entry.truncated),
+    truncatedBy: entry.truncated ? (entry.truncatedBy || 'per_file') : null,
+    fetchedBy: entry.source || null,
     text: prepared.text,
     maskedCount: prepared.maskedCount,
     replacedControls: prepared.replacedControls,
@@ -928,7 +930,12 @@ function allocate(list, budget) {
  */
 export function buildFullTextSections(data) {
   const skeleton = buildHtmlSkeleton(data.html || '');
-  const plan = planCodeInclusion(data);
+  // 追加取得の記録（v0.4.1）があれば、その取得結果（通常解析分＋追加取得分）で収録する
+  const { full } = data;
+  const resources = full
+    ? { ...data, cssResources: full.cssResources, jsResources: full.jsResources }
+    : data;
+  const plan = planCodeInclusion(resources);
   const lines = [];
 
   lines.push('## 全文収録（全文つき版のみ）');
@@ -943,13 +950,24 @@ export function buildFullTextSections(data) {
   lines.push('- 文字の向きを変える制御文字などの見えない文字は `[U+XXXX]` の表記に置き換えています。');
   lines.push(`- HTML構造は最大${MAX_FULL_HTML_CHARS}文字、CSS/JS本文は合計最大${MAX_FULL_CODE_CHARS}文字まで収録します（メタ情報の行は数えません）。`);
   lines.push('- 文字数の数え方: 「元の文字数」「解析範囲」「未収録」「元ファイルの○文字目」は、取得した元の本文で数えた文字数です。「収録」は、マスク・制御文字の置き換え後に実際にコードブロックへ載せた文字数で、上限もこの文字数で数えます。HTML構造の置き換え文にある本文の文字数は、「CSS本文」「JavaScript本文」の「元の文字数」と同じ数え方です。');
-  lines.push('- 外部CSS/JSの取得件数・1ファイルの解析範囲の上限は通常版と同じです。取得していないコード・解析範囲外の部分は収録していません。');
+  if (full) {
+    const { limits } = full;
+    lines.push(`- 外部CSS/JSは、全文つき版ではCSS ${limits.css}件・JS ${limits.js}件まで取得します（通常解析で取得した分を含み、失敗した通信も1件と数えます）。1ファイルの解析範囲の上限は通常版と同じです。取得していないコード・解析範囲外の部分は収録していません。`);
+  } else {
+    lines.push('- 外部CSS/JSの取得件数・1ファイルの解析範囲の上限は通常版と同じです。取得していないコード・解析範囲外の部分は収録していません。');
+  }
   lines.push('');
 
+  if (full) {
+    buildFullFetchSection(lines, full, data, plan);
+    buildFetchLogSection(lines, full);
+    buildScriptOrderSection(lines, full, data);
+    buildExtraDangerSection(lines, full);
+  }
   buildSkeletonSection(lines, skeleton);
   buildCodeSection(lines, '### CSS本文', 'css', plan.css, plan.cssBudget);
   buildCodeSection(lines, '### JavaScript本文', 'javascript', plan.js, plan.jsBudget);
-  buildNotIncludedSection(lines, plan, data);
+  buildNotIncludedSection(lines, plan, resources);
 
   return lines.join('\n');
 }
@@ -1004,11 +1022,14 @@ function buildCodeSection(lines, heading, lang, sources, budget) {
   }
 
   for (const source of sources) {
-    lines.push(`#### [${source.type}・${ORIGIN_LABEL[source.origin]}] ${safeText(source.label)}`);
+    const originLabel = source.origin === 'external' && source.fetchedBy === 'extra'
+      ? '外部（同一オリジン・全文つき版で追加取得）'
+      : ORIGIN_LABEL[source.origin];
+    lines.push(`#### [${source.type}・${originLabel}] ${safeText(source.label)}`);
     lines.push('');
     lines.push(`- 元の文字数: ${source.size}文字`);
     lines.push(source.analysisTruncated
-      ? `- 解析範囲: ${source.analyzedChars}文字（1ファイルの解析上限で切り詰め。${source.analyzedChars + 1}文字目以降は未取得扱い）`
+      ? `- 解析範囲: ${source.analyzedChars}文字（${TRUNCATED_BY_LABEL[source.truncatedBy] || TRUNCATED_BY_LABEL.per_file}で切り詰め。${source.analyzedChars + 1}文字目以降は未取得扱い）`
       : `- 解析範囲: ${source.analyzedChars}文字（全文）`);
 
     if (source.inclusion === 'duplicate') {
@@ -1051,6 +1072,190 @@ function buildCodeSection(lines, heading, lang, sources, budget) {
   }
 }
 
+const TRUNCATED_BY_LABEL = {
+  per_file: '1ファイルの解析上限',
+  extra_budget: '全文つき版の追加取得の合計文字数上限',
+};
+
+/** ミリ秒を「20」「4.9」のような秒の表記にする（全節で同じ丸め方にする） */
+function formatSeconds(ms) {
+  return String(Math.round(ms / 100) / 10);
+}
+
+const FAILURE_REASON_LABELS = {
+  network: '通信エラー',
+  http_error: 'HTTPエラー',
+  too_large: 'サイズが大きすぎます',
+  timeout: 'タイムアウト',
+};
+
+const FULL_FETCH_STATUS_LABELS = {
+  skipped_external: '外部オリジンのため取得対象外',
+  skipped_full_limit: '全文つき版の取得件数上限に達したため未試行',
+  skipped_time: '追加取得の全体の時間上限に達したため未試行。次回の全文生成で再試行します',
+  skipped_budget: '追加取得の合計文字数上限に達したため未試行',
+};
+
+/**
+ * 全文つき版での取得状態の説明（v0.4.1）。candidate（full-fetch.js の候補）と、
+ * toFullResources の取得記録のどちらでも使える。
+ */
+export function describeFullFetchStatus(item) {
+  if (item.status === 'ok') {
+    return (item.source || item.fetchedBy) === 'extra' ? '追加取得で取得' : '通常解析で取得済み（再利用）';
+  }
+  if (item.status === 'failed' || item.status === 'timeout') {
+    const reason = FAILURE_REASON_LABELS[item.reason] || item.reason || '不明';
+    const http = item.httpStatus ? ` ${item.httpStatus}` : '';
+    const wait = item.status === 'timeout' && item.timeoutMs ? `（${formatSeconds(item.timeoutMs)}秒）` : '';
+    return `${item.status === 'timeout' ? 'タイムアウト' : '取得失敗'}${wait}（理由: ${reason}${http}）。成功扱いにせず、次回の全文生成で再試行します`;
+  }
+  return FULL_FETCH_STATUS_LABELS[item.status] || '不明';
+}
+
+const BASE_STATUS_LABELS = {
+  ok: '取得',
+  failed: '取得失敗',
+  skipped_external: '外部オリジンのため対象外',
+  skipped_limit: '件数上限（各5件）のため対象外',
+};
+
+/**
+ * 全文つき版の取得状態（v0.4.1）。URLごとに、通常解析での状態・全文つき版での状態・収録状態を並べる。
+ * 取得状態と収録状態を同じ行に書き、両者が食い違わないようにする。
+ */
+function buildFullFetchSection(lines, full, data, plan) {
+  const { limits, lastRun } = full;
+  const stats = lastRun.stats;
+  lines.push('### 全文つき版の取得状態');
+  lines.push('');
+  lines.push(`- 取得件数の上限: CSS ${limits.css}件・JS ${limits.js}件（通常解析で取得した分を含む。失敗・タイムアウトした通信も1件と数える）`);
+  lines.push(`- 時間の上限: 追加取得の全体で${formatSeconds(limits.totalMs)}秒、通信1件あたり${formatSeconds(limits.perRequestMs)}秒（全体の残り時間の方が短ければ、そちら）`);
+  lines.push(`- 追加取得した解析範囲の合計の上限: ${limits.extraChars}文字（現在 ${stats.extraChars}文字）`);
+  if (lastRun.fetched) {
+    lines.push(`- 今回の全文生成での通信: ${stats.attempts}件（成功${stats.okThisRun}件・失敗${stats.failed}件・タイムアウト${stats.timeout}件、${formatSeconds(stats.elapsedMs)}秒）`);
+  } else {
+    lines.push('- 今回の全文生成での通信: なし（取得済みのファイルを使用）');
+  }
+  if (stats.stoppedBy === 'time') lines.push('- 全体の時間上限に達したため、途中で追加取得を打ち切りました。');
+  if (stats.stoppedBy === 'budget') lines.push('- 追加取得の合計文字数上限に達したため、途中で追加取得を打ち切りました。');
+  if (lastRun.retryable) lines.push('- 取得できなかったファイルがあります。もう一度「全文つきでMarkdownを作る」を押すと、そのファイルだけを再試行します（取得済みのファイルは再取得しません）。');
+  lines.push('');
+
+  const baseStatus = new Map();
+  for (const [type, entries] of [['CSS', data.cssResources], ['JS', data.jsResources]]) {
+    for (const entry of entries || []) {
+      const key = `${type}\n${entry.label}`;
+      if (!baseStatus.has(key)) baseStatus.set(key, entry.status);
+    }
+  }
+  const inclusion = new Map([...plan.css, ...plan.js].filter((s) => s.origin === 'external').map((s) => [`${s.type}\n${s.label}`, s]));
+
+  for (const type of ['CSS', 'JS']) {
+    const items = full.candidates.filter((c) => c.type === type);
+    lines.push(`#### ${type}（HTML内の参照順。同じURLは1件にまとめる）`);
+    lines.push('');
+    if (items.length === 0) {
+      lines.push('（外部ファイルの参照はありません）');
+      lines.push('');
+      continue;
+    }
+    for (const c of items) {
+      const key = `${type}\n${c.url}`;
+      const base = BASE_STATUS_LABELS[baseStatus.get(key)] || '—';
+      const refs = c.references > 1 ? `（HTML内で${c.references}回参照）` : '';
+      lines.push(`${c.htmlOrder}. ${safeText(c.url)}${refs}`);
+      lines.push(`   - 通常解析: ${base} / 全文つき版: ${describeFullFetchStatus(c)} / 収録: ${describeInclusion(inclusion.get(key))}`);
+    }
+    lines.push('');
+  }
+}
+
+function describeInclusion(source) {
+  if (!source) return 'なし（本文を取得していない）';
+  switch (source.inclusion) {
+    case 'full': return source.analysisTruncated ? '解析範囲の全文' : '全文';
+    case 'partial': return `途中まで（元ファイルの1〜${source.originalIncludedChars}文字目）`;
+    case 'duplicate': return `なし（${safeText(source.duplicateOf)} と同一内容）`;
+    default: return 'なし（CSS/JS本文の文字数上限のため）';
+  }
+}
+
+/** 通信の記録（通信を試行した順。HTMLの記述順・実行順とは別） */
+function buildFetchLogSection(lines, full) {
+  lines.push('### 追加取得の通信記録（試行した順）');
+  lines.push('');
+  lines.push('- 全文生成ごとに、通信を試行した順に並べています。HTMLの記述順や実行順とは別です。');
+  lines.push('');
+  if (full.runs.length === 0) {
+    lines.push('（追加取得の通信はしていません）');
+    lines.push('');
+    return;
+  }
+  full.runs.forEach((run, i) => {
+    lines.push(`#### ${i + 1}回目の全文生成（通信${run.log.length}件）`);
+    lines.push('');
+    if (run.log.length === 0) lines.push('（通信なし）');
+    for (const r of run.log) {
+      const result = r.outcome === 'ok'
+        ? `成功（解析範囲 ${r.analyzedChars}文字${r.truncatedBy ? `、${TRUNCATED_BY_LABEL[r.truncatedBy]}で切り詰め` : ''}）`
+        : `${r.outcome === 'timeout' ? 'タイムアウト' : '取得失敗'}（理由: ${FAILURE_REASON_LABELS[r.reason] || r.reason}${r.httpStatus ? ` ${r.httpStatus}` : ''}）`;
+      lines.push(`${r.order}. [${r.type}] ${safeText(r.url)}: ${result}・待ち時間の上限 ${formatSeconds(r.timeoutMs)}秒`);
+    }
+    lines.push('');
+  });
+}
+
+/** scriptの記述順と属性（実行順の手がかり。取得順とは別） */
+function buildScriptOrderSection(lines, full, data) {
+  lines.push('### scriptの記述順と属性（実行順の手がかり）');
+  lines.push('');
+  lines.push('- HTML内のscript要素を記述順に並べています。取得した順番（上の通信記録）とは別です。');
+  lines.push('- 属性の意味: 属性なしのscriptは記述順に実行されます。defer（外部ファイルのみ）とtype="module"はHTMLの解析後に記述順で実行され、asyncは取得が終わった順に実行されます。nomoduleはモジュール対応ブラウザでは実行されません。');
+  lines.push('- この一覧だけでは実際の実行順は確定しません。JSの中から後で読み込まれるコードは含みません。');
+  lines.push('');
+  const order = full.scriptOrder || [];
+  if (order.length === 0) {
+    lines.push('（script要素はありません）');
+    lines.push('');
+    return;
+  }
+  const statusByUrl = new Map(full.candidates.filter((c) => c.type === 'JS').map((c) => [c.url, c]));
+  order.forEach((s, i) => {
+    const attrs = [s.type ? `type="${s.type}"` : '', s.defer ? 'defer' : '', s.async ? 'async' : '', s.nomodule ? 'nomodule' : '']
+      .filter(Boolean)
+      .map((a) => safeText(a))
+      .join(' ');
+    const attrText = attrs ? ` 属性: ${attrs}` : ' 属性: なし';
+    if (s.kind === 'inline') {
+      lines.push(`${i + 1}. [インライン] ${safeText(s.label)}（${s.chars}文字）${attrText}`);
+    } else {
+      const c = statusByUrl.get(s.url);
+      const state = c ? describeFullFetchStatus(c) : '—';
+      lines.push(`${i + 1}. [外部] ${safeText(s.url)}${attrText} / 取得: ${state}`);
+    }
+  });
+  lines.push('');
+}
+
+/** 追加取得分の危険情報チェック（通常解析分とは別に記載する） */
+function buildExtraDangerSection(lines, full) {
+  lines.push('### 危険情報チェック（全文つき版の追加取得分）');
+  lines.push('');
+  lines.push(`- 対象: 全文つき版で追加取得したファイル ${full.extraFileCount || 0}件の解析範囲（通常解析分は上の「危険情報チェック結果」）`);
+  if (!full.extraFileCount) {
+    lines.push('- 追加取得したファイルはありません。');
+  } else if (!full.dangerFindings || full.dangerFindings.length === 0) {
+    lines.push('- チェック対象のパターンは検出されませんでした。パターン照合なので、検出されなくても安全とは限りません。');
+  } else {
+    lines.push('- 以下のパターンが検出されました。値は全文つき版には載せません。画面の「危険情報チェック」で確認してください。本文中の該当箇所はマスクしています。');
+    for (const finding of full.dangerFindings) {
+      lines.push(`  - [${safeText(finding.label)}] ${finding.type}`);
+    }
+  }
+  lines.push('');
+}
+
 function isReplaced(source) {
   return source.maskedCount > 0 || source.replacedControls > 0;
 }
@@ -1081,6 +1286,11 @@ function buildNotIncludedSection(lines, plan, data) {
   for (const [type, entries] of [['CSS', data.cssResources], ['JS', data.jsResources]]) {
     for (const entry of entries || []) {
       if (entry.status === 'ok') continue;
+      // 全文つき版の追加取得の記録（timeoutMs を持つ通信結果、または全文つき版だけの状態）は、その説明を使う（v0.4.1）
+      if (entry.timeoutMs !== undefined || !describe[entry.status]) {
+        items.push(`- [${type}] ${safeText(entry.label)}: ${describeFullFetchStatus(entry)}`);
+        continue;
+      }
       const reason = entry.status === 'failed' && entry.reason ? `（理由: ${entry.reason}）` : '';
       items.push(`- [${type}] ${safeText(entry.label)}: ${describe[entry.status] || '不明'}${reason}`);
     }
@@ -1088,7 +1298,7 @@ function buildNotIncludedSection(lines, plan, data) {
   for (const source of [...plan.css, ...plan.js]) {
     if (source.inclusion === 'none') items.push(`- [${source.type}] ${safeText(source.label)}: 文字数上限のため本文を収録せず（${describeRemaining(remainingChars(source))}）`);
     if (source.inclusion === 'partial') items.push(`- [${source.type}] ${safeText(source.label)}: 文字数上限のため 元ファイルの${source.originalIncludedChars + 1}文字目以降を収録せず（${describeRemaining(remainingChars(source))}）`);
-    if (source.analysisTruncated) items.push(`- [${source.type}] ${safeText(source.label)}: 1ファイルの解析上限のため ${source.analyzedChars + 1}文字目以降は取得・収録せず`);
+    if (source.analysisTruncated) items.push(`- [${source.type}] ${safeText(source.label)}: ${TRUNCATED_BY_LABEL[source.truncatedBy] || TRUNCATED_BY_LABEL.per_file}のため ${source.analyzedChars + 1}文字目以降は取得・収録せず`);
   }
 
   if (items.length === 0) {

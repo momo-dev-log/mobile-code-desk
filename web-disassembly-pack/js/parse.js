@@ -18,7 +18,15 @@
  *   jsScripts: Array<{ url: string, sameOrigin: boolean }>,
  *   inlineStyles: string[],
  *   inlineScripts: string[],
+ *   scriptOrder: Array<{
+ *     kind: 'external' | 'inline', url?: string, sameOrigin?: boolean, label?: string, chars?: number,
+ *     type: string, module: boolean, async: boolean, defer: boolean, nomodule: boolean,
+ *   }>,
  * }}
+ *
+ * scriptOrder は、script要素をHTMLの記述順に並べ、実行順の手がかりになる属性を記録したもの（v0.4.1）。
+ * 外部・インラインの区別、番号、件数の数え方は jsScripts / inlineScripts と同じ（空のインラインは含めない）。
+ * 取得の順番とは別物で、実際の実行順そのものでもない（async などで変わる）。
  */
 export function parseHtml(html, pageUrl) {
   const doc = new DOMParser().parseFromString(html, 'text/html');
@@ -55,18 +63,22 @@ export function parseHtml(html, pageUrl) {
 
   const jsScripts = [];
   const inlineScripts = [];
+  const scriptOrder = [];
   doc.querySelectorAll('script').forEach((script) => {
     const src = script.getAttribute('src');
     if (src) {
       const absolute = resolveUrl(src, pageUrl);
       if (!absolute) return;
-      jsScripts.push({ url: absolute, sameOrigin: getOrigin(absolute) === pageOrigin });
+      const sameOrigin = getOrigin(absolute) === pageOrigin;
+      jsScripts.push({ url: absolute, sameOrigin });
       structure.externalScriptCount += 1;
+      scriptOrder.push({ kind: 'external', url: absolute, sameOrigin, ...scriptAttributes(script) });
     } else {
       const text = (script.textContent || '').trim();
       if (!text) return;
       inlineScripts.push(text);
       structure.inlineScriptCount += 1;
+      scriptOrder.push({ kind: 'inline', label: `インラインscript #${inlineScripts.length}`, chars: text.length, ...scriptAttributes(script) });
     }
   });
 
@@ -77,6 +89,19 @@ export function parseHtml(html, pageUrl) {
     jsScripts,
     inlineStyles,
     inlineScripts,
+    scriptOrder,
+  };
+}
+
+function scriptAttributes(script) {
+  const type = (script.getAttribute('type') || '').trim();
+  const has = (name) => script.getAttribute(name) !== null;
+  return {
+    type,
+    module: type.toLowerCase() === 'module',
+    async: has('async'),
+    defer: has('defer'),
+    nomodule: has('nomodule'),
   };
 }
 
