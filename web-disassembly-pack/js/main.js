@@ -188,11 +188,11 @@ async function runStructureAnalysis(id) {
   state.inlineStyles = parsed.inlineStyles.map((text, i) => buildInlineEntry(text, `インラインstyle #${i + 1}`));
   state.inlineScripts = parsed.inlineScripts.map((text, i) => buildInlineEntry(text, `インラインscript #${i + 1}`));
 
-  const cssResources = await buildResourceEntries(parsed.cssLinks, MAX_CSS_FILES);
+  const cssResources = await buildResourceEntries(parsed.cssLinks, MAX_CSS_FILES, id);
   if (!isCurrentRun(id)) return;
   state.cssResources = cssResources;
 
-  const jsResources = await buildResourceEntries(parsed.jsScripts, MAX_JS_FILES);
+  const jsResources = await buildResourceEntries(parsed.jsScripts, MAX_JS_FILES, id);
   if (!isCurrentRun(id)) return;
   state.jsResources = jsResources;
 
@@ -284,12 +284,17 @@ function collectDangerCheckSources() {
 /**
  * 外部CSS/JSの一覧から、取得対象（同一オリジン・件数上限内）のみWorker経由で取得する。
  * 対象外・失敗のものはその旨を記録する（「取得対象外の記録」セクションに使う）。
+ *
+ * やり直し等で runId の解析が無効になったら、残りのファイルは取りに行かずに打ち切る。
+ * 打ち切った結果は呼び出し側で捨てられる。進行中の1件の通信そのものは中断しない。
  */
-async function buildResourceEntries(links, maxCount) {
+async function buildResourceEntries(links, maxCount, id) {
   const entries = [];
   let fetchedCount = 0;
 
   for (const link of links) {
+    if (!isCurrentRun(id)) break;
+
     if (!link.sameOrigin) {
       entries.push({ label: link.url, status: 'skipped_external' });
       continue;
@@ -302,6 +307,7 @@ async function buildResourceEntries(links, maxCount) {
 
     fetchedCount += 1;
     const result = await fetchResource(link.url);
+    if (!isCurrentRun(id)) break;
 
     if (!result.ok) {
       entries.push({ label: link.url, status: 'failed', reason: describeFailure(result) });

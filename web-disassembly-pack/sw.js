@@ -2,7 +2,7 @@
 // 目的: PWAとしてインストール可能にし、Web Share Target APIを成立させる。
 // オフラインキャッシュは行わず、アプリ本体ファイルを古いキャッシュから返さないようにする。
 
-const CACHE_NAME = 'web-disassembly-pack-v0.3.1';
+const CACHE_NAME = 'web-disassembly-pack-v0.3.2';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
