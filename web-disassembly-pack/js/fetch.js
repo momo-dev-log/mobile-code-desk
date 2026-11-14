@@ -3,18 +3,43 @@ import { WORKER_URL } from './constants.js';
 /**
  * 専用Worker（worker/index.js）経由でリソース（HTML/CSS/JS）を取得する。
  *
+ * timeoutMs を指定したときだけ、その時間で通信（応答本文の読み取りを含む）を打ち切り、
+ * reason: 'timeout' を返す。指定しない呼び出し（通常解析）は従来どおり打ち切らない。
+ * 打ち切ってもWorker側の処理は止まらない。
+ *
  * @param {string} targetUrl
+ * @param {{ timeoutMs?: number }} [options]
  * @returns {Promise<
  *   { ok: true, content: string, contentType: string, finalUrl: string, httpStatus: number } |
- *   { ok: false, reason: 'network' | 'http_error' | 'too_large', httpStatus?: number }
+ *   { ok: false, reason: 'network' | 'http_error' | 'too_large' | 'timeout', httpStatus?: number }
  * >}
  */
-export async function fetchResource(targetUrl) {
+export async function fetchResource(targetUrl, options = {}) {
   const endpoint = `${WORKER_URL}/?url=${encodeURIComponent(targetUrl)}`;
 
+  if (typeof options.timeoutMs !== 'number') {
+    return readJson(() => fetch(endpoint));
+  }
+
+  const controller = new AbortController();
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, Math.max(0, options.timeoutMs));
+
+  try {
+    const result = await readJson(() => fetch(endpoint, { signal: controller.signal }));
+    return timedOut ? { ok: false, reason: 'timeout' } : result;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function readJson(request) {
   let response;
   try {
-    response = await fetch(endpoint);
+    response = await request();
   } catch {
     return { ok: false, reason: 'network' };
   }
