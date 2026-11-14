@@ -44,3 +44,10 @@ test('時間内に返った結果はそのまま返し、失敗の理由も変�
   globalThis.fetch = async () => { throw new TypeError('network down'); };
   assert.deepEqual(await fetchResource('https://site.example/y.js', { timeoutMs: 1000 }), { ok: false, reason: 'network' });
 });
+
+test('不正なタイムアウト指定は即時中断せず既定値を使う', async () => {
+  globalThis.fetch = async () => ({ json: async () => ({ ok: true, content: 'ok' }) });
+  for (const timeoutMs of [NaN, Infinity, -1]) {
+    assert.equal((await fetchResource('https://site.example/a.js', { timeoutMs })).ok, true);
+  }
+});
