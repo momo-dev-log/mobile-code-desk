@@ -1,5 +1,6 @@
 import { JS_FEATURE_SUMMARY_MAP } from './keywords.js';
 import { APP_VERSION } from './constants.js';
+import { buildFullTextSections } from './fulltext.js';
 
 /**
  * 解析結果からAI向けのMarkdown調査パックを組み立てる（v0.2）。
@@ -45,6 +46,7 @@ export function buildMarkdown(data) {
     htmlChars,
     inlineStyles,
     inlineScripts,
+    outputVariant,
   } = data;
 
   const lines = [];
@@ -60,6 +62,9 @@ export function buildMarkdown(data) {
     lines.push(`- ページタイトル: ${title}`);
   }
   lines.push(`- Web解体パック版: ${APP_VERSION}`);
+  if (outputVariant === 'full') {
+    lines.push(FULL_VARIANT_META_LINE);
+  }
   lines.push('');
 
   // 2. サマリ行
@@ -110,6 +115,22 @@ export function buildMarkdown(data) {
   buildSkippedSection(lines, cssResources, jsResources);
 
   return lines.join('\n');
+}
+
+export const FULL_VARIANT_META_LINE = '- 出力形式: 全文つき（末尾の「全文収録」にHTML構造・CSS/JS本文を収録）';
+
+/**
+ * 全文つきMarkdownを組み立てる（v0.4.0）。
+ *
+ * 通常版（buildMarkdown）と同じ内容にメタ情報の1行を加え、末尾に「全文収録」の節を追加する。
+ * 通常版の出力そのものは変えない。
+ *
+ * @param {object} data buildMarkdown の入力に html（取得したHTML全文）を加えたもの
+ * @returns {string}
+ */
+export function buildFullMarkdown(data) {
+  const summary = buildMarkdown({ ...data, outputVariant: 'full' });
+  return `${summary}\n${buildFullTextSections(data)}`;
 }
 
 /**

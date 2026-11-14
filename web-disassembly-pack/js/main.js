@@ -4,7 +4,7 @@ import { extractCategoryExcerpts, detectJsFeatures, orderSourcesBySize } from '.
 import { CSS_EXCERPT_CATEGORIES, JS_EXCERPT_CATEGORIES } from './keywords.js';
 import { detectLibraries } from './libraries.js';
 import { checkDangerousContent } from './danger-check.js';
-import { buildMarkdown } from './markdown.js';
+import { buildMarkdown, buildFullMarkdown } from './markdown.js';
 import { buildInlineEntry, truncateForAnalysis } from './coverage.js';
 import { MAX_CSS_FILES, MAX_JS_FILES, APP_VERSION } from './constants.js';
 
@@ -28,6 +28,8 @@ const dangerResult = document.getElementById('danger-result');
 
 const stepMarkdown = document.getElementById('step-markdown');
 const markdownBtn = document.getElementById('markdown-btn');
+const markdownFullBtn = document.getElementById('markdown-full-btn');
+const markdownVariantEl = document.getElementById('markdown-variant');
 const markdownPreviewWrap = document.getElementById('markdown-preview-wrap');
 const markdownPreview = document.getElementById('markdown-preview');
 const copyBtn = document.getElementById('copy-btn');
@@ -56,12 +58,13 @@ function isCurrentRun(id) {
 
 /**
  * 取得・解析の実行中かどうかで、操作ボタンの状態を切り替える。
- * 実行中は「URLを取得」「構造を見る」「Markdownを作る」を押せないようにする。
+ * 実行中は「URLを取得」「構造を見る」「Markdownを作る」「全文つきでMarkdownを作る」を押せないようにする。
  */
 function setBusy(busy) {
   fetchBtn.disabled = busy;
   structureBtn.disabled = busy;
   markdownBtn.disabled = busy;
+  markdownFullBtn.disabled = busy;
   structureBtn.textContent = busy && !stepStructure.hidden ? '解析中...' : '構造を見る';
 }
 
@@ -70,7 +73,8 @@ function setBusy(busy) {
 // -----------------------------------------------
 fetchBtn.addEventListener('click', handleFetch);
 structureBtn.addEventListener('click', handleStructure);
-markdownBtn.addEventListener('click', handleMarkdown);
+markdownBtn.addEventListener('click', () => handleMarkdown('summary'));
+markdownFullBtn.addEventListener('click', () => handleMarkdown('full'));
 copyBtn.addEventListener('click', handleCopy);
 saveBtn.addEventListener('click', handleSave);
 resetBtn.addEventListener('click', handleReset);
@@ -428,11 +432,16 @@ function escapeHtml(text) {
 // -----------------------------------------------
 // 3. Markdownを作る / コピーする / .mdを保存
 // -----------------------------------------------
-function handleMarkdown() {
+/**
+ * Markdownを作る。
+ * - 'summary': 通常版（「Markdownを作る」）
+ * - 'full': 全文つき版（「全文つきでMarkdownを作る」。利用者が選んだときだけ本文を収録する）
+ */
+function handleMarkdown(variant) {
   // 解析が完了していない状態ではMarkdownを作らない
   if (!state.structure || !state.dangerFindings) return;
 
-  state.markdown = buildMarkdown({
+  const data = {
     pageUrl: state.pageUrl,
     finalUrl: state.finalUrl,
     title: state.title,
@@ -447,9 +456,16 @@ function handleMarkdown() {
     htmlChars: (state.html || '').length,
     inlineStyles: state.inlineStyles,
     inlineScripts: state.inlineScripts,
-  });
+  };
+
+  const isFull = variant === 'full';
+  state.markdown = isFull ? buildFullMarkdown({ ...data, html: state.html || '' }) : buildMarkdown(data);
+  state.markdownVariant = isFull ? 'full' : 'summary';
 
   markdownPreview.value = state.markdown;
+  markdownVariantEl.textContent = isFull
+    ? `全文つきのMarkdownです（${state.markdown.length}文字）。共有前に、機密情報が含まれていないか確認してください。`
+    : `通常版のMarkdownです（${state.markdown.length}文字）。`;
   markdownPreviewWrap.hidden = false;
   copyStatus.textContent = '';
 }
@@ -471,7 +487,7 @@ function handleSave() {
 
   const a = document.createElement('a');
   a.href = url;
-  a.download = buildFileName(state.pageUrl);
+  a.download = buildFileName(state.pageUrl, state.markdownVariant);
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -479,12 +495,13 @@ function handleSave() {
   URL.revokeObjectURL(url);
 }
 
-function buildFileName(pageUrl) {
+function buildFileName(pageUrl, variant) {
+  const suffix = variant === 'full' ? '-full' : '';
   try {
     const host = new URL(pageUrl).hostname.replace(/[^a-zA-Z0-9.-]/g, '_');
-    return `web-disassembly-pack-${host}.md`;
+    return `web-disassembly-pack-${host}${suffix}.md`;
   } catch {
-    return 'web-disassembly-pack.md';
+    return `web-disassembly-pack${suffix}.md`;
   }
 }
 
@@ -531,6 +548,7 @@ function clearAnalysisOutputs() {
   dangerResult.classList.remove('card-warning');
 
   markdownPreview.value = '';
+  markdownVariantEl.textContent = '';
   markdownPreviewWrap.hidden = true;
   copyStatus.textContent = '';
 

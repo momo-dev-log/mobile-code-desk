@@ -323,3 +323,87 @@ test('E3: 取得の通信そのものが失敗（reject）しても、ボタン�
   assert.match(el('fetch-status').textContent, /取得に失敗しました（通信エラー）/);
   assert.equal(el('step-structure').hidden, true);
 });
+
+// -----------------------------------------------
+// 全文つきMarkdown（v0.4.0）
+// -----------------------------------------------
+const FULL_PAGE_HTML = '<script src="/app.js"></script><script>const canvas = 1; drawInline();</script>';
+
+async function analyzeFresh(url, appJs) {
+  startFresh();
+  el('url-input').value = url;
+  const fetched = click('fetch-btn');
+  respond(url, okHtml(FULL_PAGE_HTML));
+  await fetched;
+  const analyzed = click('structure-btn');
+  await flush();
+  return { analyzed, finish: async () => { respond(new URL('/app.js', url).href, okHtml(appJs)); await analyzed; } };
+}
+
+test('F1: 解析中は「全文つきでMarkdownを作る」も押せず、完了後に戻る', async () => {
+  const run = await analyzeFresh('https://full.example/', 'function appBody() {}');
+  assert.equal(el('markdown-full-btn').disabled, true);
+  click('markdown-full-btn');
+  assert.equal(el('markdown-preview').value, '', '解析途中に全文つきMarkdownが作られています');
+  await run.finish();
+  assert.equal(el('markdown-full-btn').disabled, false);
+});
+
+test('F2: 全文つきは本文を収録し、通常版は収録しない（ボタンごとに独立）', async () => {
+  click('markdown-full-btn');
+  const full = el('markdown-preview').value;
+  assert.ok(full.includes('## 全文収録（全文つき版のみ）'));
+  assert.ok(full.includes('function appBody() {}'));
+  assert.ok(full.includes('const canvas = 1; drawInline();'));
+  assert.match(el('markdown-variant').textContent, /全文つき/);
+
+  click('markdown-btn');
+  const normal = el('markdown-preview').value;
+  assert.ok(!normal.includes('全文収録'));
+  assert.ok(!normal.includes('function appBody() {}'));
+  assert.match(el('markdown-variant').textContent, /通常版/);
+
+  // 通常版 → 全文つき → 通常版 で、通常版の内容は同じ
+  click('markdown-full-btn');
+  click('markdown-btn');
+  assert.equal(el('markdown-preview').value, normal);
+});
+
+test('F3: 再解析すると全文つきMarkdownも消え、新しい解析結果で作り直される', async () => {
+  click('markdown-full-btn');
+  assert.ok(el('markdown-preview').value.includes('function appBody() {}'));
+
+  const analyzed = click('structure-btn');
+  assert.equal(el('markdown-preview').value, '');
+  assert.equal(el('markdown-variant').textContent, '');
+  click('markdown-full-btn');
+  assert.equal(el('markdown-preview').value, '', '再解析中に古い結果で全文つきが作られています');
+
+  await flush();
+  respond('https://full.example/app.js', okHtml('function appBodyV2() {}'));
+  await analyzed;
+  click('markdown-full-btn');
+  const full = el('markdown-preview').value;
+  assert.ok(full.includes('function appBodyV2() {}'));
+  assert.ok(!full.includes('function appBody() {}'));
+});
+
+test('F4: 解析中に「やり直す」→別URLの全文つきに、古いページの本文が混ざらない', async () => {
+  const old = await analyzeFresh('https://oldfull.example/', 'OLD_FULL_MARKER()');
+  click('reset-btn');
+  respond('https://oldfull.example/app.js', okHtml('OLD_FULL_MARKER()'));
+  await old.analyzed;
+
+  const fresh = await analyzeFresh('https://newfull.example/', 'NEW_FULL_MARKER()');
+  await fresh.finish();
+  click('markdown-full-btn');
+  const full = el('markdown-preview').value;
+  assert.ok(full.includes('NEW_FULL_MARKER()'));
+  assert.ok(!full.includes('OLD_FULL_MARKER'));
+  assert.ok(!full.includes('oldfull.example'));
+
+  click('reset-btn');
+  assert.equal(el('markdown-preview').value, '');
+  assert.equal(el('markdown-variant').textContent, '');
+  assert.equal(el('markdown-full-btn').disabled, false);
+});
