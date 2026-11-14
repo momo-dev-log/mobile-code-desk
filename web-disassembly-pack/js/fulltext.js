@@ -17,6 +17,7 @@
  *
  * DOMに依存しないため、Nodeのテストから直接呼べる。
  */
+import { isJavaScriptType } from './parse.js';
 import { maskSensitive } from './danger-check.js';
 import {
   MAX_FULL_HTML_CHARS,
@@ -539,6 +540,10 @@ function replaceRawText(token, openToken, inTemplate, stats, chars, counters) {
   const src = openToken && openToken.attrs ? attrValue(openToken.attrs, 'src') : undefined;
   if (src) return `/* [WDP] src指定scriptの中の本文 ${chars}文字は省略（ブラウザは実行しない部分） */`;
   if (inTemplate) return `/* [WDP] template内のscript本文 ${chars}文字は省略（本文は収録対象外） */`;
+  // JavaScriptではないscript（JSON-LD・importmap・埋め込みデータ等）は parse.js が数えないため、番号を付けない。
+  // 「JavaScript本文」には載らないので、そちらを参照させない。
+  const typeAttr = openToken && openToken.attrs ? attrValue(openToken.attrs, 'type') : undefined;
+  if (!isJavaScriptType(typeAttr)) return `/* [WDP] JavaScriptではないscript（type属性で判定）の本文 ${chars}文字は省略（本文は収録していません） */`;
   const no = counters.nextScript();
   return `/* [WDP] 本文省略: インラインscript #${no}（${chars}文字）。本文は「JavaScript本文」を参照 */`;
 }

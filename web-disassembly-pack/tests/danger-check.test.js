@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { checkDangerousContent } from '../js/danger-check.js';
+import { checkDangerousContent, maskSensitive } from '../js/danger-check.js';
 
 test('APIキーらしき文字列を検出してマスクする', () => {
   const findings = checkDangerousContent([
@@ -54,4 +54,46 @@ test('引用符付きJSONキーの機密値もマスクする', async () => {
   assert.ok(!masked.text.includes('abcdefghijklmnopqrstuvwxyz'));
   assert.ok(masked.text.includes('"api_key":'));
   assert.ok(masked.text.includes('"token":'));
+});
+
+// ---- v0.4.2: 複合名のキーの検出（v0.4.1 で検出できていたものを再び検出する） ----
+const SAMPLE_VALUE = 'AbCdEfGhIjKlMnOp1234';
+
+test('前に語が付いた複合名のキー（access_token など）を検出する', () => {
+  const samples = [
+    `access_token = "${SAMPLE_VALUE}"`,
+    `client_secret: "${SAMPLE_VALUE}"`,
+    `refresh_token: '${SAMPLE_VALUE}'`,
+    `authToken = "${SAMPLE_VALUE}"`,
+    `API_TOKEN="${SAMPLE_VALUE}"`,
+    `apiSecret: "${SAMPLE_VALUE}"`,
+    `X-Auth-Token: ${SAMPLE_VALUE}`,
+    `"token": "${SAMPLE_VALUE}"`,
+    `api_key=${SAMPLE_VALUE}`,
+  ];
+  for (const text of samples) {
+    const findings = checkDangerousContent([{ label: 'JS', text }]);
+    assert.equal(findings.length, 1, `検出できていません: ${text}`);
+    assert.equal(findings[0].type, 'APIキー/トークンらしき文字列');
+  }
+});
+
+test('マスクはキー名と区切りを残し、値だけを置き換える（複合名でも同じ）', () => {
+  const masked = maskSensitive(`const cfg = { client_secret: "${SAMPLE_VALUE}", name: "app" };`);
+  assert.equal(masked.count, 1);
+  assert.equal(masked.text, 'const cfg = { client_secret: "[WDP:マスク済み]", name: "app" };');
+});
+
+test('区切り（: か =）のない文章や、短い値は検出しない', () => {
+  for (const text of ['// secret sauce: tune it', 'the token advectionStrength is used', 'token = "short"', 'author = "someLongAuthorNameHere"']) {
+    assert.equal(checkDangerousContent([{ label: 'JS', text }]).length, 0, `誤検出: ${text}`);
+  }
+});
+
+test('英数字の長い連続（base64など）でも時間がかからない', () => {
+  const text = `${'QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo'.repeat(6000)} token = "${SAMPLE_VALUE}"`;
+  const started = Date.now();
+  const findings = checkDangerousContent([{ label: 'JS', text }]);
+  assert.ok(Date.now() - started < 2000, `時間がかかりすぎています: ${Date.now() - started}ms`);
+  assert.equal(findings.length, 1);
 });
