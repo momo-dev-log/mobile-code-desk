@@ -47,3 +47,15 @@ test('scriptOrder: script要素を記述順に、外部・インラインと属�
   assert.equal(parsed.structure.externalScriptCount, 4);
   assert.equal(parsed.structure.inlineScriptCount, 1);
 });
+
+test('非実行script（JSON-LD / importmap）はJSとして数えない', () => {
+  scripts = [
+    new FakeScript({ type: 'application/ld+json' }, '{"name":"Example"}'),
+    new FakeScript({ type: 'importmap' }, '{"imports":{}}'),
+    new FakeScript({ type: 'module', src: './main.js' }, ''),
+  ];
+  const parsed = parseHtml('', 'https://example.com/app/');
+  assert.equal(parsed.structure.inlineScriptCount, 0);
+  assert.equal(parsed.structure.externalScriptCount, 1);
+  assert.equal(parsed.jsScripts[0].url, 'https://example.com/app/main.js');
+});
