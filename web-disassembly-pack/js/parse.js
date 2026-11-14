@@ -31,6 +31,8 @@
 export function parseHtml(html, pageUrl) {
   const doc = new DOMParser().parseFromString(html, 'text/html');
   const pageOrigin = getOrigin(pageUrl);
+  const baseHref = doc.querySelector('base[href]')?.getAttribute('href');
+  const resourceBaseUrl = baseHref ? resolveUrl(baseHref, pageUrl) || pageUrl : pageUrl;
 
   const structure = {
     canvas: doc.querySelectorAll('canvas').length,
@@ -47,7 +49,7 @@ export function parseHtml(html, pageUrl) {
   const cssLinks = [];
   doc.querySelectorAll('link[rel~="stylesheet"]').forEach((link) => {
     const href = link.getAttribute('href');
-    const absolute = resolveUrl(href, pageUrl);
+    const absolute = resolveUrl(href, resourceBaseUrl);
     if (!absolute) return;
     cssLinks.push({ url: absolute, sameOrigin: getOrigin(absolute) === pageOrigin });
     structure.externalStylesheetCount += 1;
@@ -65,9 +67,12 @@ export function parseHtml(html, pageUrl) {
   const inlineScripts = [];
   const scriptOrder = [];
   doc.querySelectorAll('script').forEach((script) => {
+    const type = (script.getAttribute('type') || '').trim().toLowerCase().split(';')[0].trim();
+    // JSON-LD、importmap、テンプレート等は実行可能なJSではない。
+    if (type && type !== 'module' && !['text/javascript', 'application/javascript', 'application/ecmascript', 'text/ecmascript', 'text/jscript'].includes(type)) return;
     const src = script.getAttribute('src');
     if (src) {
-      const absolute = resolveUrl(src, pageUrl);
+      const absolute = resolveUrl(src, resourceBaseUrl);
       if (!absolute) return;
       const sameOrigin = getOrigin(absolute) === pageOrigin;
       jsScripts.push({ url: absolute, sameOrigin });
