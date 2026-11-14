@@ -192,7 +192,7 @@ async function handleStructure() {
 }
 
 async function runStructureAnalysis(id) {
-  const parsed = parseHtml(state.html, state.pageUrl);
+  const parsed = parseHtml(state.html, state.finalUrl || state.pageUrl);
   state.title = parsed.title;
   state.structure = parsed.structure;
   // 全文つき版の追加取得・記述順の一覧で使う（通常解析の処理と出力には使わない）
