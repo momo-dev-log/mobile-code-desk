@@ -6,14 +6,16 @@ import { WORKER_URL } from '../js/constants.js';
 const originalFetch = globalThis.fetch;
 afterEach(() => { globalThis.fetch = originalFetch; });
 
-test('待ち時間を指定しない呼び出し（通常解析）は、従来どおり fetch(endpoint) だけを呼び、打ち切らない', async () => {
+test('待ち時間を指定しない呼び出し（通常解析）もAbortSignal付きで取得する', async () => {
   const calls = [];
   globalThis.fetch = async (...args) => {
     calls.push(args);
     return { json: async () => ({ ok: true, content: 'a' }) };
   };
   const result = await fetchResource('https://site.example/a.js');
-  assert.deepEqual(calls, [[`${WORKER_URL}/?url=${encodeURIComponent('https://site.example/a.js')}`]]);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0][0], `${WORKER_URL}/?url=${encodeURIComponent('https://site.example/a.js')}`);
+  assert.ok(calls[0][1].signal instanceof AbortSignal);
   assert.deepEqual(result, { ok: true, content: 'a' });
 });
 
