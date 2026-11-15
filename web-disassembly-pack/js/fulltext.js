@@ -892,6 +892,22 @@ function makeSource(type, origin, entry, label) {
   };
 }
 
+/**
+ * コード本文の表示順（v0.4.3）。収録優先順（allocate が付けた priority＝文字数の小さい順）に並べ、
+ * 同一内容で省略したもの（priority なし）は最後に、元の順で置く。
+ * 収録は小さい順に行うため、この順は「全文 → 途中まで → 収録なし」になる。
+ */
+export function orderForDisplay(sources) {
+  return (sources || [])
+    .map((source, index) => ({ source, index }))
+    .sort((a, b) => {
+      const pa = a.source.inclusion === 'duplicate' ? Infinity : a.source.priority;
+      const pb = b.source.inclusion === 'duplicate' ? Infinity : b.source.priority;
+      return pa - pb || a.index - b.index;
+    })
+    .map(({ source }) => source);
+}
+
 function allocate(list, budget) {
   const order = list
     .map((source, index) => ({ source, index }))
@@ -1017,7 +1033,9 @@ function buildCodeSection(lines, heading, lang, sources, budget) {
   lines.push(heading);
   lines.push('');
   lines.push(`- この種類に割り当てた枠: ${budget}文字`);
-  lines.push('- 並び: インライン（HTML内の出現順）→ 外部（HTML内の参照順）。収録は文字数の小さいものから優先しています。');
+  lines.push('- 並び: 収録優先順（文字数の小さい順）。全文を収録したもの → 途中まで収録したもの → 収録しなかったもの、の順です。');
+  lines.push('  小さいページ本体のコードを先に置き、大きなコードを後ろに置くことで、途中で切れても本体が残りやすくしています。');
+  lines.push('  HTML内での記述順とは異なります（記述順は「HTML構造」の置き換え文の位置と、「scriptの記述順と属性」を参照）。');
   lines.push('');
 
   if (sources.length === 0) {
@@ -1026,7 +1044,7 @@ function buildCodeSection(lines, heading, lang, sources, budget) {
     return;
   }
 
-  for (const source of sources) {
+  for (const source of orderForDisplay(sources)) {
     const originLabel = source.origin === 'external' && source.fetchedBy === 'extra'
       ? '外部（同一オリジン・全文つき版で追加取得）'
       : ORIGIN_LABEL[source.origin];
