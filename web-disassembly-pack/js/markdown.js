@@ -120,7 +120,9 @@ export function buildMarkdown(data) {
   // 10. 取得対象外の記録
   buildSkippedSection(lines, cssResources, jsResources, fmt);
 
-  return lines.join('\n');
+  const body = lines.join('\n');
+  // 全文つき版は buildFullMarkdown が全文収録を足してから目印を付ける
+  return outputVariant === 'full' ? body : addCompletenessMarkers(body);
 }
 
 /**
@@ -184,7 +186,7 @@ export const FULL_VARIANT_META_LINE = '- 出力形式: 全文つき（末尾の�
  */
 export function buildFullMarkdown(data) {
   const summary = buildMarkdown({ ...data, outputVariant: 'full' });
-  return `${summary}\n${buildFullTextSections(data)}`;
+  return addCompletenessMarkers(`${summary}\n${buildFullTextSections(data)}`);
 }
 
 /**
@@ -473,4 +475,39 @@ function describeSkipped(entry) {
     default:
       return '不明';
   }
+}
+
+// -----------------------------------------------
+// 完全性の目印（v0.4.3）
+// -----------------------------------------------
+
+export const END_MARKER_TEXT = 'Web解体パックの出力はここで終わりです';
+
+/**
+ * 出力の冒頭（メタ情報の最後）に「全体の文字数」の行を、末尾に「ここで終わり」の行を加える。
+ *
+ * チャットに貼り付けたときなどに途中で切れても、受け取った人やAIが
+ * 「末尾の行がない＝途中で切れている」と気づけるようにするため。
+ * 書く文字数は、この2行を含めた出力全体の文字数（JavaScriptの文字列の長さ）。
+ *
+ * @param {string} body 目印を付ける前のMarkdown（先頭は「# Web解体パック 調査結果」で、メタ情報の後に空行が続く）
+ * @returns {string}
+ */
+export function addCompletenessMarkers(body) {
+  const metaEnd = body.indexOf('\n\n', body.indexOf('\n- '));
+  const build = (total) => {
+    const headLine = `- 全体の文字数: ${total}文字（最後の行に「${END_MARKER_TEXT}」と書いてあります。その行がなければ、途中で切れています）`;
+    const tailLine = `（${END_MARKER_TEXT}。全体 ${total}文字）`;
+    const head = metaEnd === -1 ? `${headLine}\n\n${body}` : `${body.slice(0, metaEnd)}\n${headLine}${body.slice(metaEnd)}`;
+    return `${head.replace(/\n+$/, '')}\n\n---\n\n${tailLine}\n`;
+  };
+
+  // 書いた文字数で桁数が変わることがあるため、数字が落ち着くまで計算し直す
+  let total = body.length;
+  for (let i = 0; i < 5; i += 1) {
+    const next = build(total).length;
+    if (next === total) break;
+    total = next;
+  }
+  return build(total);
 }
